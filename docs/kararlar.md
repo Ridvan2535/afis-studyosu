@@ -7,6 +7,44 @@ Biçim: **K-numara · tarih · karar** — gerekçe · etki/geri alma.
 
 ---
 
+### 2026-10-13 — Çağrı kaydı, insan değerlendirmesi ve kontrollü prompt gelişimi
+
+**K-31 · 2026-10-13 · Ret kaynağı sınıflanır; olası algılama hataları öğrenme verisine katılmaz.**
+`deneme_kayit.siniflandir`: oran üründen %8+ farklı → üretim; oran ±%5 uyumlu ama birikme algılanıp boy kısa → olası
+algılama; arası → belirsiz; servis hatası ayrı. Eşikler VARSAYIM. İş 20261013-005509: 10 üretim, 1 olası algılama
+(#4), 1 belirsiz (#2) — `docs/elenen_analizi_20261013-005509.md`. Kalite eşikleri gevşetilmedi.
+
+**K-30 · 2026-10-13 · Aynı hata art arda 5 kez olursa ücretli üretim durur (Ayarlar'dan değişir, 0 = kapalı); 3'te uyarı.**
+Gerekçe: gözlenen kabul oranı ~%14, retlerin ~%75'i aynı imzada → bir sonraki çağrının aynı nedenle elenme olasılığı
+≈0,64; 5 ardışık aynı ret şans eseri ≈%11 olasılıkla görülür, yani sorun büyük olasılıkla süreklidir. 3 çok erken
+(≈%27 şans eseri). İmza = hata türü + alt neden (kısa/uzun/geniş/…); kabul edilen çağrı seriyi sıfırlar. Durunca kabul
+edilenler saklanır, raporda `son_uretim.durdurma` ve eksik sayısı görünür. Sessiz tekrar yok.
+
+**K-29 · 2026-10-13 · İnsan değerlendirmesi (Beğendim / Uygun değil + kısa not) ayrı dosyada: `insan_degerlendirme.json`.**
+Otomatik kalite kaydı (`rapor.json`) değişmez; ikisi karıştırılmaz. Yalnız kabul edilen fotoğraflar puanlanır.
+
+**K-28 · 2026-10-13 · Prompt sürümü terfi ölçütleri (yalnız öneri; geçiş kullanıcı onayıyla, geri dönülebilir).**
+Aynı kategori + aynı model karşılaştırılır. Aday için en az 12 çağrı, 3 kabul, 3 insan değerlendirmesi; tek başarı
+yetmez. Kabul oranı (olası algılama ve servis hataları hariç) etkinden en az 10 puan yüksek, beğeni oranı düşmemiş,
+ortalama süre %25'ten fazla artmamış olmalı. Denemeler mevcut harcama tavanı (`max_scene_calls`) içinde yapılır.
+Otomatik ücretli iyileştirme döngüsü YOK. Bir kategorinin sürümü diğerlerini etkilemez (`prompt_surumleri` kategori bazlı).
+
+**K-27 · 2026-10-13 · Kısa, bölümlü prompt yapısı (`prompt_yapisi.py`); aday `3A-aday` hiçbir kategoride etkin değil.**
+Bölümler ve sınırlar: ürün ≤120 (DEĞİŞTİRİLEMEZ kurallar; metin özeti testle sabit), kamera ≤60, ortam ≤115 (mevcut
+havuzda ölçülen en uzun 111), model ≤45; toplam ≤330 (etkin 2A ≈1150 kelime). Sınır aşılırsa sessiz kesme yok, hata.
+Her başarısızlıkta cümle EKLENMEZ: tekrarlayan hatanın kaynağı (üretim/algılama) önce ayrılır, gerekirse cümle
+değiştirilir/çıkarılır ve sürüm numarası artar. Ürün kurallarını kod otomatik değiştiremez.
+
+**K-26 · 2026-10-13 · Elenen sahnede ham görsel ve algılama görseli ayrı kaydedilir.**
+`elenen_<..>_ham.jpg` (servisten gelen) + `elenen_<..>_algilama.jpg` (maske işaretli). `dosya` alanı geriye uyum için
+kalır. Eski kayıtlarda ham görsel yoktur; arayüz bunu açıkça yazar, uydurmaz.
+
+**K-25 · 2026-10-13 · Her sahne çağrısı `rapor.json` → `denemeler` altında kaydedilir.**
+Alanlar: çağrı no, üretim no, zaman, servis, model kimliği, prompt sürümü, son prompt metni ve özeti, kelime sayısı,
+referans kimlikleri (`depo:<kategori>/<dosya>`, `yukleme:<dosya>`), kılavuz, tohum, süre, sonuç, tür, neden, sade
+neden, sınıf, hata imzası, art arda sayısı, görsel dosyaları. Anahtar, bağlantı ve base64 yazılmaz (servis hata metni
+temizlenir). Eski işlere sonradan eklenmez.
+
 ### 2026-10-13 — Yerleştirme kuralı netleşti: tasarımın bütünlüğü önce
 
 **K-24 · 2026-10-13 · Güçlü kıvrım/katlanmada sahne uygunsuz (`sahne_kivrim`); tasarım zorla deforme edilmez.**

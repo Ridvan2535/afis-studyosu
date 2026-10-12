@@ -151,6 +151,7 @@ class MockScenes:
     FORCED = {"mock_pool": "birikmeli", "mock_air": "havada", "mock_long": "uzun", "mock_touch": "dokunan"}
 
     def __init__(self, variant="mock"):
+        self.model = f"mock-{variant}"          # kayıt için model kimliği (gerçek servislerdeki impl.model gibi)
         self.kind = variant                     # mock | mock_bad (hep yan açılı) | mock_err (hep hata) | mock_thin (afiş fazla ince) | FORCED
 
     def _square(self, prompt, seed, size=1536) -> bytes:

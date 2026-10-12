@@ -30,6 +30,9 @@ os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")
 import refstore                                              # noqa: E402
 import camera_move                                            # noqa: E402
 import cvio                                                   # noqa: E402
+import deneme_kayit                                           # noqa: E402
+import prompt_yapisi                                          # noqa: E402
+import prompts                                                # noqa: E402
 import orchestrator as orch                                   # noqa: E402
 import product                                                # noqa: E402
 from orchestrator import Cancelled, Orchestrator              # noqa: E402
@@ -200,6 +203,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._design_preview(q.get("olcu", [""])[0])
             if u.path == "/api/karne":
                 return self._send(200, overview(orch.STATS_PATH))
+            if u.path == "/api/prompt_ozet":
+                return self._send(200, self._prompt_ozet())
             if u.path == "/api/jobs":
                 return self._send(200, Orchestrator.list_jobs())
             if u.path == "/api/job":
@@ -282,7 +287,33 @@ class Handler(BaseHTTPRequestHandler):
         oran_url = base + "onizleme_oran.png" if os.path.exists(os.path.join(jp, "onizleme_oran.png")) else None
         videos = [dict(v, url=base + v["dosya"]) for v in rap.get("videolar", [])]
         ov = os.path.exists(os.path.join(jp, "foto", "_ozet.jpg"))
-        return {"name": name, "kategori": rap.get("kategori"), "fotograflar": photos, "elenenler": rap.get("elenenler", []),
+        insan = deneme_kayit.insan_oku(jp).get("fotograflar", {})
+        for p in photos:
+            p["insan"] = insan.get(p["ad"])                    # otomatik kalite kontrolünden AYRI dosyadan
+        prof = rap.get("urun_profili") or {}
+        oran, boy = prof.get("oran") or 0.375, prof.get("boy_cm")
+        elen = []
+        for i, e in enumerate(rap.get("elenenler", [])):
+            e = dict(e, sira=i + 1)
+            if not e.get("sade_neden"):
+                e["sade_neden"] = deneme_kayit.sade_neden(e, boy)            # kayıttaki ölçümlerden türetilir (yeni bilgi uydurulmaz)
+            if not e.get("hata_imzasi"):
+                e["hata_imzasi"] = deneme_kayit.hata_imzasi(e.get("tur"), e.get("neden"))   # tür+nedenden türetilir
+            if not e.get("siniflama"):
+                e["siniflama"] = deneme_kayit.siniflandir(e, oran)
+            e["ham_url"] = base + urllib.parse.quote(e["ham_dosya"]) if e.get("ham_dosya") and os.path.exists(os.path.join(jp, e["ham_dosya"])) else None
+            alg = e.get("algilama_dosya")
+            if not alg and not e.get("ham_dosya") and e.get("dosya") and e.get("olcum"):
+                alg = e["dosya"]                                             # eski kayıt: kaydedilen dosya algılama işaretli görsel
+            e["algilama_url"] = base + urllib.parse.quote(alg) if alg and os.path.exists(os.path.join(jp, alg)) else None
+            if not e["ham_url"] and not e["algilama_url"] and e.get("dosya") and os.path.exists(os.path.join(jp, e["dosya"])):
+                e["diger_url"] = base + urllib.parse.quote(e["dosya"])        # eski kayıt: türü belirsiz tek görsel
+            e["eski_kayit"] = "ham_dosya" not in e and e.get("tur") != "servis_hatasi"
+            elen.append(e)
+        denemeler = rap.get("denemeler", [])
+        return {"name": name, "kategori": rap.get("kategori"), "fotograflar": photos, "elenenler": elen,
+                "denemeler": denemeler, "deneme_kaydi_var": bool(denemeler),
+                "tekrar": deneme_kayit.tekrar_ozeti(denemeler) if denemeler else None,
                 "videolar": videos, "son_uretim": rap.get("son_uretim"), "ozet": base + "foto/_ozet.jpg" if ov else None,
                 "servis_karnesi": rap.get("servis_karnesi", []), "insanli": bool(rap.get("insanli")),
                 "urun_profili": rap.get("urun_profili"), "tasarim_kontrol": rap.get("tasarim_kontrol"), "durum": rap.get("durum"),
@@ -290,6 +321,45 @@ class Handler(BaseHTTPRequestHandler):
                 "islem": rap.get("islem"), "kaynak_is": rap.get("kaynak_is"), "saglayici_cagrisi": rap.get("saglayici_cagrisi"),
                 "yeniden_birlestirilebilir": any(p.get("stem") and os.path.exists(os.path.join(jp, "sahneler_bos", p["stem"] + ".png"))
                                                  for p in rap.get("fotograflar", []))}
+
+    def _rate(self, body):
+        """İnsan değerlendirmesi: Beğendim / Uygun değil + kısa not. Otomatik kalite kaydından ayrı dosyaya yazılır."""
+        name = str(body.get("job") or "")
+        jp = safe_join(orch.JOBS_DIR, name) if name else None
+        if not jp or not os.path.isdir(jp):
+            return self._send(404, {"hata": "iş bulunamadı"})
+        foto = str(body.get("foto") or "")
+        rap = Orchestrator.report_of(jp)
+        if foto not in {p.get("ad") for p in rap.get("fotograflar", [])}:
+            return self._send(400, {"hata": "fotoğraf bu işte yok"})
+        karar = body.get("karar") or None
+        try:
+            d = deneme_kayit.insan_yaz(jp, foto, karar, str(body.get("not") or ""))
+        except ValueError as e:
+            return self._send(400, {"hata": str(e)})
+        return self._send(200, {"tamam": True, "insan": d["fotograflar"].get(foto)})
+
+    @staticmethod
+    def _prompt_ozet():
+        """Sürüm karşılaştırması (yalnız rapor; sürüm OTOMATİK değişmez)."""
+        s = Settings.load()
+        gr = deneme_kayit.ozet(orch.JOBS_DIR)
+        kat = {}
+        for c in CATEGORIES:
+            cc = prompts.canon(c)
+            kat[cc] = prompt_yapisi.secili_surum(s, cc)
+        oneriler = []
+        for g in gr:
+            if g["prompt_surumu"] == prompt_yapisi.ETKIN_VARSAYILAN:
+                continue
+            etkin = next((x for x in gr if x["kategori"] == g["kategori"] and x["model"] == g["model"]
+                          and x["prompt_surumu"] == prompt_yapisi.ETKIN_VARSAYILAN), None)
+            oneriler.append(dict(deneme_kayit.aday_karari(etkin, g), kategori=g["kategori"], model=g["model"],
+                                 aday=g["prompt_surumu"]))
+        return {"gruplar": gr, "surumler": prompt_yapisi.SURUMLER, "etkin_varsayilan": prompt_yapisi.ETKIN_VARSAYILAN,
+                "kategori_surumleri": kat, "oneriler": oneriler, "kurallar": deneme_kayit.ADAY_KURALLARI,
+                "limitler": prompt_yapisi.LIMITLER, "toplam_limit": prompt_yapisi.TOPLAM_LIMIT,
+                "ayni_hata_siniri": s.ayni_hata_siniri}
 
     # -- tasarım kontrolü (ürün profili) -------------------------------------------------
     @staticmethod
@@ -340,6 +410,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._start_video(body)
             if u.path == "/api/yeniden_birlestir":
                 return self._recompose(body)
+            if u.path == "/api/degerlendir":
+                return self._rate(body)
             if u.path == "/api/cancel":
                 RUN.cancel_flag = True
                 return self._send(200, {"tamam": True})
@@ -425,6 +497,21 @@ class Handler(BaseHTTPRequestHandler):
             s.auto_video = bool(body["auto_video"])
         if body.get("ornek_olcu") in product.OLCULER:
             s.ornek_olcu = body["ornek_olcu"]
+        if "ayni_hata_siniri" in body:
+            try:
+                s.ayni_hata_siniri = max(0, min(int(body["ayni_hata_siniri"]), 50))
+            except (TypeError, ValueError):
+                return self._send(400, {"hata": "aynı hata sınırı bir sayı olmalı (0 = kapalı)"})
+        if isinstance(body.get("prompt_surumleri"), dict):          # yalnız kullanıcının elle seçimi; kategori bazlı
+            ps = dict(s.prompt_surumleri or {})
+            for k, v in body["prompt_surumleri"].items():
+                k = prompts.canon(str(k))
+                if v in prompt_yapisi.SURUMLER:
+                    if v == prompt_yapisi.ETKIN_VARSAYILAN:
+                        ps.pop(k, None)
+                    else:
+                        ps[k] = v
+            s.prompt_surumleri = ps
         for k in SETTING_FIELDS:
             if k in body and body[k] not in (None, ""):
                 v = body[k]
@@ -441,8 +528,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, {"hata": "Önce bir tasarım dosyası yükle."})
         category = body.get("category") or CATEGORIES[0]
         n = max(1, min(int(body.get("n", 6)), 12))
-        refs = [open(p, "rb").read() for p in RUN.refs if os.path.exists(p)]
-        depot = refstore.items(category) if body.get("use_refs", True) else []
+        ref_paths = [p for p in RUN.refs if os.path.exists(p)]
+        refs = [open(p, "rb").read() for p in ref_paths]
+        ref_ids = ["yukleme:" + os.path.basename(p) for p in ref_paths]       # kayıt için kimlik (görsel baytı değil)
+        depot = refstore.items_ids(category) if body.get("use_refs", True) else []
         design = RUN.design
         people = bool(body.get("people"))
         rname = body.get("ribbon")
@@ -458,7 +547,7 @@ class Handler(BaseHTTPRequestHandler):
         def work(o, settings):
             job = o.new_job(design, category, body.get("name"), profile=prof)
             RUN._set(job=os.path.basename(job))
-            res = o.generate_photos(job, n, refs, people=people, ribbon=ribbon, ref_items=depot, profile=prof)
+            res = o.generate_photos(job, n, refs, people=people, ribbon=ribbon, ref_items=depot, profile=prof, ref_ids=ref_ids)
             res["job"] = os.path.basename(job)
             return res
 

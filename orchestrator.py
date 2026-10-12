@@ -30,10 +30,12 @@ import banner_detect as bd
 import camera_move as cm
 import compositor as cp
 import cvio
+import deneme_kayit
 import guide as guide_mod
 import layout
 import pipeline
 import product
+import prompt_yapisi
 import prompts
 import proportion
 import ribbon as ribbon_mod
@@ -207,7 +209,7 @@ class Orchestrator:
 
     # -- fotoğraflar --------------------------------------------------------------------
     def generate_photos(self, job: str, n: int = 6, ref_images: list[bytes] | None = None, people: bool = False, ribbon: dict | None = None,
-                        ref_items: list | None = None, profile=None) -> dict:
+                        ref_items: list | None = None, profile=None, ref_ids: list | None = None) -> dict:
         """Aşama 2A fotoğraf hattı: kare (1:1) sahne, ürün profili ölçüsü, tam kumaş yerleşimi.
 
         Profil: verilen > rapordaki > Settings.ornek_olcu. Tasarım oranı profil ile uyuşmazsa HİÇ sahne çağrısı yapılmaz;
@@ -238,10 +240,13 @@ class Orchestrator:
         design = self._design(job)
         design_file = glob.glob(os.path.join(job, "tasarim.*"))[0]
         refs = [self._small_png(b) for b in (ref_images or [])][:4]
-        depot = [(self._small_png(b), d) for b, d in (ref_items or [])]      # referans deposu: [(görsel, sahne tarifi)]
+        ref_ids = list(ref_ids or [])[:len(refs)]
+        ref_ids += [f"yukleme:{i + 1}" for i in range(len(ref_ids), len(refs))]          # kimliği verilmemiş yüklemeler
+        depot = [(self._small_png(it[0]), it[1], it[2] if len(it) > 2 else f"depo:{i + 1}")
+                 for i, it in enumerate(ref_items or [])]      # referans deposu: [(görsel, sahne tarifi, kimlik)]
         if depot:
             self.log(f"Referans deposu: {len(depot)} görsel kullanılacak (her sahne sırayla birinden ilham alır; "
-                     f"{sum(1 for _, d in depot if d)} tanesinin hazır sahne tarifi var).")
+                     f"{sum(1 for x in depot if x[1])} tanesinin hazır sahne tarifi var).")
         pa = prof.oran                                         # yerleşim/kalite ölçütleri PNG oranına değil ÜRÜN oranına göre
         frame = 1.0                                            # ilan fotoğrafı her zaman kare; video ayarı (auto_video_kind) kadrajı DEĞİŞTİRMEZ
         guide_png, _ = guide_mod.make_guide(frame, pa, ribbon_hex=(ribbon or {}).get("hex"))         # kılavuz görseli destekleyen servislere verilir
@@ -255,23 +260,64 @@ class Orchestrator:
         have = len(rap.get("fotograflar", []))
         accepted_now, calls, seen = 0, 0, set()
         new_photos: list[str] = []
+        rap.setdefault("denemeler", [])                      # K-25: çağrı başına tam kayıt (eski işlerde yok; sonradan doldurulmaz)
+        uretim_no = 1 + len(rap.get("uretimler", []))
+        siniri = int(getattr(self.s, "ayni_hata_siniri", 5) or 0)
+        seri = {"imza": None, "sayi": 0}
+        durdurma = None
+        cur: dict = {}                                       # o anki çağrının kaydı (reject/kabul tamamlar)
         self.log(f"Fotoğraf üretimi başladı: hedef {n}, ölçü {product.olcu_etiketi(prof.olcu_id)}, kare kadraj, "
                  f"en fazla {self.s.max_scene_calls} sahne çağrısı, servis: "
                  + (", ".join(nice(x) for x in names) + " (otomatik seçim)" if auto else nice(names[0])))
 
         def reject(tur, reason, img=None, det=None, lay=None, extra=None):
-            rec = {"cagri": calls, "servis": name, "neden": reason, "tur": tur}
+            reason = deneme_kayit.temizle(reason)                        # bağlantı / base64 kayda girmez
+            rec = {"cagri": calls, "servis": name, "neden": reason, "tur": tur, "uretim_no": uretim_no}
             if lay is not None:
                 rec["olcum"] = lay
             if extra:
                 rec.update(extra)
             if img is not None:
-                fn = f"elenen_{have + 1:02d}_{calls:02d}.jpg"                # eski "elenen_NN" üzerine yazmasın
-                cvio.imwrite(os.path.join(job, "sahneler_bos", fn),
-                             bd.overlay(img, det) if (det is not None and det.mask.any()) else img, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                rec["dosya"] = f"sahneler_bos/{fn}"
+                base = f"elenen_{have + 1:02d}_{calls:02d}"                  # eski "elenen_NN" üzerine yazmasın
+                if any(os.path.exists(os.path.join(job, "sahneler_bos", base + x)) for x in (".jpg", "_ham.jpg")):
+                    base = f"elenen_u{uretim_no:02d}_{calls:02d}"             # aynı işte ikinci üretim: çakışma yok
+                ov = bd.overlay(img, det) if (det is not None and det.mask.any()) else None
+                cvio.imwrite(os.path.join(job, "sahneler_bos", base + "_ham.jpg"), img, [cv2.IMWRITE_JPEG_QUALITY, 88])
+                rec["ham_dosya"] = f"sahneler_bos/{base}_ham.jpg"            # sağlayıcıdan gelen görsel (işaretsiz)
+                if ov is not None:
+                    cvio.imwrite(os.path.join(job, "sahneler_bos", base + "_algilama.jpg"), ov, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                    rec["algilama_dosya"] = f"sahneler_bos/{base}_algilama.jpg"
+                rec["dosya"] = rec.get("algilama_dosya") or rec["ham_dosya"]     # geriye uyum (eski arayüz/rapor)
+            rec["sade_neden"] = deneme_kayit.sade_neden(rec, prof.boy_cm)
+            rec["siniflama"] = deneme_kayit.siniflandir(rec, prof.oran)
+            rec["hata_imzasi"] = deneme_kayit.hata_imzasi(tur, reason)
             rap["elenenler"].append(rec)
+            cur.update(sonuc="servis_hatasi" if tur == "servis_hatasi" else "elendi", tur=tur, neden=reason,
+                       sade_neden=rec["sade_neden"], siniflama=rec["siniflama"], hata_imzasi=rec["hata_imzasi"],
+                       ham_dosya=rec.get("ham_dosya"), algilama_dosya=rec.get("algilama_dosya"))
             _write_json(os.path.join(job, "rapor.json"), rap)
+
+        def finish_call():
+            """Çağrı kaydını kapatır, art arda aynı hatayı sayar. Dönüş: durdurma nedeni ya da None."""
+            cur["sure_sn"] = round(time.monotonic() - cur.pop("_t0"), 1)
+            rap["denemeler"].append(dict(cur))
+            if cur.get("sonuc") == "elendi":
+                sig = cur.get("hata_imzasi")
+                seri["sayi"] = seri["sayi"] + 1 if sig == seri["imza"] else 1
+                seri["imza"] = sig
+            else:
+                seri.update(imza=None, sayi=0)
+            cur["art_arda"] = seri["sayi"]
+            rap["denemeler"][-1]["art_arda"] = seri["sayi"]
+            _write_json(os.path.join(job, "rapor.json"), rap)
+            if seri["sayi"] >= 3 and cur.get("sonuc") == "elendi":
+                self.log(f"UYARI: aynı hata art arda {seri['sayi']}. kez: {cur.get('sade_neden')}"
+                         + (f" (durma sınırı {siniri})" if siniri else " (durma sınırı kapalı)"))
+            if siniri and seri["sayi"] >= siniri:
+                return {"neden": "ayni_hata_tekrari", "imza": seri["imza"], "sayi": seri["sayi"],
+                        "aciklama": f"Aynı hata art arda {seri['sayi']} kez tekrarlandı: {cur.get('sade_neden')} "
+                                    f"Ücretli tekrar sürdürülmedi (Ayarlar: aynı hata sınırı {siniri})."}
+            return None
 
         while accepted_now < n and calls < self.s.max_scene_calls:
             name = sel.pick()
@@ -292,47 +338,82 @@ class Orchestrator:
             calls += 1
             self.progress(0.05 + 0.9 * min(calls / max(self.s.max_scene_calls, 1), 1.0) * 0.5 + 0.45 * accepted_now / n,
                           f"Sahne {calls} üretiliyor ({nice(name)}; geçerli {accepted_now}/{n})")
-            call_refs, sdesc = refs, None
+            call_refs, sdesc, call_ref_ids = refs, None, list(ref_ids)
             if depot:
                 k = (idx + start + have) % len(depot)
-                call_refs, sdesc = [depot[k][0]], (depot[k][1] or None)
-            prompt = prompts.build_scene_prompt(category, idx + start + have, prof.en_cm, prof.boy_cm, bool(call_refs), (idx + have) // psize,
-                                                guided=guided, people=people, ribbon=ribbon, scene_desc=sdesc, profile=prof)
+                call_refs, sdesc, call_ref_ids = [depot[k][0]], (depot[k][1] or None), [depot[k][2]]
+            surum = prompt_yapisi.secili_surum(self.s, category)
             try:
-                raw = provider.scene(prompt, frame, 1.0, call_refs, seed=idx + 1 + have * 7, guide=guide_png if guided else None)
+                prompt, pinfo = prompt_yapisi.build(surum, category, idx + start + have, prof, ribbon=ribbon, people=people,
+                                                    has_refs=bool(call_refs), guided=guided, scene_desc=sdesc,
+                                                    round_no=(idx + have) // psize)
+            except ValueError as e:                     # aday sürüm sınırı aşıldı: sessiz kesme yok, etkin sürüme dön
+                self.log(f"Prompt sürümü {surum} kullanılamadı ({e}); etkin sürüm {prompt_yapisi.ETKIN_VARSAYILAN} kullanılıyor.")
+                prompt, pinfo = prompt_yapisi.build(prompt_yapisi.ETKIN_VARSAYILAN, category, idx + start + have, prof,
+                                                    ribbon=ribbon, people=people, has_refs=bool(call_refs), guided=guided,
+                                                    scene_desc=sdesc, round_no=(idx + have) // psize)
+            seed = idx + 1 + have * 7
+            cur.clear()
+            cur.update({"cagri": calls, "uretim_no": uretim_no, "zaman": datetime.now().isoformat(timespec="seconds"),
+                        "servis": name, "model": None, "prompt_surumu": pinfo["prompt_surumu"], "prompt": prompt,
+                        "prompt_ozeti": hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:16],
+                        "prompt_kelime": len(prompt.split()), "referanslar": call_ref_ids, "kilavuz": guided,
+                        "tohum": seed, "_t0": time.monotonic()})
+            cur.update({k: v for k, v in pinfo.items() if k != "prompt_surumu"})
+            try:
+                raw = provider.scene(prompt, frame, 1.0, call_refs, seed=seed, guide=guide_png if guided else None)
             except AuthError as e:
+                cur["model"] = self._model_id(provider)
                 if not auto:
+                    reject("servis_hatasi", f"servis hatası: {e}")
+                    finish_call()
                     raise
                 self.log(f"Sahne {calls} ({nice(name)}): {e}")
                 reject("servis_hatasi", f"servis hatası: {e}")
+                finish_call()
                 sel.record(name, False, error=True)
                 sel.disable(name, "anahtar reddedildi")
                 continue
             except ProviderError as e:
+                cur["model"] = self._model_id(provider)
                 self.log(f"Sahne {calls} ({nice(name)}): hata: {e}")
                 reject("servis_hatasi", f"servis hatası: {e}")
+                finish_call()
                 sel.record(name, False, error=True)
                 continue
+            cur["model"] = self._model_id(provider)
             h = hashlib.md5(raw).hexdigest()
             if h in seen:
                 reject("kalite_kapisi", "aynı görsel tekrar geldi")
+                durdurma = finish_call()
                 sel.record(name, False)
+                if durdurma:
+                    self.log("DURDURULDU: " + durdurma["aciklama"])
+                    break
                 continue
             seen.add(h)
             img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
             if img is None:
                 reject("servis_hatasi", "görsel okunamadı")
+                finish_call()
                 sel.record(name, False, error=True)
                 continue
             img = self._upscale(img)
             ev = self._evaluate_scene(img, design, prof, f"Sahne {calls} ({nice(name)})")
             if not ev["ok"]:
                 reject(ev["tur"], ev["neden"], img, ev["det"], ev["lay"], ev.get("extra"))
+                durdurma = finish_call()
                 sel.record(name, False)
+                if durdurma:
+                    self.log("DURDURULDU: " + durdurma["aciklama"])
+                    break
                 continue
             sel.record(name, True, ev["kalite"])
             num = have + accepted_now + 1
             rec = self._save_accepted(job, rap, img, ev, prof, ribbon, num, name, design_file)
+            rec["cagri"], rec["uretim_no"] = calls, uretim_no
+            cur.update(sonuc="kabul", foto=rec["ad"], kalite=round(float(ev["kalite"]), 1))
+            finish_call()
             new_photos.append(rec["ad"])
             accepted_now += 1
             self.log(f"Sahne {calls} ({nice(name)}) kabul edildi -> {rec['ad']}, kalite {ev['kalite']:.0f}/100, "
@@ -348,14 +429,27 @@ class Orchestrator:
         for p_ in rap.get("fotograflar", []):
             p_["en_iyi"] = bool(best) and p_ is best
         self._overview(job, rap)
-        rap["son_uretim"] = {"hedef": n, "uretilen": accepted_now, "eksik": max(0, n - accepted_now), "cagri": calls, "beklemede": False}
+        tekrar = deneme_kayit.tekrar_ozeti([d for d in rap["denemeler"] if d.get("uretim_no") == uretim_no])
+        rap["son_uretim"] = {"hedef": n, "uretilen": accepted_now, "eksik": max(0, n - accepted_now), "cagri": calls, "beklemede": False,
+                             "uretim_no": uretim_no, "ayni_hata_siniri": siniri, "tekrar": tekrar, "durdurma": durdurma}
+        rap.setdefault("uretimler", []).append(dict(rap["son_uretim"], zaman=datetime.now().isoformat(timespec="seconds")))
         _write_json(os.path.join(job, "rapor.json"), rap)
-        self.progress(1.0, f"Bitti: {accepted_now}/{n} geçerli fotoğraf")
+        self.progress(1.0, f"Bitti: {accepted_now}/{n} geçerli fotoğraf" + (" (aynı hata tekrarı nedeniyle durduruldu)" if durdurma else ""))
         if self.s.auto_video and new_photos:
             self._auto_videos(job, new_photos)
         if accepted_now < n:
             self.log(f"{n - accepted_now} fotoğraf eksik kaldı (çağrı tavanı ya da hata). Tekrar çalıştırırsan eksikler tamamlanır.")
         return rap["son_uretim"]
+
+    @staticmethod
+    def _model_id(provider):
+        """Kayıt için model kimliği (ör. seedream-v5-pro-edit). Anahtar/bağlantı içermez; bilinmiyorsa None."""
+        for obj in (getattr(provider, "impl", None), provider):
+            for attr in ("model", "model_id", "_model"):
+                v = getattr(obj, attr, None) if obj is not None else None
+                if isinstance(v, str) and v and len(v) < 120 and "://" not in v:
+                    return v
+        return None
 
     # -- ortak sahne değerlendirme ve kayıt (sağlayıcıdan bağımsız) -----------------------------------
     def _evaluate_scene(self, img, design, prof, label: str) -> dict:

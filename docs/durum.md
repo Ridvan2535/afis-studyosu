@@ -4,9 +4,54 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-13 00:35 (Claude) · **Mevcut aşama:** Aşama 2A + kopma düzeltmesi + düzlem (tek homografi)
-yerleşim kuralı + uygulama akışında doğrulama tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı görünüm + eksikleri
-tamamla) — BAŞLAMADI (kullanıcı onayı bekleniyor). Video aşamasına başlanmadı.
+**Son güncelleme:** 2026-10-13 02:05 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
+denemeler / insan değerlendirmesi / kontrollü prompt sürümleri** tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı
+görünüm) — BAŞLAMADI (kullanıcı onayı bekleniyor). Video aşamasına başlanmadı.
+
+---
+
+## 0. Son iş: elenen denemeler, çağrı kaydı, tekrar sınırı, kısa prompt adayı (2026-10-13)
+
+**İstek:** iş 20261013-005509'da 14 çağrıdan 2 kabul. Boşa giden tekrarları kaliteyi düşürmeden azaltmak.
+Ücretli çağrı YAPILMADI; eski iş dosyalarına dokunulmadı (analiz kopya üzerinde).
+
+**Bulgular** (`docs/elenen_analizi_20261013-005509.md`): 12 retin 10'u gerçek üretim hatası (model afişi ürüne göre
+geniş/kısa çiziyor; ölçülen en/boy 0,41–0,53, ürün 0,375), 1 olası algılama hatası (#4: maske zemine taşmış, sahte
+birikme), 1 belirsiz (#2). Santimetreler tahmini. Eşikler gevşetilmedi.
+
+**Yapılanlar / değişen dosyalar:**
+- `deneme_kayit.py` (yeni): ret sınıflama, sade Türkçe neden, hata imzası, tekrar özeti, insan değerlendirmesi dosyası,
+  sürüm karşılaştırması ve terfi önerisi (yalnız öneri). Kayıt metni temizleme (bağlantı/base64).
+- `prompt_yapisi.py` (yeni): etkin `2A` (değişmedi) + aday `3A-aday` (4 bölüm, ≤330 kelime, ürün kuralları kilitli).
+  Aday hiçbir kategoride etkin değil.
+- `orchestrator.py`: her çağrı `rapor.json → denemeler` (prompt, sürüm, model, referans kimlikleri, süre, sonuç, neden);
+  elenende ham + algılama görseli ayrı; aynı hata sınırında durma; `son_uretim.durdurma/tekrar`, `uretimler` geçmişi.
+- `providers.py`: ayarlar `ayni_hata_siniri` (varsayılan 5, 0 = kapalı), `prompt_surumleri` (kategori → sürüm).
+- `refstore.py`: `items_ids` (referans kimliği). `mock_provider.py`: sahte servise model kimliği.
+- `app.py`: `/api/job` elenen kayıtlarını zenginleştirir (eski kayıtlar dahil); `POST /api/degerlendir`;
+  `GET /api/prompt_ozet`; ayar kaydı.
+- `ui.html`: Sonuçlar → "Elenen denemeler" kart ızgarası (numara, sade neden, sınıf rozeti, art arda rozeti, büyütme;
+  ham / algılama ayrı; eski kayıtta "ham görsel kaydedilmemiş"; ayrıntıda model/prompt). Seçili fotoğraf için
+  Beğendim / Uygun değil + not. Eksik/durdurma mesajı. Ayarlar → aynı hata sınırı; kategori bazlı prompt sürümü + karşılaştırma tablosu.
+- Testler (yeni): `tests/test_deneme_kayit.py`, `tests/test_elenen_arayuz.py`.
+- Kararlar: K-25 … K-31.
+
+**Uygulamada nereden bakılır:** `baslat.bat` → 3 Sonuçlar → "Önceki işler"den `20261013-005509_20261013-005503_design`
+→ altta "Elenen denemeler (12)". Fotoğrafa tıklayınca altında Beğendim / Uygun değil. Ayarlar → "Harcama koruması"
+(aynı hata sınırı) ve "Prompt sürümleri".
+
+**Çalıştırılan testler (bu ortam: Linux, Windows DEĞİL), hepsi TAMAM:** test_selector, test_product, test_tam_kumas,
+test_kare_kadraj, test_sureklilik, test_duzlem_yerlesim, test_yeniden_birlestir, test_unicode_path, test_refstore,
+test_magnific_fix, test_topview (yerel/taklit), test_e2e_mock, test_deneme_kayit, test_elenen_arayuz (sahte servis),
+kontrol.py ("HER ŞEY TAMAM"). test_elenen_arayuz ayrıca gerçek işin kopyasıyla çalıştırıldı (12 elenen; 10/1/1).
+Gerçek iş kopyasıyla yerel HTTP + başsız Chromium arayüz testi: konsol hatası yok, dış istek yok.
+Windows'ta çalıştırılmadı. Gerçek sağlayıcı testi yok.
+
+**Doğrulanmamış:** aday prompt gerçek modelde hiç denenmedi (etkisi bilinmiyor). Sınıflama eşikleri ve durma sınırı
+varsayım; yeni işlerle gözden geçirilmeli. Algılamanın zemine taşması (#4) ve saçaklı etek kaybı ayrı iş olarak açık.
+
+**Kullanıcıdan beklenen:** (1) Uygulamada eski işi açıp kartları kontrol etmek; (2) aday sürümü bir kategoride denemek
+isteyip istemediği (ücretli, en az 12 çağrı); (3) durma sınırı 5 uygun mu.
 
 ---
 

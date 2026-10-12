@@ -122,3 +122,13 @@ def items(category: str) -> list[tuple[bytes, str]]:
         with open(p, "rb") as f:
             out.append((f.read(), r["aciklama"]))
     return out
+
+
+def items_ids(category: str) -> list[tuple[bytes, str, str]]:
+    """items() ile aynı, ek olarak kayıt için referans kimliği ("depo:<kategori>/<dosya>"). Görsel baytı kayda yazılmaz."""
+    out = []
+    for r in list_refs(category):
+        p = os.path.join(folder(category), r["ad"])
+        with open(p, "rb") as f:
+            out.append((f.read(), r["aciklama"], f"depo:{slug(category)}/{r['ad']}"))
+    return out

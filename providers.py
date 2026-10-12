@@ -80,6 +80,8 @@ class Settings:
     ribbon_default: str = "Sarı"          # fotoğraf ekranında varsayılan seçili kurdele rengi ("" = kurdelesiz)
     strict_layout: bool = True            # sahne: dik, karşıdan (yan açısız) ve yere kadar uzanan afiş şartı
     ornek_olcu: str = "75x200"            # ilan görsellerinde gösterilen örnek ölçü kimliği (product.OLCULER); satış ölçülerinden ayrı
+    prompt_surumleri: dict = field(default_factory=dict)   # kategori -> prompt sürümü (prompt_yapisi.SURUMLER); boş = etkin "2A"
+    ayni_hata_siniri: int = 5             # aynı hata art arda bu kadar tekrarlanırsa üretim durur (0 = kapalı); K-30
 
     @classmethod
     def load(cls) -> "Settings":
@@ -109,6 +111,12 @@ class Settings:
             s.servis_surumu = 2
         if s.ornek_olcu not in ("50x100", "50x150", "75x200", "150x300", "150x400"):   # product.OLCULER ile aynı (döngüsel içe aktarma olmasın)
             s.ornek_olcu = "75x200"
+        try:
+            s.ayni_hata_siniri = max(0, min(int(s.ayni_hata_siniri), 50))
+        except (TypeError, ValueError):
+            s.ayni_hata_siniri = 5
+        if not isinstance(s.prompt_surumleri, dict):
+            s.prompt_surumleri = {}
         if data and int(data.get("servis_surumu", 0)) < 3:             # kullanıcı isteği: video ben "üret" demeden üretilmesin
             s.auto_video = False
             s.servis_surumu = 3
