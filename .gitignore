@@ -1,0 +1,14 @@
+__pycache__/
+.venv/
+isler/
+yuklemeler/
+ayarlar.json
+raporlar/
+*.zip
+referanslar/
+tasarim.*
+servis_karnesi.json
+kayit.log
+_yedek/
+*.tmp
+tests/video_out/

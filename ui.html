@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Afiş Stüdyosu</title>
+<style>
+:root{
+  --bg:#f6f3ee; --card:#ffffff; --ink:#26221d; --muted:#7a7268; --line:#e3ddd3;
+  --accent:#2f5d50; --accent-ink:#ffffff; --accent-soft:#e3eeea;
+  --warn:#9a5b00; --warn-soft:#fbf0dc; --bad:#a4311f; --bad-soft:#fbe6e1; --ok:#25683f; --ok-soft:#e1f1e6;
+  --shadow:0 1px 2px rgba(40,30,20,.06),0 4px 14px rgba(40,30,20,.05);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#16140f; --card:#211e18; --ink:#efe9de; --muted:#a39b8d; --line:#37322a;
+    --accent:#6fb59f; --accent-ink:#0e1a16; --accent-soft:#1f2f2a;
+    --warn:#e6b25a; --warn-soft:#352a14; --bad:#ee8d7c; --bad-soft:#3a1f1a; --ok:#78c795; --ok-soft:#1b2f22;
+    --shadow:none;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px 80px}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:22px 0 8px}
+header h1{font-size:22px;margin:0;letter-spacing:-.01em}
+header .ver{color:var(--muted);font-size:12px}
+header .sp{flex:1}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12.5px;border:1px solid var(--line);background:var(--card);color:var(--muted)}
+.chip.ok{color:var(--ok);background:var(--ok-soft);border-color:transparent}
+.chip.warn{color:var(--warn);background:var(--warn-soft);border-color:transparent}
+.chip.bad{color:var(--bad);background:var(--bad-soft);border-color:transparent}
+nav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:8px 0 22px}
+nav button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 16px;font:inherit;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+nav button.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:18px;box-shadow:var(--shadow)}
+.card h2{font-size:16px;margin:0 0 4px}
+.card .sub{color:var(--muted);font-size:13.5px;margin:0 0 14px}
+.step{display:inline-flex;width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:12.5px;font-weight:700;align-items:center;justify-content:center;margin-right:8px;vertical-align:1px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}}
+label.f{display:block;font-size:13px;color:var(--muted);margin:0 0 4px}
+input[type=text],input[type=number],input[type=password],select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);font:inherit}
+input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.row>*{flex:1;min-width:120px}
+.row>.nogrow{flex:0 0 auto;min-width:0}
+button.btn{font:inherit;padding:10px 18px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.btn:hover:not(:disabled){border-color:var(--accent)}
+button.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.btn.primary:hover:not(:disabled){filter:brightness(1.07)}
+button.btn.danger{color:var(--bad);border-color:var(--bad)}
+button.btn:disabled{opacity:.45;cursor:not-allowed}
+button.btn.sm{padding:5px 11px;font-size:13px;border-radius:8px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:26px 16px;text-align:center;color:var(--muted);cursor:pointer;transition:.15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+.drop b{color:var(--ink)}
+.prev{display:flex;gap:14px;align-items:center;margin-top:12px}
+.prev img{max-height:120px;max-width:200px;border-radius:8px;border:1px solid var(--line);background:#fff}
+.prev .meta{font-size:13.5px;color:var(--muted)}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.thumbs img{height:64px;border-radius:6px;border:1px solid var(--line)}
+.refgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-top:10px}
+.refitem{border:1px solid var(--line);border-radius:10px;padding:8px;position:relative}
+.refitem img{width:100%;height:190px;object-fit:cover;border-radius:6px;cursor:zoom-in;display:block}
+.refitem textarea{width:100%;margin-top:6px;font-size:12px;min-height:54px;resize:vertical;box-sizing:border-box}
+.refitem .x{position:absolute;top:12px;right:14px;background:rgba(0,0,0,.55);color:#fff;border-radius:50%;width:24px;height:24px;line-height:24px;text-align:center;text-decoration:none;font-size:13px}
+.bar{height:10px;border-radius:99px;background:var(--line);overflow:hidden}
+.bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .4s}
+.runtext{margin:10px 0 0;font-weight:600}
+pre.log{margin:10px 0 0;max-height:210px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 12px;font:12.5px/1.55 Consolas,"Cascadia Mono",monospace;white-space:pre-wrap;word-break:break-word;color:var(--muted)}
+.msg{padding:11px 14px;border-radius:10px;margin:12px 0 0;font-size:14px}
+.msg.bad{background:var(--bad-soft);color:var(--bad)}
+.msg.ok{background:var(--ok-soft);color:var(--ok)}
+.msg.warn{background:var(--warn-soft);color:var(--warn)}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-top:14px}
+.ph{position:relative;border:2px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg);cursor:pointer}
+.ph.sel{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.ph img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;background:#ddd}
+.ph .cap{padding:8px 10px;font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.ph .zoom{position:absolute;right:8px;top:8px;background:rgba(0,0,0,.55);color:#fff;border:0;border-radius:8px;padding:3px 8px;font-size:12px;cursor:zoom-in}
+.ph .tick{position:absolute;left:8px;top:8px;width:24px;height:24px;border-radius:50%;background:var(--card);border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--accent-ink)}
+.ph.sel .tick{background:var(--accent);border-color:var(--accent)}
+.vids{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:14px}
+.vid{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg)}
+.vid video{width:100%;border-radius:8px;background:#000;max-height:480px}
+.vid .t{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:13px}
+details{margin-top:10px}
+details summary{cursor:pointer;color:var(--muted);font-size:13.5px}
+table.karne{border-collapse:collapse;font-size:13px;margin:4px 0 6px;width:100%;max-width:640px}
+table.karne th,table.karne td{padding:5px 10px;border-bottom:1px solid var(--line);text-align:left}
+table.karne th{color:var(--muted);font-weight:600}
+table.karne tr.win td{color:var(--ok);font-weight:600}
+.rej{margin:8px 0 0;padding-left:18px;font-size:13px;color:var(--muted)}
+.keyrow{display:grid;grid-template-columns:150px 1fr auto auto;gap:10px;align-items:center;margin-bottom:12px}
+@media (max-width:760px){.keyrow{grid-template-columns:1fr 1fr}.keyrow>.kl{grid-column:1/-1}}
+.keyrow .kl b{display:block}
+.keyrow .kl span{font-size:12.5px;color:var(--muted)}
+.help h3{font-size:15px;margin:18px 0 4px}
+.help p,.help li{color:var(--ink);font-size:14.5px}
+.help ul{padding-left:20px;margin:4px 0}
+.lb{position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:50;display:none;align-items:center;justify-content:center;padding:20px;cursor:zoom-out}
+.lb.on{display:flex}
+.lb img{max-width:100%;max-height:100%;border-radius:6px}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;font-size:14px;z-index:60;opacity:0;pointer-events:none;transition:.25s}
+.toast.on{opacity:1}
+.hint{font-size:12.5px;color:var(--muted);margin-top:6px}
+.sheet{width:100%;border-radius:10px;border:1px solid var(--line);margin-top:6px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Afiş Stüdyosu</h1><span class="ver" id="ver"></span>
+    <span class="sp"></span>
+    <span class="chip" id="chipMode"></span>
+    <span class="chip warn" id="chipFfmpeg" hidden>ffmpeg yok</span>
+  </header>
+  <nav>
+    <button data-tab="uret" class="on">Üret</button>
+    <button data-tab="ayar">Ayarlar</button>
+    <button data-tab="yardim">Yardım</button>
+  </nav>
+
+  <!-- ÜRET -->
+  <section id="tab-uret">
+    <div class="card">
+      <h2><span class="step">1</span>Tasarımını yükle</h2>
+      <p class="sub">Baskıya gidecek gerçek PNG dosyan. Yazılar ve çizimler hiçbir zaman yapay zekâ ile çizilmez; bu dosyadan aynen yerleştirilir.</p>
+      <div class="drop" id="dropDesign"><b>Dosyayı buraya sürükle</b> ya da tıklayıp seç (PNG / JPG)</div>
+      <input type="file" id="fileDesign" accept=".png,.jpg,.jpeg,.webp" hidden>
+      <div class="prev" id="prevDesign" hidden><img id="imgDesign" alt=""><div class="meta" id="metaDesign"></div></div>
+      <div class="hint" id="serverDesign" hidden></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">2</span>Ne tür sahne istiyorsun?</h2>
+      <div class="grid2">
+        <div><label class="f" for="category">Kategori</label><select id="category"></select></div>
+        <div class="row">
+          <div><label class="f" for="count">Kaç fotoğraf</label><input type="number" id="count" min="1" max="12" value="6"></div>
+          <div><label class="f" for="jobname">İş adı (isteğe bağlı)</label><input type="text" id="jobname" placeholder="ör. candy-baby-shower"></div>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="people" style="margin-top:4px">
+          <span><b>Arka planda misafirler olsun</b> (insanlı sahne)<br><span class="hint" style="margin:0">Afişin çok arkasında birkaç kişi görünür. Hareketli sahne videosunda bu kişiler yavaşça hareket eder. Afişin önüne kimse girmez.</span></span></label>
+      </div>
+      <div style="margin-top:14px">
+        <label class="f" for="ribbon">Kurdele rengi</label>
+        <select id="ribbon"></select>
+        <span class="hint" style="margin:6px 0 0">Afiş, arkasındaki ince ahşap çerçevenin (stand) üst çubuğuna asılır; iki üst köşede kurdele fiyonkla bağlanır ve uzun kuyruklar afişin yan kenarlarından aşağı sarkar. İlham görsellerindeki kurdele rengi yok sayılır, burada seçtiğin renk kullanılır. Renkleri Ayarlar sekmesinden eklersin.</span>
+      </div>
+      <div style="margin-top:16px">
+        <label class="f">Referans deposu: <b id="refCatName"></b> kategorisi</label>
+        <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;margin-bottom:8px"><input type="checkbox" id="useRefs" checked style="margin-top:4px">
+          <span>Depodaki referansları kullan <span class="hint" style="margin:0">(her sahne sırayla bir referanstan ilham alır; kopyalanmaz, afiş her zaman boş çıkar)</span></span></label>
+        <button class="btn sm" id="btnRef">Referans ekle</button>
+        <input type="file" id="fileRef" accept=".png,.jpg,.jpeg,.webp" multiple hidden>
+        <span class="hint" style="margin:0 0 0 8px" id="refCount"></span>
+        <div class="refgrid" id="refGrid"></div>
+        <span class="hint" style="margin:6px 0 0">Yüklediklerin bu kategoriye kalıcı kaydedilir, her seferinde yeniden yüklemen gerekmez. Altındaki "sahne tarifi" kutusu isteğe bağlıdır: doldurursan bu referanstan üretirken o ayrıntılı tarif kullanılır (İngilizce yazılması daha iyi sonuç verir; boş bırakırsan genel kategori tarifi kullanılır).</span>
+      </div>
+      <div style="margin-top:18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <button class="btn primary" id="btnPhotos">Fotoğrafları üret</button>
+        <span class="hint" id="costPhotos"></span>
+      </div>
+    </div>
+
+    <div class="card" id="runCard" hidden>
+      <h2 id="runTitle">Çalışıyor…</h2>
+      <div class="bar"><i id="barFill"></i></div>
+      <p class="runtext" id="runText"></p>
+      <div id="runErr" class="msg bad" hidden></div>
+      <div style="margin-top:12px"><button class="btn danger sm" id="btnCancel">Durdur</button></div>
+      <details id="logBox"><summary>Ayrıntılı kayıt</summary><pre class="log" id="logPre"></pre></details>
+    </div>
+
+    <div class="card" id="resultCard" hidden>
+      <div class="row" style="align-items:center">
+        <div><h2><span class="step">3</span>Sonuçlar</h2><div class="sub" id="jobInfo" style="margin:0"></div></div>
+        <div class="nogrow"><label class="f" for="jobSel">Önceki işler</label><select id="jobSel" style="min-width:240px"></select></div>
+      </div>
+      <div id="sumMsg"></div>
+      <div class="gallery" id="gallery"></div>
+      <div id="rejBox"></div>
+      <div id="karneJob"></div>
+      <div style="margin-top:22px">
+        <h2 style="font-size:15px;margin:0 0 4px">Video</h2>
+        <p class="sub" style="margin-bottom:10px">Sahne sabit kalır; kamera elde yürüyen biri gibi hafifçe sallanır ve yavaşça hareket eder. Fotoğraftaki yazı hiçbir karede değişmez.</p>
+        <div class="row" style="margin-bottom:10px">
+          <div><label class="f" for="vidMode">Video türü</label>
+            <select id="vidMode"><option value="kamera">Kamera hareketi (ücretsiz, yazı bozulmaz)</option><option value="canli">Gerçek hareketli sahne: yapay zekâ kamerayı yürütür, kurdele/çocuk hareket eder (ücretli, önerilen)</option><option value="kompozit">Hareketli sahne: insanlar/ortam canlı (yapay zekâ + kod, ücretli)</option><option value="yapay_zeka">Ham yapay zekâ videosu (Veo, ücretli, yazıyı bozabilir)</option></select></div>
+          <div id="moveWrap"><label class="f" for="vidMove">Kamera hareketi</label><select id="vidMove"></select></div>
+          <div id="handWrap"><label class="f" for="vidHand">El sallantısı</label><select id="vidHand"></select></div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button class="btn primary" id="btnVideo" disabled>Seçili fotoğraftan video üret</button>
+          <span class="hint" id="costVideo">Önce bir fotoğraf seç.</span>
+        </div>
+      </div>
+      <div class="vids" id="vids"></div>
+      <details id="sheetBox" hidden><summary>Özet sayfası (tüm fotoğraflar tek görselde)</summary><img class="sheet" id="sheetImg" alt=""></details>
+    </div>
+
+    <div class="card">
+      <h2>Bir şey ters giderse</h2>
+      <p class="sub">Tek tıkla bir rapor dosyası hazırlanır (kayıt, ayarlar, küçük önizlemeler). <b>API anahtarların ve tasarım dosyan rapora girmez.</b> Dosyayı bana gönder, nedenini bulup düzelteyim.</p>
+      <button class="btn" id="btnReport">Hata raporu hazırla</button>
+      <span id="reportOut" class="hint"></span>
+    </div>
+  </section>
+
+  <!-- AYARLAR -->
+  <section id="tab-ayar" hidden>
+    <div class="card">
+      <h2>API anahtarları</h2>
+      <p class="sub">Anahtarlar yalnızca bu bilgisayarda, program klasöründeki <code>ayarlar.json</code> dosyasında durur. Her servis için ayrı anahtar oluştur ve servisin sitesinden <b>aylık harcama limiti</b> koy.</p>
+      <div id="keys"></div>
+      <div class="hint">Anahtarı yapıştırıp “Kaydet”e bas. “Test et” harcama yapmadan anahtarın geçerli olup olmadığına bakar.</div>
+    </div>
+    <div class="card">
+      <h2>Servis seçimi</h2>
+      <div class="grid2">
+        <div><label class="f" for="sceneProv">Sahne (fotoğraf) üretimi</label>
+          <select id="sceneProv"><option value="auto">Otomatik (önerilen): anahtarı olan servisleri dener, en iyisini seçer</option><option value="magnific-edit">Magnific Seedream 4.5 Edit — kılavuz görselli</option><option value="magnific-edit-pro">Magnific Seedream 5 Pro Edit — kılavuz görselli</option><option value="magnific">Magnific (Seedream) — yalnızca istemle</option><option value="openai">OpenAI (GPT görsel) — kılavuz görselli</option><option value="gemini">Gemini — kılavuz görselli</option><option value="mock">Deneme modu (ücretsiz, sahte sahneler)</option></select>
+          <div class="hint">Otomatik modda servisleri kendim denemene gerek kalmaz: program anahtarı girilmiş servislerin hepsini dener, hangisinin kalite kapısından daha çok sahne geçirdiğini ölçer ve sonraki üretimlerde onu daha sık kullanır. Hata veren servisi o iş için bırakır.</div></div>
+        <div><label class="f" for="videoProv">Yapay zekâ videosu için servis (“Hareketli sahne” ve “Ham yapay zekâ” türlerinde kullanılır)</label>
+          <select id="videoProv"><option value="auto">Otomatik (önerilen): servisleri sırayla dener, kalite kontrolü en iyi geçeni seçer</option><option value="veo-3-1">Veo 3.1 (Magnific üzerinden)</option><option value="veo-3-1-fast">Veo 3.1 Fast (daha ucuz)</option><option value="kling-pro">Kling Pro (Magnific üzerinden)</option><option value="runway-4-5">Runway Gen-4.5 (Magnific üzerinden, denenmedi)</option><option value="tv-kling">Kling 3.0 Turbo (TopView üzerinden, denenmedi)</option><option value="tv-veo">Veo 3.1 (TopView üzerinden, denenmedi)</option><option value="tv-seedance">Seedance 2.5 (TopView üzerinden, denenmedi)</option><option value="mock">Deneme modu (ücretsiz, sahte video)</option></select></div>
+        <div><label class="f" for="openaiModel">OpenAI görsel modeli</label><input type="text" id="openaiModel" placeholder="auto"><div class="hint">“auto”: servisten en yeni görsel modeli kendisi bulur.</div></div>
+        <div><label class="f" for="geminiModel">Gemini görsel modeli</label><input type="text" id="geminiModel" placeholder="auto"><div class="hint">“auto”: servisten en yeni görsel modeli kendisi bulur.</div></div>
+        <div><label class="f" for="vidRes">Video çözünürlüğü</label>
+          <select id="vidRes"><option>720p</option><option>1080p</option><option>4k</option></select></div>
+        <div><label class="f" for="seconds">Video süresi (sn)</label><input type="number" id="seconds" min="4" max="10"></div>
+      </div>
+      <div class="msg" id="autoInfo" style="margin-top:14px"></div>
+    </div>
+    <div class="card" id="karneCard" hidden>
+      <h2>Servis karnesi</h2>
+      <p class="sub">Bu bilgisayarda şimdiye kadar yapılan üretimlerin sonucu. Otomatik seçim bunu kullanır; en iyi sonuç veren servis daha sık denenir.</p>
+      <div id="karneBody"></div>
+    </div>
+    <div class="card">
+      <h2>Sahne kuralları</h2>
+      <p class="sub">Tasarım düz açıda yerleştirildiği için sahnedeki afişin de karşıdan, dik ve boyunun doğru olması gerekir.</p>
+      <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="strictLayout" style="margin-top:4px">
+        <span>Yalnızca <b>dik, karşıdan çekilmiş ve yere kadar uzanan</b> afişli sahneleri kabul et (önerilir). Kapatırsan yan açılı ya da kısa afişli sahneler de geçer.</span></label>
+    </div>
+    <div class="card">
+      <h2>Kurdele renkleri</h2>
+      <p class="sub">Afişlerin köşelerine bağlanan kurdele renkleri. Buraya eklediğin renkler fotoğraf ekranındaki "Kurdele rengi" listesinde çıkar.</p>
+      <div id="ribbonList" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div><label class="f" for="rbName">Renk adı</label><input type="text" id="rbName" placeholder="ör. Somon"></div>
+        <div><label class="f" for="rbHex">Renk</label><input type="color" id="rbHex" value="#F2C230" style="height:38px;width:60px;padding:2px"></div>
+        <button class="btn sm" id="rbAdd" type="button">Rengi ekle</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Otomatik video</h2>
+      <p class="sub">Açarsan fotoğraf üretimi bittiğinde her fotoğraf için video da kendiliğinden hazırlanır. "Gerçek hareketli" türü yapay zekâ video kredisi harcar (fotoğraf başına 1 deneme); kamera türü ücretsizdir.</p>
+      <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="autoVideo" style="margin-top:4px">
+        <span>Fotoğraflar bitince videoyu da kendiliğinden üret <b>(varsayılan: kapalı; video yalnız sen "Video üret" dediğinde başlar)</b></span></label>
+      <div style="margin-top:10px"><label class="f" for="autoMove">Otomatik videoda kamera hareketi</label><select id="autoMove"></select></div>
+      <div style="margin-top:10px"><label class="f" for="autoKind">Otomatik video türü</label>
+        <select id="autoKind"><option value="canli">Gerçek hareketli sahne (kurdele uçuşur, çocuklar koşar; ücretli)</option><option value="kamera">Kamera hareketi (düz fotoğraf, ücretsiz)</option></select></div>
+    </div>
+    <div class="card">
+      <h2>Harcama koruması</h2>
+      <p class="sub">Bu sınırlar, bir hata ya da kötü sonuç yüzünden kontrolsüz ücret çıkmasını engeller.</p>
+      <div class="grid2">
+        <div><label class="f" for="maxScene">Tek seferde en fazla sahne üretimi çağrısı</label><input type="number" id="maxScene" min="1" max="60"></div>
+        <div><label class="f" for="maxVideo">Video kalite kontrolü geçmezse en fazla deneme</label><input type="number" id="maxVideo" min="1" max="4"></div>
+        <div><label class="f" for="longSide">Fotoğraf uzun kenarı (piksel)</label><input type="number" id="longSide" min="0" max="6000" step="100"></div>
+      </div>
+    </div>
+    <button class="btn primary" id="btnSave">Ayarları kaydet</button>
+    <span class="hint" id="saveOut"></span>
+  </section>
+
+  <!-- YARDIM -->
+  <section id="tab-yardim" class="help" hidden>
+    <div class="card">
+      <h2>Nasıl çalışır?</h2>
+      <ul>
+        <li>Yapay zekâ, <b>boş</b> bir kumaş afişin durduğu gerçekçi bir sahne üretir. Üzerine hiçbir yazı çizmez.</li>
+        <li>Program afişin kenarlarını bulur, <b>senin tasarımını</b> kumaşın kırışıklığına, gölgesine ve ışığına uyarak oturtur.</li>
+        <li>Kalite kapısı: afiş bulunamazsa, sahne zaten yazılıysa, afiş çok koyu/desenliyse ya da oran tutmuyorsa o sahne elenir ve yenisi istenir.</li>
+        <li>Video: varsayılan olarak seçtiğin fotoğraf <b>sabit</b> kalır, program sanal bir kamera ile hafifçe yakınlaştırır ya da sağa/sola kaydırır. Yapay zekâ kullanılmadığı için yazı bozulmaz ve ücret çıkmaz. İstersen “Yapay zekâ videosu” da seçilebilir; o durumda yazıyı program her karede onarır ve kalite kontrolü yapar, ama sonuç garanti değildir.</li>
+      </ul>
+      <h3>Otomatik servis seçimi</h3>
+      <ul>
+        <li>Ayarlar’da servis alanları “Otomatik” ise program, anahtarı girilmiş servislerin hepsini dener. Her sahne ya da video kalite kapısından geçerse o servise puan yazılır; hata verirse puan düşer.</li>
+        <li>Üst üste 3 hata veren (ya da anahtarı reddedilen) servis o iş boyunca bırakılır, iş diğer servislerle sürer.</li>
+        <li>Sonuç ekranında her fotoğrafın hangi servisten geldiği ve kalite puanı yazar; en yüksek puanlı fotoğrafta <b>★ en iyi</b> rozeti çıkar ve otomatik seçilir. Videoda da kalite kontrolünden en temiz geçen kullanılır.</li>
+        <li>Harcama sınırları (tek seferde en fazla çağrı/deneme) otomatik modda da aynen geçerlidir.</li>
+      </ul>
+      <h3>Önce ücretsiz dene</h3>
+      <p>Ayarlar → Servis seçimi’nde iki alanı da “Deneme modu” yap. Hiçbir ücretli servis çağrılmaz; sahte sahnelerle bütün akışın çalıştığını görürsün. Sonra gerçek servislere geç.</p>
+      <h3>Video kalite rozetleri</h3>
+      <ul>
+        <li><b>Kontrolden geçti</b>: yazı karelerde görünür, titremiyor, tasarımla örtüşüyor.</li>
+        <li><b>Kontrolden geçmedi</b>: yazı bir bölümde kayıyor ya da kayboluyor olabilir. Videoyu mutlaka kendin izle; gerekirse yeniden dene.</li>
+      </ul>
+      <h3>Etsy hakkında</h3>
+      <ul>
+        <li>İlan fotoğrafları ürünü doğru göstermelidir: tasarım, kumaş rengi ve ölçü gerçek üründekiyle uyumlu olmalı.</li>
+        <li>Yapay zekâyla hazırlanan sahneleri ilan açıklamasında belirtmek (ör. “mockup görselleri yapay zekâ ile hazırlanmıştır”) Etsy kurallarına uyum için iyi olur. Güncel kuralları Etsy’nin kendi sayfasından kontrol et.</li>
+        <li>İlk gerçek baskıdan önce bir örnek bas ve ekrandaki renkle karşılaştır.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<div class="lb" id="lb"><img id="lbImg" alt=""></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let cfg = {}, S = {}, curJob = null, curInfo = null, selPhoto = null, designUrl = null;
+
+async function api(path, body) {
+  const opt = body === undefined ? {} : {method: "POST", headers: {"X-Afis": "1", "Content-Type": "application/json"}, body: JSON.stringify(body)};
+  const r = await fetch(path, opt);
+  let j = {};
+  try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(j.hata || ("HTTP " + r.status));
+  return j;
+}
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("on"), 3200);
+}
+
+/* sekmeler */
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
+  for (const t of ["uret", "ayar", "yardim"]) $("#tab-" + t).hidden = (t !== b.dataset.tab);
+});
+
+/* ------------------------------------------------------------------ yapılandırma */
+const KEYS = [
+  ["magnific", "magnific_key", "Magnific", "Sahne (Seedream, Seedream Edit) + video (Veo/Kling/Runway)"],
+  ["openai", "openai_key", "OpenAI", "İsteğe bağlı: sahne"],
+  ["gemini", "gemini_key", "Gemini", "İsteğe bağlı: sahne"],
+  ["topview", "topview_key", "TopView anahtarı", "İsteğe bağlı: video (Kling, Veo, Seedance). Altındaki kullanıcı numarasını da gir."],
+  ["topview_uid", "topview_uid", "TopView kullanıcı no", "TopView API ayar sayfasındaki 'Uid'"],
+];
+function renderRibbons() {
+  const cols = cfg.ribbon_colors || [];
+  $("#ribbonList").innerHTML = cols.map((c, i) => `<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line,#ccc);border-radius:999px;padding:4px 10px">
+    <i style="width:16px;height:16px;border-radius:50%;background:${esc(c.hex)};border:1px solid #0003;display:inline-block"></i>${esc(c.ad)}
+    <a href="#" data-del="${i}" style="text-decoration:none" title="Sil">✕</a></span>`).join("") || "<span class='hint'>Renk yok</span>";
+  const sel = $("#ribbon"), keep = sel.value;
+  sel.innerHTML = cols.map(c => `<option value="${esc(c.ad)}">${esc(c.ad)}</option>`).join("") + `<option value="">Kurdelesiz</option>`;
+  sel.value = keep !== "" && cols.some(c => c.ad === keep) ? keep : (cfg.ribbon_default === "" ? "" : (cols.some(c => c.ad === cfg.ribbon_default) ? cfg.ribbon_default : (cols[0] ? cols[0].ad : "")));
+}
+async function saveRibbons(cols) {
+  await api("/api/settings", {ribbon_colors: cols});
+  await loadConfig();
+}
+document.addEventListener("click", async e => {
+  const a = e.target.closest && e.target.closest("[data-del]");
+  if (a) { e.preventDefault(); const cols = (cfg.ribbon_colors || []).filter((_, i) => i !== +a.dataset.del); await saveRibbons(cols); }
+});
+document.addEventListener("DOMContentLoaded", () => {
+  $("#rbAdd").onclick = async () => {
+    const ad = $("#rbName").value.trim(); if (!ad) return toast("Renk adı yaz");
+    const cols = (cfg.ribbon_colors || []).filter(c => c.ad !== ad).concat([{ad, hex: $("#rbHex").value}]);
+    await saveRibbons(cols); $("#rbName").value = ""; toast("Renk eklendi");
+  };
+  $("#ribbon").onchange = () => api("/api/settings", {ribbon_default: $("#ribbon").value}).catch(() => {});
+});
+async function loadConfig() {
+  cfg = await api("/api/config");
+  $("#ver").textContent = "sürüm " + cfg.surum;
+  const sel = $("#category");
+  const keep = sel.value;
+  sel.innerHTML = cfg.categories.map(c => `<option>${esc(c)}</option>`).join("");
+  if (keep) sel.value = keep;
+  loadRefs();
+  $("#sceneProv").value = cfg.scene_provider; $("#videoProv").value = cfg.video_provider;
+  $("#openaiModel").value = cfg.openai_model === "auto" ? "" : cfg.openai_model; $("#geminiModel").value = cfg.gemini_model === "auto" ? "" : cfg.gemini_model;
+  $("#vidRes").value = cfg.video_resolution; $("#seconds").value = cfg.seconds;
+  $("#maxScene").value = cfg.max_scene_calls; $("#maxVideo").value = cfg.max_video_tries;
+  $("#longSide").value = cfg.photo_long_side;
+  $("#strictLayout").checked = cfg.strict_layout !== false;
+  renderRibbons();
+  $("#autoVideo").checked = cfg.auto_video === true;
+  $("#autoMove").innerHTML = (cfg.moves || []).map(([k, n]) => `<option value="${esc(k)}">${esc(n)}</option>`).join("");
+  $("#autoMove").value = cfg.auto_video_move || "yakinlas_saga";
+  $("#autoKind").value = cfg.auto_video_kind || "canli";
+  $("#chipFfmpeg").hidden = !!cfg.ffmpeg;
+  const vidMock = cfg.video_mode === "kamera" || cfg.video_provider === "mock";     // kamera hareketi ücretsiz sayılır
+  const mock = cfg.scene_provider === "mock" && vidMock;
+  const partial = cfg.scene_provider === "mock" || (cfg.video_provider === "mock" && cfg.video_mode !== "kamera");
+  const chip = $("#chipMode");
+  chip.className = "chip " + (mock ? "warn" : partial ? "warn" : "ok");
+  chip.textContent = mock ? "Deneme modu (ücretsiz)" : partial ? "Kısmen deneme modu" : "Gerçek servisler";
+  const sn = ((cfg.servisler || {}).sahne || []).map(x => x[1]);
+  $("#costPhotos").textContent = cfg.scene_provider === "mock"
+    ? "Deneme modu: ücret yok."
+    : (cfg.scene_provider === "auto"
+        ? (sn.length ? `Otomatik seçim: ${sn.join(", ")}. En fazla ${cfg.max_scene_calls} sahne çağrısı yapılır (üstünden fazlası harcanmaz).`
+                     : "Henüz hiçbir servis için anahtar girilmemiş (Ayarlar).")
+        : `En fazla ${cfg.max_scene_calls} sahne çağrısı yapılır (üstünden fazlası harcanmaz).`);
+  const vn = ((cfg.servisler || {}).video || []).map(x => x[1]);
+  const ai = $("#autoInfo");
+  ai.className = "msg " + ((cfg.scene_provider === "auto" && !sn.length) || (cfg.video_provider === "auto" && !vn.length) ? "warn" : "ok");
+  ai.textContent = "Şu an kullanılacak servisler — Sahne: " + (sn.length ? sn.join(", ") : "yok (anahtar gir)") + " · Video: " + (vn.length ? vn.join(", ") : "yok (Magnific anahtarı gir)")
+    + (cfg.scene_provider === "auto" || cfg.video_provider === "auto" ? " · Otomatik seçim açık." : " · Elle seçili.");
+  loadKarne();
+  const mv = $("#vidMove");
+  if (!mv.options.length) {
+    mv.innerHTML = (cfg.moves || []).map(([k, n]) => `<option value="${esc(k)}">${esc(n)}</option>`).join("")
+      + `<option value="hepsi">Hepsini üret (yakınlaş, sağa, sola: 3 video)</option>`;
+    $("#vidMode").value = cfg.video_mode || "kamera";
+    mv.value = cfg.camera_move || "yakinlas";
+  }
+  const hd = $("#vidHand");
+  if (!hd.options.length) {
+    hd.innerHTML = (cfg.handheld_levels || []).map(([k, n]) => `<option value="${esc(k)}">${esc(n)}</option>`).join("");
+    hd.value = cfg.handheld || "yuruyus";
+  }
+  loadConfigCost();
+  renderKeys();
+}
+function renderKeys() {
+  $("#keys").innerHTML = KEYS.map(([id, field, name, note]) => {
+    const has = !!cfg[field];
+    return `<div class="keyrow">
+      <div class="kl"><b>${name}</b><span>${note}</span></div>
+      <div><input type="password" id="key_${id}" autocomplete="off" placeholder="${has ? "Kayıtlı: " + esc(cfg[field]) + " — değiştirmek için yenisini yapıştır" : "Anahtarı buraya yapıştır"}"></div>
+      <button class="btn sm" data-test="${id}">Test et</button>
+      <button class="btn sm danger" data-clear="${field}" ${has ? "" : "disabled"}>Sil</button>
+      <div class="hint" id="keyout_${id}" style="grid-column:2/-1;margin:0"></div></div>`;
+  }).join("");
+  document.querySelectorAll("[data-test]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.test;
+    const say = t => { const o = $("#keyout_" + id); if (o) o.textContent = t; };   // kaydedince ekran yenilendiği için her seferinde yeniden bul
+    say("Deneniyor…"); b.disabled = true;
+    try {
+      await saveSettings(true);
+      say("Deneniyor…");
+      const r = await api("/api/check_key", {name: id});
+      say(r.sonuc);
+    } catch (e) { say("Hata: " + e.message); }
+    b.disabled = false;
+  });
+  document.querySelectorAll("[data-clear]").forEach(b => b.onclick = async () => {
+    if (!confirm("Kayıtlı anahtar bu bilgisayardan silinsin mi?")) return;
+    await api("/api/settings", {clear: [b.dataset.clear]});
+    await loadConfig(); toast("Anahtar silindi");
+  });
+}
+async function saveSettings(silent) {
+  const body = {
+    scene_provider: $("#sceneProv").value, video_provider: $("#videoProv").value,
+    openai_model: $("#openaiModel").value.trim() || "auto", gemini_model: $("#geminiModel").value.trim() || "auto",
+    video_resolution: $("#vidRes").value, seconds: $("#seconds").value,
+    max_scene_calls: $("#maxScene").value, max_video_tries: $("#maxVideo").value, photo_long_side: $("#longSide").value,
+    strict_layout: $("#strictLayout").checked,
+    auto_video: $("#autoVideo").checked, auto_video_move: $("#autoMove").value, auto_video_kind: $("#autoKind").value,
+  };
+  for (const [id, field] of KEYS) { const v = ($("#key_" + id) || {}).value; if (v && v.trim()) body[field] = v.trim(); }
+  await api("/api/settings", body);
+  await loadConfig();
+  if (!silent) { $("#saveOut").textContent = "Kaydedildi."; toast("Ayarlar kaydedildi"); setTimeout(() => $("#saveOut").textContent = "", 3000); }
+}
+$("#btnSave").onclick = () => saveSettings(false).catch(e => toast("Hata: " + e.message));
+
+/* ------------------------------------------------------------------ yüklemeler */
+async function upload(kind, file) {
+  const r = await fetch("/api/upload?kind=" + kind + "&name=" + encodeURIComponent(file.name),
+    {method: "POST", headers: {"X-Afis": "1"}, body: file});
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(j.hata || ("HTTP " + r.status));
+  return j;
+}
+async function setDesign(file) {
+  if (!file) return;
+  try {
+    const j = await upload("design", file);
+    if (designUrl) URL.revokeObjectURL(designUrl);
+    designUrl = URL.createObjectURL(file);
+    $("#imgDesign").src = designUrl; $("#prevDesign").hidden = false;
+    $("#serverDesign").hidden = true;
+    $("#metaDesign").innerHTML = `<b>${esc(file.name)}</b><br>${j.genislik} × ${j.yukseklik} piksel · en/boy oranı ${j.oran}`
+      + (Math.min(j.genislik, j.yukseklik) < 1500 ? `<br><span style="color:var(--warn)">Küçük dosya: baskı kalitesi için daha büyük çözünürlük önerilir.</span>` : "");
+    S.design = j.ad;
+    toast("Tasarım yüklendi");
+  } catch (e) { toast("Yüklenemedi: " + e.message); }
+}
+const dd = $("#dropDesign");
+dd.onclick = () => $("#fileDesign").click();
+$("#fileDesign").onchange = e => setDesign(e.target.files[0]);
+["dragenter", "dragover"].forEach(ev => dd.addEventListener(ev, e => { e.preventDefault(); dd.classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => dd.addEventListener(ev, e => { e.preventDefault(); dd.classList.remove("over"); }));
+dd.addEventListener("drop", e => setDesign(e.dataTransfer.files[0]));
+$("#btnRef").onclick = () => $("#fileRef").click();
+async function loadRefs() {
+  const cat = $("#category").value;
+  $("#refCatName").textContent = cat;
+  let list = [];
+  try { list = (await api("/api/refs?category=" + encodeURIComponent(cat))).liste; } catch (e) {}
+  $("#refCount").textContent = list.length ? list.length + " referans kayıtlı" : "Bu kategoride henüz referans yok";
+  $("#refGrid").innerHTML = list.map((r, i) => `<div class="refitem" data-i="${i}">
+    <a href="#" class="x" data-del="${i}" title="Sil">✕</a>
+    <img src="${esc(r.kucuk)}" data-big="${esc(r.buyuk)}" title="${esc(r.ad)}">
+    <textarea data-desc="${i}" placeholder="Sahne tarifi (isteğe bağlı)">${esc(r.aciklama || "")}</textarea></div>`).join("");
+  $("#refGrid").querySelectorAll("img").forEach(im => im.onclick = () => window.open(im.dataset.big, "_blank"));
+  $("#refGrid").querySelectorAll("[data-del]").forEach(a => a.onclick = async ev => {
+    ev.preventDefault();
+    const r = list[+a.dataset.del];
+    if (!confirm("Bu referans silinsin mi?\n" + r.ad)) return;
+    await api("/api/ref_delete", {category: cat, name: r.ad}); loadRefs();
+  });
+  $("#refGrid").querySelectorAll("textarea").forEach(t => t.onchange = async () => {
+    await api("/api/ref_desc", {category: cat, name: list[+t.dataset.desc].ad, desc: t.value}); toast("Sahne tarifi kaydedildi");
+  });
+}
+$("#fileRef").onchange = async e => {
+  const cat = $("#category").value;
+  for (const f of [...e.target.files]) {
+    try {
+      const r = await fetch("/api/ref_upload?category=" + encodeURIComponent(cat) + "&name=" + encodeURIComponent(f.name),
+        {method: "POST", headers: {"X-Afis": "1"}, body: f});
+      let j = {}; try { j = await r.json(); } catch (x) {}
+      if (!r.ok) throw new Error(j.hata || ("HTTP " + r.status));
+    } catch (err) { toast("Yüklenemedi: " + err.message); }
+  }
+  e.target.value = ""; loadRefs();
+};
+$("#category").addEventListener("change", loadRefs);
+
+/* ------------------------------------------------------------------ iş başlat */
+let jobLoading = false;
+function busy() { return !!S.running || jobLoading; }
+async function guardedStart(path, body, what, provider, limit) {
+  if (provider !== "mock" && !confirm(`${what} ücretli servis çağırır (en fazla ${limit} çağrı${provider === "auto" ? "; hangi servisin kullanılacağına program kendisi karar verir" : ""}). Devam edilsin mi?`)) return;
+  try { await api(path, body); toast("Başladı"); await poll(); } catch (e) { toast(e.message); }
+}
+$("#btnPhotos").onclick = () => {
+  if (!S.design) return toast("Önce bir tasarım dosyası yükle.");
+  guardedStart("/api/start_photos", {category: $("#category").value, n: +$("#count").value || 6, name: $("#jobname").value.trim(), people: $("#people").checked, ribbon: $("#ribbon").value, use_refs: $("#useRefs").checked},
+    "Fotoğraf üretimi", cfg.scene_provider, cfg.max_scene_calls);
+};
+$("#btnVideo").onclick = async () => {
+  if (!curJob || !selPhoto) return;
+  const mode = $("#vidMode").value, move = $("#vidMove").value, hand = $("#vidHand").value;
+  try { await api("/api/settings", {video_mode: mode, camera_move: move, handheld: hand}); cfg.video_mode = mode; cfg.camera_move = move; cfg.handheld = hand; } catch (e) {}
+  const provider = mode !== "kamera" ? cfg.video_provider : "mock";     // kamera hareketi ücretsiz: onay sorma
+  guardedStart("/api/start_video", {job: curJob, photo: selPhoto, mode, move}, "Video üretimi", provider, cfg.max_video_tries);
+};
+$("#btnCancel").onclick = () => api("/api/cancel", {}).then(() => toast("Durdurma isteği gönderildi"));
+
+/* ------------------------------------------------------------------ durum izleme */
+function renderRun() {
+  const show = S.running || S.error || (S.logs && S.logs.length);
+  $("#runCard").hidden = !show;
+  $("#runTitle").textContent = S.running ? (S.kind === "video" ? "Video hazırlanıyor…" : "Fotoğraflar hazırlanıyor…") : (S.error ? "Durdu" : "Son çalışma");
+  $("#barFill").style.width = Math.round((S.running ? S.frac : (S.error ? S.frac : 1)) * 100) + "%";
+  $("#runText").textContent = S.running ? (S.text || "") : "";
+  const err = $("#runErr"); err.hidden = !S.error; err.textContent = S.error || "";
+  $("#btnCancel").hidden = !S.running;
+  const pre = $("#logPre"), atEnd = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 30;
+  pre.textContent = (S.logs || []).join("\n");
+  if (atEnd) pre.scrollTop = pre.scrollHeight;
+  if (S.running) $("#logBox").open = true;
+  ["btnPhotos"].forEach(id => $("#" + id).disabled = busy());
+  $("#btnVideo").disabled = busy() || !selPhoto;
+  if (S.design && $("#prevDesign").hidden) {
+    $("#serverDesign").hidden = false;
+    $("#serverDesign").textContent = "Daha önce yüklenen tasarım kullanılacak: " + S.design + " (değiştirmek için yenisini yükle)";
+  }
+}
+let firstPoll = true;
+async function poll() {
+  let st;
+  try { st = await api("/api/state"); } catch (e) { return; }
+  const prev = S.finished;
+  S = st;
+  renderRun();
+  if (firstPoll) {
+    firstPoll = false;
+    await refreshJobs();
+    const j = st.job || ($("#jobSel").options[0] || {}).value;
+    if (j) await loadJob(j);
+  } else if (prev !== undefined && st.finished !== prev) {
+    jobLoading = true; renderRun();
+    try {
+      await refreshJobs();
+      const j = (st.result && st.result.job) || st.job || curJob;
+      if (j) await loadJob(j, st.kind === "video");
+    } finally { jobLoading = false; renderRun(); renderResult(); }
+    if (st.error) toast(st.error); else toast(st.kind === "video" ? "Video hazır" : "Fotoğraflar hazır");
+  }
+}
+setInterval(poll, 1200);
+
+/* ------------------------------------------------------------------ sonuçlar */
+async function refreshJobs() {
+  const jobs = await api("/api/jobs");
+  const sel = $("#jobSel");
+  sel.innerHTML = jobs.map(j => `<option value="${esc(j)}">${esc(j)}</option>`).join("");
+  if (curJob && jobs.includes(curJob)) sel.value = curJob;
+}
+$("#jobSel").onchange = e => loadJob(e.target.value);
+async function loadJob(name, keepSel) {
+  if (!name) return;
+  const info = await api("/api/job?name=" + encodeURIComponent(name));
+  if (info.hata) return;
+  if (name !== curJob && !keepSel) selPhoto = null;
+  curJob = name; curInfo = info;
+  $("#jobSel").value = name;
+  $("#resultCard").hidden = false;
+  renderResult();
+}
+const NICE = {openai: "OpenAI", gemini: "Gemini", magnific: "Magnific (yalnız istem)", "magnific-edit": "Magnific Seedream 4.5 Edit", "magnific-edit-pro": "Magnific Seedream 5 Pro Edit", "veo-3-1": "Veo 3.1", "veo-3-1-fast": "Veo 3.1 Fast", "kling-pro": "Kling Pro",
+  "runway-4-5": "Runway Gen-4.5", mock: "Deneme", mock_bad: "Deneme (kötü)", mock_err: "Deneme (hatalı)", mock_vbad: "Deneme video (kötü)"};
+function niceName(n) { return NICE[n] || n; }
+function karneTable(rows, win) {
+  const r = (rows || []).filter(x => x.cagri > 0);
+  if (!r.length) return "";
+  return `<table class="karne"><thead><tr><th>Servis</th><th>Bu işte</th><th>Kabul</th><th>Hata</th><th>Ort. kalite</th></tr></thead><tbody>` +
+    r.map(x => `<tr class="${x.servis === win ? "win" : ""}"><td>${x.servis === win ? "★ " : ""}${esc(x.ad)}${x.devre_disi ? ` <span class="chip bad" title="${esc(x.devre_disi)}">bırakıldı</span>` : ""}</td>
+      <td>${x.cagri}</td><td>${x.kabul}</td><td>${x.hata}</td><td>${x.kalite != null ? Math.round(x.kalite) : "—"}</td></tr>`).join("") + `</tbody></table>`;
+}
+function renderKarneBox(i) {
+  const ks = (i.servis_karnesi || []);
+  const last = k => { for (let j = ks.length - 1; j >= 0; j--) if (ks[j].tur === k) return ks[j]; return null; };
+  const sc = last("scene") || last("sahne"), vd = last("video");
+  let h = "";
+  if (sc && karneTable(sc.tablo, sc.kazanan)) h += `<div class="hint" style="margin:8px 0 2px"><b>Sahne servisleri (bu iş)</b></div>` + karneTable(sc.tablo, sc.kazanan);
+  if (vd && karneTable(vd.tablo, vd.kazanan)) h += `<div class="hint" style="margin:8px 0 2px"><b>Video servisleri (bu iş)</b></div>` + karneTable(vd.tablo, vd.kazanan);
+  $("#karneJob").innerHTML = h ? `<details open><summary>Servis karnesi: hangi servis ne kadar başarılı oldu?</summary>${h}</details>` : "";
+}
+async function loadKarne() {
+  try {
+    const k = await api("/api/karne");
+    const parts = [];
+    for (const [kind, title] of [["scene", "Sahne"], ["video", "Video"]]) {
+      const rows = (k[kind] || []).filter(x => x.cagri > 0);
+      if (!rows.length) continue;
+      const best = rows.slice().sort((a, b) => (b.oran - a.oran) || (b.cagri - a.cagri))[0];
+      parts.push(`<div class="hint" style="margin:8px 0 2px"><b>${title}</b></div><table class="karne"><thead><tr><th>Servis</th><th>Deneme</th><th>Kabul</th><th>Kabul oranı</th><th>Ort. kalite</th></tr></thead><tbody>` +
+        rows.map(x => `<tr class="${x === best ? "win" : ""}"><td>${x === best ? "★ " : ""}${esc(x.ad)}</td><td>${x.cagri}</td><td>${x.kabul}</td><td>%${Math.round(x.oran * 100)}</td><td>${x.kalite != null ? Math.round(x.kalite) : "—"}</td></tr>`).join("") + `</tbody></table>`);
+    }
+    $("#karneCard").hidden = !parts.length;
+    $("#karneBody").innerHTML = parts.join("");
+  } catch (e) { $("#karneCard").hidden = true; }
+}
+function kindName(t) { return t === "fabric" ? "Kumaş afiş" : "Sert afiş"; }
+function renderResult() {
+  const i = curInfo; if (!i) return;
+  if (selPhoto && !i.fotograflar.some(p => p.ad === selPhoto)) selPhoto = null;
+  if (!selPhoto) { const b = i.fotograflar.find(p => p.en_iyi); if (b) selPhoto = b.ad; }       // en iyi fotoğraf kendiliğinden seçili gelir
+  $("#jobInfo").textContent = `${i.kategori || ""} · ${i.fotograflar.length} fotoğraf`;
+  const su = i.son_uretim;
+  const sm = $("#sumMsg"); sm.innerHTML = "";
+  if (su && su.eksik > 0) sm.innerHTML = `<div class="msg warn">${su.hedef} fotoğraf istendi, ${su.uretilen} tanesi kalite kapısından geçti (${su.cagri} sahne denendi). Kalan hak bitti ya da sahneler elendi; tekrar üretmeyi deneyebilirsin.</div>`;
+  const g = $("#gallery");
+  if (!i.fotograflar.length) g.innerHTML = `<div class="hint">Bu işte henüz fotoğraf yok.</div>`;
+  else g.innerHTML = i.fotograflar.map(p => {
+    const warn = Array.isArray(p.uyari) ? p.uyari.join("; ") : (p.uyari || "");
+    return `<div class="ph ${selPhoto === p.ad ? "sel" : ""}" data-ad="${esc(p.ad)}">
+      <img loading="lazy" src="${esc(p.url)}" alt="${esc(p.ad)}"><span class="tick">${selPhoto === p.ad ? "✓" : ""}</span>
+      <button class="zoom" data-zoom="${esc(p.url)}">büyüt</button>
+      <div class="cap"><span>${kindName(p.tur)}</span>${p.en_iyi ? `<span class="chip ok" title="Bu işteki en yüksek kalite puanı">★ en iyi</span>` : ""}
+      ${p.servis ? `<span class="chip" title="Bu sahneyi üreten servis${p.kalite != null ? " · kalite puanı " + p.kalite + "/100" : ""}">${esc(niceName(p.servis))}${p.kalite != null ? " · " + Math.round(p.kalite) : ""}</span>` : ""}
+      ${warn ? `<span class="chip warn" title="${esc(warn)}">uyarı</span>` : ""}
+      <a href="${esc(p.url)}" download style="margin-left:auto;color:var(--accent)" data-stop>indir</a></div></div>`;
+  }).join("");
+  g.querySelectorAll(".ph").forEach(el => el.onclick = () => { selPhoto = el.dataset.ad; renderResult(); renderRun(); });
+  g.querySelectorAll("[data-zoom]").forEach(b => b.onclick = e => { e.stopPropagation(); $("#lbImg").src = b.dataset.zoom; $("#lb").classList.add("on"); });
+  g.querySelectorAll("[data-stop]").forEach(a => a.onclick = e => e.stopPropagation());
+  renderKarneBox(i);
+  const rej = i.elenenler || [];
+  $("#rejBox").innerHTML = rej.length ? `<details><summary>${rej.length} sahne elendi (neden: kalite kapısı)</summary><ul class="rej">${rej.map(r => `<li>çağrı ${r.cagri}${r.servis ? " (" + esc(niceName(r.servis)) + ")" : ""}: ${esc(r.neden)}</li>`).join("")}</ul></details>` : "";
+  const vs = i.videolar || [];
+  $("#vids").innerHTML = vs.map(v => {
+    const ok = v.kontrol_gecti;
+    const nedenler = (v.nedenler || []).join("; ");
+    if (v.tur === "kamera" || v.tur === "kompozit") {
+      const comp = v.tur === "kompozit";
+      const live = !!v.canli;
+      return `<div class="vid"><video controls loop playsinline preload="metadata" src="${esc(v.url)}"></video>
+      <div class="t"><b>${esc(v.ad || v.hareket)}</b><span class="hint" style="margin:0">${esc(v.foto)}</span>
+      <span class="chip ok" title="${comp ? "Tasarım her karede kodla yerleştirilir; yapay zekâ yazıya dokunmaz" : "Fotoğraf sabit, yalnızca kamera hareket eder"}">Yazı değişmez</span>
+      ${live ? `<span class="chip ok">Gerçek hareket</span>` : comp ? `<span class="chip">Canlı sahne</span>` : ""}
+      ${v.servis && !v.yedek ? `<span class="chip" title="Videoyu üreten servis${v.kalite != null ? " · kalite puanı " + v.kalite + "/100" : ""}">${esc(niceName(v.servis))}${v.kalite != null ? " · " + Math.round(v.kalite) : ""}</span>` : ""}
+      ${v.yedek ? `<span class="chip warn" title="${esc((v.yedek_neden || []).join("; "))}">Yedek: kamera videosu</span>` : ""}
+      <a href="${esc(v.url)}" download style="margin-left:auto;color:var(--accent)">indir</a></div>
+      ${v.yedek ? `<div class="hint">Canlı sahne videosu kalite kontrolünden geçmedi, bu yüzden güvenli kamera videosu üretildi. Neden: ${esc((v.yedek_neden || []).join("; ") || "bilinmiyor")}</div>` : ""}</div>`;
+    }
+    return `<div class="vid"><video controls loop playsinline preload="metadata" src="${esc(v.url)}"></video>
+      <div class="t"><b>${esc(v.foto)}</b><span class="chip">Yapay zekâ</span>${v.servis ? `<span class="chip">${esc(niceName(v.servis))}</span>` : ""}
+      <span class="chip ${ok ? "ok" : "bad"}">${ok ? "Kontrolden geçti" : "Kontrolden geçmedi"}</span>
+      <a href="${esc(v.url)}" download style="margin-left:auto;color:var(--accent)">indir</a></div>
+      ${ok ? "" : `<div class="hint">${esc(nedenler)} — videoyu kendin izleyip karar ver.</div>`}
+      <details><summary>${(v.denemeler || []).length} deneme</summary><ul class="rej">${(v.denemeler || []).map(d =>
+        `<li>deneme ${d.deneme}${d.servis ? " (" + esc(niceName(d.servis)) + ")" : ""}: ${d.hata ? "servis hatası: " + esc(d.hata) : (d.kontrol_gecti ? "geçti" : "geçmedi (" + esc((d.nedenler || []).join(", ")) + ")")}</li>`).join("")}</ul></details></div>`;
+  }).join("");
+  if (i.ozet) { $("#sheetBox").hidden = false; $("#sheetImg").src = i.ozet + "?t=" + Date.now(); } else $("#sheetBox").hidden = true;
+  $("#btnVideo").disabled = busy() || !selPhoto;
+  loadConfigCost();
+}
+function loadConfigCost() {
+  const m = $("#vidMode").value, ai = m !== "kamera", raw = m === "yapay_zeka";
+  $("#moveWrap").hidden = raw;
+  $("#handWrap").hidden = raw;
+  $("#costVideo").textContent = !selPhoto ? "Önce bir fotoğraf seç."
+    : !ai ? `Seçili: ${selPhoto} · ücretsiz, birkaç on saniye sürer.`
+    : (cfg.video_provider === "mock" ? "Deneme modu: ücret yok."
+       : `Seçili: ${selPhoto} · en fazla ${cfg.max_video_tries} video denemesi, her biri ücretlidir.` +
+         ((m === "kompozit" || m === "canli") ? " Kalite kontrolden geçmezse otomatik olarak ücretsiz kamera videosuna dönülür." : ""));
+}
+$("#vidMode").onchange = loadConfigCost;
+$("#lb").onclick = () => $("#lb").classList.remove("on");
+document.addEventListener("keydown", e => { if (e.key === "Escape") $("#lb").classList.remove("on"); });
+
+/* ------------------------------------------------------------------ hata raporu */
+$("#btnReport").onclick = async () => {
+  const out = $("#reportOut"); out.textContent = " Hazırlanıyor…";
+  try {
+    const r = await api("/api/report" + (curJob ? "?job=" + encodeURIComponent(curJob) : ""));
+    out.innerHTML = ` Hazır: <a href="/rapor/${encodeURIComponent(r.dosya)}" style="color:var(--accent)">${esc(r.dosya)}</a> (indirdikten sonra bana gönder)`;
+  } catch (e) { out.textContent = " Rapor hazırlanamadı: " + e.message; }
+};
+
+/* ------------------------------------------------------------------ başlangıç */
+loadConfig().then(poll).catch(e => toast("Başlatılamadı: " + e.message));
+</script>
+</body>
+</html>

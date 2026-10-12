@@ -1,0 +1,7 @@
+opencv-python
+numpy
+scipy
+pillow
+requests
+imageio-ffmpeg
+# opsiyonel (SAM 2 arkauç, ileri seviye): torch, sam2
