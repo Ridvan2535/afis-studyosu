@@ -88,6 +88,14 @@ yüzeye tasarım uygulama motoru ürün türüne özel.
 - **Aşama 5:** sağlayıcı yaşam döngüsü sertleştirme (iş numarası, sorgulamadan yeniden üretim yok, sürüm kaydı).
 - **Aşama 6:** ürün türü soyutlaması (tişört, saat, davetiye, menü).
 
+### Aşama sonu belgeleri (zorunlu)
+Proje Codex ile de inceleniyor; iki araç aynı klasörü okur. Her aşamanın sonunda:
+- `docs/durum.md` güncellenir: tamamlanan işler ve değişen dosyalar, gerçekten çalıştırılan testler ve sonuçları
+  (yerel / sahte servis / gerçek sağlayıcı ayrımıyla), doğrulanmamış konular ve mevcut hatalar, kullanıcıdan
+  beklenen yanıtlar, sonraki önerilen adım.
+- Önemli kararlar kısa gerekçeyle `docs/kararlar.md`'ye eklenir (eski kararlar silinmez).
+- Bu dosyalara anahtar, ayar içeriği, gizli bağlantı veya base64 yazılmaz.
+
 ## 6. Video ve servis kuralları (sonraki aşamalar)
 
 - Video bir adet; fotoğraf başına otomatik ücretli üretim yok.
