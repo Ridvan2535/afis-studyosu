@@ -79,6 +79,7 @@ class Settings:
         {"ad": "Siyah", "hex": "#1E1E1E"}])      # kullanıcı Ayarlar'dan kendi renklerini ekler
     ribbon_default: str = "Sarı"          # fotoğraf ekranında varsayılan seçili kurdele rengi ("" = kurdelesiz)
     strict_layout: bool = True            # sahne: dik, karşıdan (yan açısız) ve yere kadar uzanan afiş şartı
+    ornek_olcu: str = "75x200"            # ilan görsellerinde gösterilen örnek ölçü kimliği (product.OLCULER); satış ölçülerinden ayrı
 
     @classmethod
     def load(cls) -> "Settings":
@@ -106,6 +107,8 @@ class Settings:
             s.handheld = "yuruyus"
             s.auto_video, s.auto_video_move = True, "yakinlas_saga"
             s.servis_surumu = 2
+        if s.ornek_olcu not in ("50x100", "50x150", "75x200", "150x300", "150x400"):   # product.OLCULER ile aynı (döngüsel içe aktarma olmasın)
+            s.ornek_olcu = "75x200"
         if data and int(data.get("servis_surumu", 0)) < 3:             # kullanıcı isteği: video ben "üret" demeden üretilmesin
             s.auto_video = False
             s.servis_surumu = 3
@@ -694,7 +697,7 @@ def make_scene_provider(s: Settings, log=print, name=None) -> SceneProvider:
         return SceneProvider(OpenAIImages(s.openai_key, s.openai_model, log))
     if p == "gemini":
         return SceneProvider(GeminiImages(s.gemini_key, s.gemini_model, log))
-    if p in ("mock", "mock_bad", "mock_err", "mock_thin"):
+    if p in ("mock", "mock_bad", "mock_err", "mock_thin", "mock_pool", "mock_air", "mock_long", "mock_touch"):
         from mock_provider import MockScenes
         return SceneProvider(MockScenes(variant=p))
     raise ProviderError(f"Bilinmeyen sahne sağlayıcısı: {p}")

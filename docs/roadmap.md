@@ -21,7 +21,15 @@ kullanıcı onayıyla, Aşama 2'nin sonunda örnek ürünlerle.
 Hedef: bir tasarım + ürün profili → 6 kare ürün görseli (3 ortam × önden/hafif yandan), tutarlı kumaş
 yerleşimi, eksikleri tamamlama, 2 bilgi görseli pakette. Video'ya dokunulmaz.
 
-### 2.0 Önce ürün sahibinden alınacak bilgiler (uydurulmayacak)
+### 2.0 Ürün sahibinden alınan bilgiler
+
+**2026-10-12 yanıtlandı (Aşama 2A):** örnek ölçü 75×200; PNG tuvali = kumaşın tamamı (tam kumaş modu); oran
+uyuşmazlığında üretim bekletilir; kumaş zemine değer / hafifçe birikir, birikme miktarı uydurulmaz; görünür fiyonk ile
+kuşgözü ayrı, kuşgözü görünürlüğü ret nedeni değil; bilinmeyen gramaj/karışım/halka çapı boş kalabilir. Ayrıntı:
+`CLAUDE.md` §1, `docs/kararlar.md` K-10…K-17. Aşağıdaki liste geçmiş kayıt olarak duruyor; açık kalanlar: 7 (açılı
+görünümün derecesi/yönü), 8 (diğer kategorilerin 3 ortamı), 9 (bilgi görselleri).
+
+Önceki soru listesi:
 
 1. Her ölçü için **baskı alanı (cm)** ve kenar/dikiş payı; baskı kenara kadar mı?
 2. Üst kenar yapısı: çubuk tüneli mi, kurdeleyle bağlama mı? Kurdele afişe nereden bağlanıyor?
@@ -37,6 +45,9 @@ yerleşimi, eksikleri tamamlama, 2 bilgi görseli pakette. Video'ya dokunulmaz.
     (B) en fazla %15 esnetmeye izin ver ve raporla.
 
 ### 2.1 Adımlar (sıra, sahip, test)
+
+> Aşama 2A'da tamamlananlar: adım 1 (`product.py`), 3 (tam kumaş yerleşimi — önden görünüm), 4 (sahte servis kare/birikmeli/
+> havada/uzun), 5 (prompt + kılavuz profilden), 6 (kare kadraj). Kalan: 2 (açılı profil), 3'ün açılı kısmı, 7, 8, 9.
 
 | # | İş | Sahip | Dosyalar | Regresyon testi (düzeltme geri alınınca başarısız olmalı) |
 |---|---|---|---|---|

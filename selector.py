@@ -26,7 +26,9 @@ NICE = {
     "magnific-edit-pro": "Magnific Seedream 5 Pro Edit",
     "veo-3-1": "Veo 3.1", "veo-3-1-fast": "Veo 3.1 Fast", "kling-pro": "Kling Pro", "runway-4-5": "Runway Gen-4.5",
     "tv-kling": "TopView Kling 3.0 Turbo", "tv-veo": "TopView Veo 3.1", "tv-seedance": "TopView Seedance 2.5",
-    "mock": "Deneme modu", "mock_bad": "Deneme (kötü)", "mock_err": "Deneme (hatalı)", "mock_thin": "Deneme (ince afiş)", "mock_vbad": "Deneme video (kötü)",
+    "mock": "Deneme modu", "mock_bad": "Deneme (kötü)", "mock_err": "Deneme (hatalı)", "mock_thin": "Deneme (ince afiş)",
+    "mock_pool": "Deneme (yerde birikmeli)", "mock_air": "Deneme (havada biten)", "mock_long": "Deneme (ürün boyundan uzun)",
+    "mock_touch": "Deneme (zemine değen)", "mock_vbad": "Deneme video (kötü)",
 }
 
 

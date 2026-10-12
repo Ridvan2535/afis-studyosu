@@ -18,8 +18,24 @@ os.environ.setdefault("MOCK_FRAMES", "16")
 import orchestrator as orch          # noqa: E402
 from providers import Settings        # noqa: E402
 
-design = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "design_candy.jpg")
 tmp = tempfile.mkdtemp(prefix="afis_e2e_")
+
+
+def exact_design(path, w=750, h=2000):
+    """Aşama 2A: tasarım PNG'si ürün ölçüsüyle (varsayılan örnek ölçü 75x200) TAM oranlı olmalı; aksi halde üretim bekletilir.
+    design_candy.jpg (4116x8000, en/boy 0.51) 75x200 (0.375) ile uyuşmadığı için test tasarımı ondan TÜRETİLİR: candy, oranı
+    bozulmadan kumaş enine ölçeklenip şeffaf 750x2000 tuvalin üstüne konur (alt kısım şeffaf = baskısız kumaş)."""
+    import cv2 as _c, numpy as _n
+    im = _c.imread(os.path.join(ROOT, "design_candy.jpg"))
+    im = _c.resize(im, (w, int(round(im.shape[0] * w / im.shape[1]))), interpolation=_c.INTER_AREA)
+    can = _n.zeros((h, w, 4), _n.uint8)
+    can[:im.shape[0], :, :3] = im
+    can[:im.shape[0], :, 3] = 255
+    _c.imwrite(path, can)
+    return path
+
+
+design = sys.argv[1] if len(sys.argv) > 1 else exact_design(os.path.join(tmp, "tasarim_75x200.png"))
 orch.JOBS_DIR = os.path.join(tmp, "isler")
 orch.REPORT_DIR = os.path.join(tmp, "raporlar")
 orch.LOG_PATH = os.path.join(tmp, "kayit.log")
@@ -41,8 +57,11 @@ for e in rap["elenenler"]:
 assert res["uretilen"] == 6, "6 geçerli fotoğraf bekleniyordu"
 assert os.path.exists(os.path.join(job, "foto", "_ozet.jpg"))
 
-# video: önce sert afişli bir fotoğraf, sonra kumaşlı
-pick = next(p for p in rap["fotograflar"] if p["tur"] == "rigid")
+# her fotoğraf kare ve tam kumaş yerleşimli (Aşama 2A); algılayıcı sert/kumaş ayrımı yerleşimi değiştirmez
+assert all(p["olcu"][0] == p["olcu"][1] and p["yerlesim_modu"] == "tam_kumas" for p in rap["fotograflar"]), rap["fotograflar"]
+assert all(e.get("tur") for e in rap["elenenler"])
+# video: ilk fotoğraf (eskiden "sert afişli" seçiliyordu; artık tüm sahneler kumaş yolunda)
+pick = rap["fotograflar"][0]
 t1 = time.time()
 v = o.generate_video(job, pick["ad"])
 print(f"\nVİDEO ({pick['ad']}): kontrol_gecti={v['kontrol_gecti']} deneme={v['secilen_deneme']} nedenler={v['nedenler']} "
@@ -149,7 +168,7 @@ assert tab["mock"]["cagri"] > tab["mock_bad"]["cagri"], tab
 assert tab["mock_err"]["cagri"] <= 3, tab                 # 3 üst üste hatadan sonra bırakılmış olmalı
 assert any("devre dışı" in m for m in msgs), "hatalı servis devre dışı bırakılmalıydı"
 
-pick2 = next(p for p in rap_a["fotograflar"] if p["tur"] == "rigid")
+pick2 = rap_a["fotograflar"][0]
 t6 = time.time()
 av = o3.generate_composite_video(job2, pick2["ad"])
 a0 = av["videolar"][0]
@@ -164,23 +183,19 @@ assert vk["kazanan"] == "mock", vk
 import selector                              # noqa: E402
 assert selector.overview(orch.STATS_PATH) == {"scene": [], "video": []}, "sahte servisler kalıcı karneye yazılmamalı"
 
-# ORAN DÜZELTME: servis afişi fazla ince çizerse sahne atılmaz, genişletilip tasarım oranına getirilir
+# ORAN DÜZELTME KAPALI (Aşama 2A): servis afişi üründen ince/uzun çizerse sahne yatayda GERİLMEZ; sahne geometrisi
+# uyuşmazlığı olarak elenir (eskiden proportion.widen ile genişletiliyordu).
 import dataclasses as _dc
-o6 = orch.Orchestrator(_dc.replace(s, auto_video_kind="kamera"), log=msgs.append, progress=lambda f, t: None)   # sahte 'ince' servis oranı kadrajdan türetir; 9:16 kadrajda düzeltme sınırını aşar (test yapaylığı)
+msgs6 = []
+o6 = orch.Orchestrator(_dc.replace(s, auto_video_kind="kamera", max_scene_calls=3), log=msgs6.append, progress=lambda f, t: None)
 o6.arms_override = {"scene": ["mock_thin"]}
 job6 = o6.new_job(design, "Düğün", "ince")
 r6 = o6.generate_photos(job6, 2)
 rap6 = o6.report_of(job6)
-print(f"ORAN-DÜZELTME: {r6}")
-for p_ in rap6["fotograflar"]:
-    print("  ", p_["ad"], "oran", (p_["yerlesim"] or {}).get("aspect"), "düzeltme", p_.get("oran_duzeltme"), "kalite", p_["kalite"], "boyut", p_["olcu"])
-assert r6["uretilen"] == 2, (r6, rap6["elenenler"])
-da_ = 4116 / 8000
-for p_ in rap6["fotograflar"]:
-    assert p_["oran_duzeltme"] and p_["oran_duzeltme"]["f"] > 1.2, p_
-    assert abs(p_["yerlesim"]["aspect"] / da_ - 1) < 0.04, p_["yerlesim"]
-    assert p_["kalite"] <= 100 - 5, p_["kalite"]                       # düzeltilmiş sahne, düzeltilmemişten hafif geride
-assert any("genişletildi" in m for m in msgs)
+print(f"ORAN-DÜZELTME KAPALI: {r6} elenen türleri {[e['tur'] for e in rap6['elenenler']]}")
+assert r6["uretilen"] == 0 and r6["cagri"] == 3, (r6, rap6["elenenler"])
+assert all(e["tur"] == "sahne_geometri" for e in rap6["elenenler"]), rap6["elenenler"]
+assert not any("genişletildi" in m for m in msgs6)
 
 # REFERANS DEPOSU: depodaki görseller sırayla sahnelere verilir, tarifli olanın tarifi kullanılır
 import cv2 as _cv2, numpy as _np
@@ -222,3 +237,4 @@ assert b"SECRET-KEY-123456" not in blob, "ANAHTAR RAPORA SIZDI"
 assert not any(n.startswith("tasarim") for n in names), "tasarım rapora girmiş"
 print("anahtar sızıntısı yok, tasarım rapora girmedi")
 print("iş klasörü:", job)
+print("test_e2e_mock: TAMAM")

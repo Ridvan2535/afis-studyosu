@@ -9,10 +9,15 @@ import math
 SUBJECT = (
     "SUBJECT: one single tall vertical BLANK banner made of natural off-white unbleached raw cotton-and-linen canvas "
     "(light cream, matte, visible fine weave, clean, neatly hemmed straight edges with no fringe, no tassels and no frayed threads anywhere, and no coloured border or edge strip). The banner is completely empty: no text, no letters, "
-    "no pattern, no border, no logo, no print. {stand} It is FLOOR-LENGTH: the fabric is about 20-30 cm longer than the frame's clearance, so its straight plain hem reaches down TO the floor "
-    "and rests ON the ground, lying there with a soft slight curve and a few gentle folds (no fringe, no tassels). Only very gentle natural vertical folds and a soft natural drape, otherwise flat and smooth. "
+    "no pattern, no border, no logo, no print. {stand} {hem} Only very gentle natural vertical folds and a soft natural drape, otherwise flat and smooth. "
     "{ribbon} {proportion}"
 )
+# Eski sabit "20-30 cm daha uzun" ifadesi uydurulmuş bir ölçüydü (Aşama 2A'da kaldırıldı). Profil yoksa eski metin korunur.
+HEM_LEGACY = ("It is FLOOR-LENGTH: the fabric is about 20-30 cm longer than the frame's clearance, so its straight plain hem reaches down TO the floor "
+              "and rests ON the ground, lying there with a soft slight curve and a few gentle folds (no fringe, no tassels).")
+HEM_PROFILE = ("It is FLOOR-LENGTH: the fabric hangs straight down from the rod and its straight plain bottom hem reaches the floor and touches it, "
+               "ideally resting softly on the ground with only a little gentle pooling; the hem NEVER ends in the air above the floor "
+               "(no fringe, no tassels).")
 
 STAND = (
     "CONSTRUCTION (copy exactly): a slim free-standing rectangular frame of plain light natural pine wood stands on the floor by itself: two thin "
@@ -45,6 +50,13 @@ RIBBON_ON = (
     "fabric with NO ribbon stripe or coloured edging on them. The ribbon colour is exactly {name} ({hex}), the same on both sides."
 )
 RIBBON_OFF = "No ribbons: the banner is simply draped over the rod, clean and unadorned."
+# Ürün profiliyle her sahne kurdelelidir; renk seçilmemişse ortama uygun nötr bir renk modele bırakılır.
+RIBBON_ANY = (
+    "RIBBONS: at each of the two top corners a soft ribbon, about 3 cm wide, soft matte satin or chiffon in a colour that suits the scene, "
+    "is tied around the top rod right at the banner's corner in a relaxed, slightly imperfect bow, as in a real event decoration. From each bow "
+    "two long, thin ribbon tails of slightly different lengths hang down freely OUTSIDE the banner's side edge, in the gap beside the posts. "
+    "The tails do NOT lie on the banner: the banner's side edges are plain cream fabric with NO ribbon stripe or coloured edging on them."
+)
 
 CAMERA = (
     "CAMERA: perfectly FRONTAL straight-on view, like a catalogue product photo or architectural front elevation. The lens "
@@ -53,6 +65,14 @@ CAMERA = (
     "its left and right edges are perfectly vertical and parallel, and its top edge is perfectly horizontal. "
     "Portrait photograph; the banner is the main subject and fills about 80% of the image height and about 60-70% of the image width, "
     "from about 11% below the top of the frame down to the floor, fully visible, not cropped; the whole wooden frame is visible."
+)
+CAMERA_SQUARE = (
+    "CAMERA: perfectly FRONTAL straight-on view, like a catalogue product photo or architectural front elevation. The lens "
+    "is at the banner's mid-height, the camera axis is exactly perpendicular to the banner, and the banner faces the camera "
+    "squarely and is horizontally centred. The banner is NOT turned, NOT angled, NOT seen from the side, NOT in perspective: "
+    "its left and right edges are perfectly vertical and parallel, and its top edge is perfectly horizontal. "
+    "SQUARE photograph (1:1). The banner and the ENTIRE wooden stand - top rod, both posts and both feet - and the floor where the hem "
+    "touches it are fully visible inside the square with a little space around them; nothing is cropped at the top, bottom or sides."
 )
 
 SURROUND = (
@@ -89,9 +109,9 @@ RIBBON_REF = " The ribbon colour is FIXED as stated above: ignore the colours of
 GUIDE_NOTE = (
     "Image 1 is a LAYOUT GUIDE, not a style reference. Turn it into a realistic photograph with EXACTLY this composition: "
     "the cream rectangle is the blank fabric banner. Keep its exact position, size, tall proportions and perfectly frontal, flat "
-    "orientation (edges perfectly vertical, no rotation, no perspective, no side view). The two small dark circles at its top corners "
-    "are the metal grommets and the two thin coloured strips beside the banner (outside its edges, in the gap next to the posts) are the ribbon tails of the bows at the rod ends: keep them outside the banner, never on it. "
-    "The lower band is the floor and the banner's bottom hem rests on the floor. "
+    "orientation (edges perfectly vertical, no rotation, no perspective, no side view). The small coloured shapes at the rod ends are ribbon bows "
+    "and the two thin coloured strips beside the banner (outside its edges, in the gap next to the posts) are their ribbon tails: keep them outside the banner, never on it. "
+    "The lower band is the floor and the banner's bottom hem reaches it and touches it. "
     "Replace the plain grey wall and flat floor with the scene described below, but do not move, resize, rotate or reshape the banner, "
     "and do not put any print or text on it. "
 )
@@ -219,7 +239,8 @@ def pool_size(category: str) -> int:
     return len(CATEGORIES[canon(category)])
 
 
-# Satılan gerçek ölçüler (cm, en x boy). Tasarımın oranı en yakın ölçüye oturtulur; istem bu ölçüyü birebir ister.
+# ESKİ YOL (profilsiz işler ve eski testler için korunur): tasarım oranından ölçü tahmini. Yeni üretim hattı bunu KULLANMAZ;
+# ölçü ürün profilinden gelir (product.py). Bilinen hata: aynı oranlı ölçüler (50x100/150x300, 75x200/150x400) ayırt edilemez.
 STANDARD_SIZES = [(50, 100), (50, 150), (75, 200), (150, 300), (150, 400)]
 
 
@@ -248,8 +269,16 @@ def frame_aspect(banner_aspect: float) -> float:
     return min((9 / 16, 2 / 3, 3 / 4), key=lambda r: abs(math.log(want / r)))
 
 
+def profile_size_text(profile) -> str:
+    """Ürün profilinden ölçü cümlesi (PNG oranından tahmin YOK)."""
+    w, h = profile.en_cm, profile.boy_cm
+    return (f"Banner size: the fabric is exactly {w} cm wide and {h} cm long (its length is {h / w:.2f} times its width). "
+            f"The stand is just tall enough for this fabric to hang from the rod down to the floor. Keep exactly this proportion: "
+            f"do NOT make the banner wider, narrower, shorter or longer than this.")
+
+
 def build_scene_prompt(category: str, index: int, aw: float, ah: float, has_refs=False, round_no=0, guided=False,
-                       people=False, ribbon=None, scene_desc: str | None = None) -> str:
+                       people=False, ribbon=None, scene_desc: str | None = None, profile=None) -> str:
     """scene_desc: referans deposundaki görsele yazılmış hazır sahne tarifi (varsa genel kategori listesi yerine kullanılır).
     Tarif "OUT:" ya da "IN:" ile başlayabilir (ışık seçimi için); başlamıyorsa dış mekân sayılır."""
     pool = CATEGORIES[canon(category)]
@@ -263,11 +292,19 @@ def build_scene_prompt(category: str, index: int, aw: float, ah: float, has_refs
     variety = ""
     if round_no > 0:   # liste tükenip başa dönünce aynı sahneyi tekrar etmesin
         variety = f" Variation {round_no + 1}: change the venue details, season of the plants, colour palette and the people, but keep the same banner layout."
-    rb = RIBBON_ON.format(name=color_en(ribbon["hex"]), hex=ribbon["hex"]) if ribbon else RIBBON_OFF
-    subject = SUBJECT.format(proportion=aspect_text(aw, ah), ribbon=rb, stand=STAND)
+    if ribbon:
+        rb = RIBBON_ON.format(name=color_en(ribbon["hex"]), hex=ribbon["hex"])
+    else:
+        rb = RIBBON_ANY if profile is not None else RIBBON_OFF        # ürün profiliyle tüm sahneler kurdeleli
+    if profile is not None:                                          # Aşama 2A: ölçü profilden, kare kadraj, uydurulmuş birikme ölçüsü yok
+        subject = SUBJECT.format(proportion=profile_size_text(profile), ribbon=rb, stand=STAND, hem=HEM_PROFILE)
+        camera = CAMERA_SQUARE
+    else:
+        subject = SUBJECT.format(proportion=aspect_text(aw, ah), ribbon=rb, stand=STAND, hem=HEM_LEGACY)
+        camera = CAMERA
     head = GUIDE_NOTE if guided else ""
     surround = SURROUND.format(clear=", and at most a few small gift boxes at its very foot where the scene mentions them", light=light)
-    return (head + subject + " " + CAMERA + " " + desc + variety + " " + surround + (PEOPLE if people else "")
+    return (head + subject + " " + camera + " " + desc + variety + " " + surround + (PEOPLE if people else "")
             + (REFERENCE_NOTE if has_refs else "") + (REF_ORDER if (has_refs and guided) else "")
             + (RIBBON_REF if (ribbon and has_refs) else ""))
 

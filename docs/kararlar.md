@@ -7,6 +7,39 @@ Biçim: **K-numara · tarih · karar** — gerekçe · etki/geri alma.
 
 ---
 
+### 2026-10-12 — Aşama 2A
+
+**K-17 · 2026-10-12 · Yerleşim eşikleri VARSAYIM olarak işaretlendi ve raporlanıyor.**
+`ORAN_TOLERANSI` %1 (PNG ↔ kumaş), `TAM_BOY_TOL` %3 (sahnede görünen boy ↔ ürün boyu), `OLCUM_PAYI` %0,5, `GIZLI_EN_FAZLA`
+%25, `SPREAD_FRAC` %4, `MUREKKEP_ESIK` %0,1. Sentetik sahnelerle seçildi; gerçek sahnelerle ayarlanmadı.
+
+**K-16 · 2026-10-12 · Dikey ölçek: kumaş sahnede kısa görünürse tasarım SIKIŞTIRILMAZ.**
+Bağımsız inceleme (quality-reviewer B1) sonrası. Asılı boy ürün boyundan kısa ise ölçek fizikseldir, görünmeyen alt kısım
+gizli bölge sayılır ve mürekkep denetimine girer; %3'ten fazla kısa ve birikme yoksa sahne "havada bitiyor" diye reddedilir.
+Ürün boyundan en fazla %3 uzun ise tasarım görünen boya sığdırılır ve bu kullanıcıya UYARI olarak yazılır (sessiz değil);
+daha uzunsa red. Gerekçe: "yazıyı yapay olarak yukarı taşıma" ve "oranı bozarak esnetme yok" kuralları.
+
+**K-15 · 2026-10-12 · Zemindeki birikmede baskı varsa sahne başarılı sayılmaz (`birikme_cozulemedi`).**
+Birikmedeki kıvrımların üzerinde baskı doğru çizilemiyor. Gizli bölge baskısızsa kabul + uyarı + gizli kısım önizlemesi.
+
+**K-14 · 2026-10-12 · Fotoğraf hattında sahne esnetme (`proportion.widen`) kapalı; algılamada kumaş zorunlu.**
+Sahne `bd.detect(hint={"kind":"fabric"})` ile alınır; otomatik sert/kumaş sınıflandırması yerleşimi değiştirmez.
+Eski yollar (`compositor` mode=None) video modülleri ve eski işler için korunur.
+
+**K-13 · 2026-10-12 · Fotoğraf kadrajı sabit 1:1.** `auto_video_kind` kadrajı etkilemez (önceki: canlı video seçiliyken
+9:16). Video koduna yeni 9:16 zorunluluğu eklenmedi; video oranı sonraki aşamada belirlenecek.
+
+**K-12 · 2026-10-12 · Ürün profili `product.UrunProfili` ve örnek ölçü `Settings.ornek_olcu` = 75×200.**
+Ölçü kimlikle seçilir (aynı oranlılar ayrı); ölçü cm değerleri rapora kaydedilir; görünür fiyonk (`gorunur_fiyonk`) ile
+fiziksel bağlantı (`fiziksel_baglanti.kusgozu`) ayrı; bilinmeyenler None. Profil her işin `rapor.json`'una kopyalanır.
+
+**K-11 · 2026-10-12 · Tam kumaş modu: PNG tuvali = kumaşın tamamı.** (kullanıcı kararı) Kenar payı, içeri küçültme,
+kırpma, ortalama ve oran bozan esneme yok. Yatayda kumaşın gerçek kenarları, dikeyde fiziksel ölçek (px/cm = en).
+
+**K-10 · 2026-10-12 · Oran uyuşmazlığında üretim BEKLETİLİR.** (kullanıcı kararı) Uyarı + önizleme; hiç ücretli çağrı
+yapılmaz (arayüz/app ve orkestratör iki katmanda). **Önceki öneri "(A) sahne esnetmeyi kapat / (B) %15 esnetme" ve
+CLAUDE.md'deki "baskı alanına oranı koruyarak sığdır" kuralının yerine geçti.**
+
 ### 2026-10-12 — Aşama 1
 
 **K-09 · 2026-10-12 · Aşama sonu belgeleri: `docs/durum.md` ve `docs/kararlar.md`.**
@@ -47,7 +80,7 @@ kategorisinden ayrıdır.**
 Onaylı sahneler kütüphanede tekrar kullanılır, günlük üretimde gereksiz ücretli çağrı olmaz. Gelecek ürünler
 (tişört, saat, davetiye, menü) için yalnız yerleştirme motoru ve kalite profili türe özel olur.
 
-### Aşama 2 için önerilen, henüz onaylanmamış kararlar
-- Fotoğraf kadrajı sabit 1:1; 9:16 yalnız video aşamasında kırpılır.
-- Kumaş ürününde yerleşim her zaman kumaş yolundan; baskı alanı ürün profilinden.
-- Oran uyuşmazlığında sahne esnetme kapatılır, uymayan sahne yeniden üretilir (seçenek A) — **kullanıcı kararı bekleniyor.**
+### Aşama 2 için önerilen kararlar (Aşama 1'de yazılmıştı) — durum
+- Fotoğraf kadrajı sabit 1:1 → **K-13 ile uygulandı** (9:16 video kırpması yerine "video oranı sonra belirlenecek").
+- Kumaş ürününde yerleşim her zaman kumaş yolundan → **K-14 ile uygulandı**; "baskı alanı profilden" yerine tam kumaş (K-11).
+- Oran uyuşmazlığında (A)/(B) seçimi → **yanıtlandı: K-10** (ne esnetme ne sığdırma; üretim bekletilir).

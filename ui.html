@@ -77,7 +77,7 @@ pre.log{margin:10px 0 0;max-height:210px;overflow:auto;background:var(--bg);bord
 .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-top:14px}
 .ph{position:relative;border:2px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg);cursor:pointer}
 .ph.sel{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-.ph img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;background:#ddd}
+.ph img{display:block;width:100%;aspect-ratio:1/1;object-fit:contain;background:#ddd}  /* Aşama 2A: fotoğraflar kare; eski dikey fotoğraflar kırpılmadan sığar */
 .ph .cap{padding:8px 10px;font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .ph .zoom{position:absolute;right:8px;top:8px;background:rgba(0,0,0,.55);color:#fff;border:0;border-radius:8px;padding:3px 8px;font-size:12px;cursor:zoom-in}
 .ph .tick{position:absolute;left:8px;top:8px;width:24px;height:24px;border-radius:50%;background:var(--card);border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--accent-ink)}
@@ -133,6 +133,16 @@ table.karne tr.win td{color:var(--ok);font-weight:600}
       <input type="file" id="fileDesign" accept=".png,.jpg,.jpeg,.webp" hidden>
       <div class="prev" id="prevDesign" hidden><img id="imgDesign" alt=""><div class="meta" id="metaDesign"></div></div>
       <div class="hint" id="serverDesign" hidden></div>
+      <div style="margin-top:14px">
+        <label class="f" for="olcu">Görsellerde gösterilecek ölçü</label>
+        <select id="olcu"></select>
+        <span class="hint" style="margin:6px 0 0">İlan fotoğraflarında afiş bu ölçüde (en × boy) gösterilir. Satış ölçülerin değişmez; bu yalnız fotoğraflardaki örnek ölçüdür. Tasarım dosyan kumaşın tamamıdır: dosyadaki boşluklar da kumaşta aynen yer alır, şeffaf yerler baskısız kumaş olarak görünür.</span>
+      </div>
+      <div id="designCheck" style="margin-top:12px"></div>
+      <div id="oranPrevWrap" hidden style="margin-top:10px">
+        <img id="imgOranPrev" alt="Oran önizlemesi" style="max-height:340px;border:1px solid var(--line,#ccc);border-radius:8px;background:#fff">
+        <div class="hint" style="margin:6px 0 0">Gri çerçeve kumaşın sınırıdır. <b style="color:#d22">Kırmızı taralı</b> kısım kumaşa sığmayan tasarım, <b style="color:#e8891e">turuncu taralı</b> kısım tasarımın kaplamadığı kumaştır. Program tasarımını kırpmaz ve esnetmez; doğru oranlı dosyayı yüklemen gerekir.</div>
+      </div>
     </div>
 
     <div class="card">
@@ -378,6 +388,9 @@ document.addEventListener("DOMContentLoaded", () => {
 async function loadConfig() {
   cfg = await api("/api/config");
   $("#ver").textContent = "sürüm " + cfg.surum;
+  $("#olcu").innerHTML = (cfg.olculer || []).map(([k, ad]) => `<option value="${esc(k)}">${esc(ad)}</option>`).join("");
+  $("#olcu").value = cfg.ornek_olcu || "75x200";
+  $("#olcu").onchange = async () => { try { await api("/api/settings", {ornek_olcu: $("#olcu").value}); cfg.ornek_olcu = $("#olcu").value; } catch (e) {} checkDesign(); };
   const sel = $("#category");
   const keep = sel.value;
   sel.innerHTML = cfg.categories.map(c => `<option>${esc(c)}</option>`).join("");
@@ -474,8 +487,33 @@ async function saveSettings(silent) {
 $("#btnSave").onclick = () => saveSettings(false).catch(e => toast("Hata: " + e.message));
 
 /* ------------------------------------------------------------------ yüklemeler */
+let designCheck = null, designCheckAsked = false;
+function renderDesignCheck(k) {
+  designCheck = k || null;
+  const box = $("#designCheck"), pw = $("#oranPrevWrap");
+  if (!k) { box.innerHTML = ""; pw.hidden = true; return; }
+  const info = (k.bilgiler || []).map(t => `<div class="hint" style="margin:4px 0 0">${esc(t)}</div>`).join("");
+  const sf = k.seffaflik && k.seffaflik.var ? ` · şeffaf alan %${(k.seffaflik.tam_seffaf_oran * 100).toFixed(1)}` : " · şeffaflık yok";
+  const head = `${k.px[0]} × ${k.px[1]} px · tasarım en/boy ${k.png_oran} · kumaş ${esc(k.olcu_etiketi || k.olcu_id)} en/boy ${k.kumas_oran} · yaklaşık ${Math.round(k.dpi)} dpi${sf}`;
+  if (k.uyumlu) {
+    box.innerHTML = `<div class="msg ok">Tasarım oranı seçilen ölçüyle uyumlu.<br><span class="hint" style="margin:0">${head}</span></div>` + info;
+    pw.hidden = true;
+  } else {
+    const other = (k.uyan_olculer || []).length ? `<br>Bu dosyanın oranına uyan ölçü: ${k.uyan_olculer.map(esc).join(", ")}.` : "";
+    box.innerHTML = `<div class="msg warn"><b>Oran uyuşmuyor, üretim bekletiliyor.</b><br>${esc(k.uyarilar[0] || "")}${other}<br><span class="hint" style="margin:0">${head}</span></div>` + info;
+    $("#imgOranPrev").src = "/api/tasarim_onizleme?olcu=" + encodeURIComponent(k.olcu_id) + "&t=" + Date.now();
+    pw.hidden = false;
+  }
+}
+async function checkDesign() {
+  if (!S.design) return renderDesignCheck(null);
+  try {
+    const r = await fetch("/api/tasarim_kontrol?olcu=" + encodeURIComponent($("#olcu").value));
+    const j = await r.json(); if (r.ok) renderDesignCheck(j);
+  } catch (e) {}
+}
 async function upload(kind, file) {
-  const r = await fetch("/api/upload?kind=" + kind + "&name=" + encodeURIComponent(file.name),
+  const r = await fetch("/api/upload?kind=" + kind + "&name=" + encodeURIComponent(file.name) + (kind === "design" ? "&olcu=" + encodeURIComponent($("#olcu").value) : ""),
     {method: "POST", headers: {"X-Afis": "1"}, body: file});
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(j.hata || ("HTTP " + r.status));
@@ -492,6 +530,7 @@ async function setDesign(file) {
     $("#metaDesign").innerHTML = `<b>${esc(file.name)}</b><br>${j.genislik} × ${j.yukseklik} piksel · en/boy oranı ${j.oran}`
       + (Math.min(j.genislik, j.yukseklik) < 1500 ? `<br><span style="color:var(--warn)">Küçük dosya: baskı kalitesi için daha büyük çözünürlük önerilir.</span>` : "");
     S.design = j.ad;
+    renderDesignCheck(j.kontrol);
     toast("Tasarım yüklendi");
   } catch (e) { toast("Yüklenemedi: " + e.message); }
 }
@@ -546,7 +585,8 @@ async function guardedStart(path, body, what, provider, limit) {
 }
 $("#btnPhotos").onclick = () => {
   if (!S.design) return toast("Önce bir tasarım dosyası yükle.");
-  guardedStart("/api/start_photos", {category: $("#category").value, n: +$("#count").value || 6, name: $("#jobname").value.trim(), people: $("#people").checked, ribbon: $("#ribbon").value, use_refs: $("#useRefs").checked},
+  if (designCheck && !designCheck.uyumlu) return toast("Tasarım oranı seçilen ölçüyle uyuşmuyor; üretim bekletiliyor. Ayrıntı 1. adımda.");
+  guardedStart("/api/start_photos", {olcu: $("#olcu").value, category: $("#category").value, n: +$("#count").value || 6, name: $("#jobname").value.trim(), people: $("#people").checked, ribbon: $("#ribbon").value, use_refs: $("#useRefs").checked},
     "Fotoğraf üretimi", cfg.scene_provider, cfg.max_scene_calls);
 };
 $("#btnVideo").onclick = async () => {
@@ -576,6 +616,7 @@ function renderRun() {
   if (S.design && $("#prevDesign").hidden) {
     $("#serverDesign").hidden = false;
     $("#serverDesign").textContent = "Daha önce yüklenen tasarım kullanılacak: " + S.design + " (değiştirmek için yenisini yükle)";
+    if (!designCheck && !designCheckAsked) { designCheckAsked = true; checkDesign(); }     // sayfa yenilense de oran kontrolü görünsün
   }
 }
 let firstPoll = true;
@@ -654,7 +695,7 @@ async function loadKarne() {
     $("#karneBody").innerHTML = parts.join("");
   } catch (e) { $("#karneCard").hidden = true; }
 }
-function kindName(t) { return t === "fabric" ? "Kumaş afiş" : "Sert afiş"; }
+function kindName(t, p) { if (p && (p.tam_kumas || p.yerlesim_modu === "tam_kumas")) return "Kumaş (tam tuval)"; return t === "fabric" ? "Kumaş afiş" : "Sert afiş"; }
 function renderResult() {
   const i = curInfo; if (!i) return;
   if (selPhoto && !i.fotograflar.some(p => p.ad === selPhoto)) selPhoto = null;
@@ -662,7 +703,8 @@ function renderResult() {
   $("#jobInfo").textContent = `${i.kategori || ""} · ${i.fotograflar.length} fotoğraf`;
   const su = i.son_uretim;
   const sm = $("#sumMsg"); sm.innerHTML = "";
-  if (su && su.eksik > 0) sm.innerHTML = `<div class="msg warn">${su.hedef} fotoğraf istendi, ${su.uretilen} tanesi kalite kapısından geçti (${su.cagri} sahne denendi). Kalan hak bitti ya da sahneler elendi; tekrar üretmeyi deneyebilirsin.</div>`;
+  if (i.durum === "beklemede") sm.innerHTML = `<div class="msg warn"><b>Bu ürün bekletiliyor.</b> ${esc(((i.tasarim_kontrol || {}).uyarilar || [])[0] || "Tasarım kontrolü geçmedi.")}${i.oran_onizleme ? `<br><a href="${esc(i.oran_onizleme)}" target="_blank">Oran önizlemesini aç</a>` : ""}</div>`;
+  else if (su && su.eksik > 0) sm.innerHTML = `<div class="msg warn">${su.hedef} fotoğraf istendi, ${su.uretilen} tanesi kalite kapısından geçti (${su.cagri} sahne denendi). Kalan hak bitti ya da sahneler elendi; tekrar üretmeyi deneyebilirsin.</div>`;
   const g = $("#gallery");
   if (!i.fotograflar.length) g.innerHTML = `<div class="hint">Bu işte henüz fotoğraf yok.</div>`;
   else g.innerHTML = i.fotograflar.map(p => {
@@ -670,9 +712,10 @@ function renderResult() {
     return `<div class="ph ${selPhoto === p.ad ? "sel" : ""}" data-ad="${esc(p.ad)}">
       <img loading="lazy" src="${esc(p.url)}" alt="${esc(p.ad)}"><span class="tick">${selPhoto === p.ad ? "✓" : ""}</span>
       <button class="zoom" data-zoom="${esc(p.url)}">büyüt</button>
-      <div class="cap"><span>${kindName(p.tur)}</span>${p.en_iyi ? `<span class="chip ok" title="Bu işteki en yüksek kalite puanı">★ en iyi</span>` : ""}
+      <div class="cap"><span>${kindName(p.tur, p)}</span>${p.en_iyi ? `<span class="chip ok" title="Bu işteki en yüksek kalite puanı">★ en iyi</span>` : ""}
       ${p.servis ? `<span class="chip" title="Bu sahneyi üreten servis${p.kalite != null ? " · kalite puanı " + p.kalite + "/100" : ""}">${esc(niceName(p.servis))}${p.kalite != null ? " · " + Math.round(p.kalite) : ""}</span>` : ""}
       ${warn ? `<span class="chip warn" title="${esc(warn)}">uyarı</span>` : ""}
+      ${p.gizli_url ? `<button class="zoom" style="position:static" data-zoom="${esc(p.gizli_url)}" title="Tasarımın yerde biriken kıvrımda görünmeyen alt kısmı (taralı)">gizli kısım</button>` : ""}
       <a href="${esc(p.url)}" download style="margin-left:auto;color:var(--accent)" data-stop>indir</a></div></div>`;
   }).join("");
   g.querySelectorAll(".ph").forEach(el => el.onclick = () => { selPhoto = el.dataset.ad; renderResult(); renderRun(); });
@@ -680,7 +723,7 @@ function renderResult() {
   g.querySelectorAll("[data-stop]").forEach(a => a.onclick = e => e.stopPropagation());
   renderKarneBox(i);
   const rej = i.elenenler || [];
-  $("#rejBox").innerHTML = rej.length ? `<details><summary>${rej.length} sahne elendi (neden: kalite kapısı)</summary><ul class="rej">${rej.map(r => `<li>çağrı ${r.cagri}${r.servis ? " (" + esc(niceName(r.servis)) + ")" : ""}: ${esc(r.neden)}</li>`).join("")}</ul></details>` : "";
+  $("#rejBox").innerHTML = rej.length ? `<details><summary>${rej.length} sahne elendi</summary><ul class="rej">${rej.map(r => `<li>${r.tur ? "[" + esc(({servis_hatasi: "servis hatası", kalite_kapisi: "kalite kapısı", sahne_geometri: "sahne ürün ölçüsüne uymuyor", birikme_cozulemedi: "zemindeki birikme çözülemedi"})[r.tur] || r.tur) + "] " : ""}çağrı ${r.cagri}${r.servis ? " (" + esc(niceName(r.servis)) + ")" : ""}: ${esc(r.neden)}</li>`).join("")}</ul></details>` : "";
   const vs = i.videolar || [];
   $("#vids").innerHTML = vs.map(v => {
     const ok = v.kontrol_gecti;

@@ -31,6 +31,7 @@ import refstore                                              # noqa: E402
 import camera_move                                            # noqa: E402
 import cvio                                                   # noqa: E402
 import orchestrator as orch                                   # noqa: E402
+import product                                                # noqa: E402
 from orchestrator import Cancelled, Orchestrator              # noqa: E402
 from providers import AuthError, ProviderError, Settings, check_key, scene_arms, video_arms   # noqa: E402
 from selector import nice, overview   # noqa: E402
@@ -185,12 +186,18 @@ class Handler(BaseHTTPRequestHandler):
                 d["handheld_levels"] = [[k, v["ad"]] for k, v in camera_move.HANDHELD_LEVELS.items()]
                 d["ffmpeg"] = bool(__import__("video_repair").find_ffmpeg())
                 d["surum"] = orch.VERSION
+                d["olculer"] = [[k, product.olcu_etiketi(k), round(w / h, 4)] for k, (w, h) in product.OLCULER.items()]
+                d["ornek_olcu"] = s.ornek_olcu if s.ornek_olcu in product.OLCULER else product.VARSAYILAN_ORNEK_OLCU
                 d["servisler"] = {"sahne": [[n, nice(n)] for n in scene_arms(s)], "video": [[n, nice(n)] for n in video_arms(s)]}
                 return self._send(200, d)
             if u.path == "/api/refs":
                 return self._send(200, {"liste": refstore.list_refs(q.get("category", [CATEGORIES[0]])[0])})
             if u.path.startswith("/refs/"):
                 return self._file(safe_join(refstore.ROOT, urllib.parse.unquote(u.path[len("/refs/"):])))
+            if u.path == "/api/tasarim_kontrol":
+                return self._send(*self._design_check(q.get("olcu", [""])[0]))
+            if u.path == "/api/tasarim_onizleme":
+                return self._design_preview(q.get("olcu", [""])[0])
             if u.path == "/api/karne":
                 return self._send(200, overview(orch.STATS_PATH))
             if u.path == "/api/jobs":
@@ -269,12 +276,40 @@ class Handler(BaseHTTPRequestHandler):
             return {"hata": "iş bulunamadı"}
         rap = Orchestrator.report_of(jp)
         base = f"/files/{urllib.parse.quote(name)}/"
-        photos = [dict(p, url=base + "foto/" + p["ad"]) for p in rap.get("fotograflar", [])]
+        photos = [dict(p, url=base + "foto/" + p["ad"],
+                       gizli_url=(base + urllib.parse.quote(p["gizli_onizleme"]) if p.get("gizli_onizleme") else None))
+                  for p in rap.get("fotograflar", [])]
+        oran_url = base + "onizleme_oran.png" if os.path.exists(os.path.join(jp, "onizleme_oran.png")) else None
         videos = [dict(v, url=base + v["dosya"]) for v in rap.get("videolar", [])]
         ov = os.path.exists(os.path.join(jp, "foto", "_ozet.jpg"))
         return {"name": name, "kategori": rap.get("kategori"), "fotograflar": photos, "elenenler": rap.get("elenenler", []),
                 "videolar": videos, "son_uretim": rap.get("son_uretim"), "ozet": base + "foto/_ozet.jpg" if ov else None,
-                "servis_karnesi": rap.get("servis_karnesi", []), "insanli": bool(rap.get("insanli"))}
+                "servis_karnesi": rap.get("servis_karnesi", []), "insanli": bool(rap.get("insanli")),
+                "urun_profili": rap.get("urun_profili"), "tasarim_kontrol": rap.get("tasarim_kontrol"), "durum": rap.get("durum"),
+                "bekleme_nedeni": rap.get("bekleme_nedeni"), "oran_onizleme": oran_url}
+
+    # -- tasarım kontrolü (ürün profili) -------------------------------------------------
+    @staticmethod
+    def _olcu(raw):
+        return raw if raw in product.OLCULER else (Settings.load().ornek_olcu if Settings.load().ornek_olcu in product.OLCULER
+                                                    else product.VARSAYILAN_ORNEK_OLCU)
+
+    def _design_check(self, olcu):
+        if not RUN.design or not os.path.exists(RUN.design):
+            return 400, {"hata": "Önce bir tasarım dosyası yükle."}
+        prof = product.profil_olustur(self._olcu(olcu))
+        k = product.tasarim_kontrol(RUN.design, prof)
+        k["olcu_etiketi"] = product.olcu_etiketi(prof.olcu_id)
+        k["uyan_olculer"] = product.uyan_olculer(k["png_oran"])
+        return 200, k
+
+    def _design_preview(self, olcu):
+        if not RUN.design or not os.path.exists(RUN.design):
+            return self._send(404, {"hata": "tasarım yok"})
+        import cv2
+        img = product.oran_onizleme(RUN.design, product.profil_olustur(self._olcu(olcu)), height=700)
+        ok, buf = cv2.imencode(".png", img)
+        return self._send(200, buf.tobytes(), "image/png")
 
     # -- POST ---------------------------------------------------------------------------
     def do_POST(self):
@@ -339,7 +374,12 @@ class Handler(BaseHTTPRequestHandler):
             RUN.design = path
         else:
             RUN.refs = (RUN.refs + [path])[-4:]
-        return self._send(200, {"genislik": w, "yukseklik": h, "oran": round(w / h, 3), "ad": os.path.basename(path)})
+        res = {"genislik": w, "yukseklik": h, "oran": round(w / h, 3), "ad": os.path.basename(path)}
+        if kind == "design":
+            code, k = self._design_check(q.get("olcu", [""])[0])
+            if code == 200:
+                res["kontrol"] = k
+        return self._send(200, res)
 
     def _ref_upload(self, q):
         cat = q.get("category", [CATEGORIES[0]])[0]
@@ -378,6 +418,8 @@ class Handler(BaseHTTPRequestHandler):
             s.ribbon_default = body["ribbon_default"]
         if "auto_video" in body:
             s.auto_video = bool(body["auto_video"])
+        if body.get("ornek_olcu") in product.OLCULER:
+            s.ornek_olcu = body["ornek_olcu"]
         for k in SETTING_FIELDS:
             if k in body and body[k] not in (None, ""):
                 v = body[k]
@@ -400,11 +442,18 @@ class Handler(BaseHTTPRequestHandler):
         people = bool(body.get("people"))
         rname = body.get("ribbon")
         ribbon = Settings.load().ribbon(rname if isinstance(rname, str) else None)
+        olcu = body.get("olcu")
+        if olcu is not None and olcu not in product.OLCULER:
+            return self._send(400, {"hata": f"Bilinmeyen ölçü: {olcu}"})
+        prof = product.profil_olustur(self._olcu(olcu), (ribbon or {}).get("hex"))
+        kontrol = product.tasarim_kontrol(design, prof)
+        if not kontrol["uyumlu"]:                      # uyuşmazlık sessizce düzeltilmez: ücretli üretim hiç başlamaz
+            return self._send(400, {"hata": kontrol["uyarilar"][0], "kontrol": kontrol, "beklemede": True})
 
         def work(o, settings):
-            job = o.new_job(design, category, body.get("name"))
+            job = o.new_job(design, category, body.get("name"), profile=prof)
             RUN._set(job=os.path.basename(job))
-            res = o.generate_photos(job, n, refs, people=people, ribbon=ribbon, ref_items=depot)
+            res = o.generate_photos(job, n, refs, people=people, ribbon=ribbon, ref_items=depot, profile=prof)
             res["job"] = os.path.basename(job)
             return res
 

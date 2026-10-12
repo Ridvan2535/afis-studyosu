@@ -33,6 +33,7 @@ import cvio
 import guide as guide_mod
 import layout
 import pipeline
+import product
 import prompts
 import proportion
 import ribbon as ribbon_mod
@@ -135,7 +136,10 @@ class Orchestrator:
             self._progress_cb(float(frac), text)
 
     # -- iş klasörü ---------------------------------------------------------------
-    def new_job(self, design_path: str, category: str, name: str | None = None) -> str:
+    def new_job(self, design_path: str, category: str, name: str | None = None, profile=None) -> str:
+        """Yeni iş klasörü. Rapor: eski alanlar + "urun_profili" ve "tasarim_kontrol" (Aşama 2A).
+        profile verilmezse Settings.ornek_olcu ile profil oluşturulur. Oran uyuşmazsa iş yine açılır (kayıt için) ama
+        durum "beklemede" yazılır ve onizleme_oran.png üretilir; generate_photos sahne çağrısı yapmaz."""
         os.makedirs(JOBS_DIR, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         base = slug(name or os.path.splitext(os.path.basename(design_path))[0])
@@ -144,10 +148,41 @@ class Orchestrator:
             os.makedirs(os.path.join(job, sub), exist_ok=True)
         ext = os.path.splitext(design_path)[1].lower() or ".png"
         shutil.copy(design_path, os.path.join(job, "tasarim" + ext))
-        _write_json(os.path.join(job, "rapor.json"), {"surum": VERSION, "kategori": category, "olusturuldu": stamp,
-                                                      "fotograflar": [], "elenenler": [], "videolar": []})
-        self.log(f"Yeni iş: {os.path.basename(job)} ({category})")
+        prof = self._profile(None, profile)
+        rap = {"surum": VERSION, "kategori": category, "olusturuldu": stamp,
+               "fotograflar": [], "elenenler": [], "videolar": [], "urun_profili": prof.to_dict()}
+        self._check_design(job, rap, prof)
+        _write_json(os.path.join(job, "rapor.json"), rap)
+        self.log(f"Yeni iş: {os.path.basename(job)} ({category}, ölçü {product.olcu_etiketi(prof.olcu_id)})")
         return job
+
+    # -- ürün profili ve tasarım kontrolü (Aşama 2A) ------------------------------------
+    def _profile(self, rap: dict | None, profile=None):
+        """Öncelik: açık verilen profil > rapordaki profil > ayarlardaki örnek ölçü."""
+        if profile is not None:
+            return product.UrunProfili.from_dict(profile, strict=True) if isinstance(profile, dict) else profile.dogrula()
+        if rap and rap.get("urun_profili"):
+            return product.UrunProfili.from_dict(rap["urun_profili"])
+        return product.profil_olustur(getattr(self.s, "ornek_olcu", None) or product.VARSAYILAN_ORNEK_OLCU)
+
+    def _check_design(self, job: str, rap: dict, prof) -> dict:
+        """Tasarım kontrolünü rapora yazar; uyumsuzsa onizleme_oran.png üretir ve durumu "beklemede" yapar."""
+        files = glob.glob(os.path.join(job, "tasarim.*"))
+        if not files:
+            raise ProviderError("İş klasöründe tasarım dosyası yok.")
+        tk = product.tasarim_kontrol(files[0], prof)
+        rap["tasarim_kontrol"] = tk
+        if not tk["uyumlu"]:
+            cvio.imwrite(os.path.join(job, "onizleme_oran.png"), product.oran_onizleme(files[0], prof))
+            rap["durum"] = "beklemede"
+            rap["bekleme_nedeni"] = "tasarim_oran_uyusmazligi"
+            rap["beklemede_neden"] = " ".join(tk["uyarilar"])
+            rap["oran_onizleme"] = "onizleme_oran.png"
+        elif rap.get("bekleme_nedeni") == "tasarim_oran_uyusmazligi":      # profil/ölçü değişti, artık uyumlu
+            rap.pop("durum", None)
+            rap.pop("bekleme_nedeni", None)
+            rap.pop("beklemede_neden", None)
+        return tk
 
     @staticmethod
     def list_jobs():
@@ -172,8 +207,27 @@ class Orchestrator:
 
     # -- fotoğraflar --------------------------------------------------------------------
     def generate_photos(self, job: str, n: int = 6, ref_images: list[bytes] | None = None, people: bool = False, ribbon: dict | None = None,
-                        ref_items: list | None = None) -> dict:
+                        ref_items: list | None = None, profile=None) -> dict:
+        """Aşama 2A fotoğraf hattı: kare (1:1) sahne, ürün profili ölçüsü, tam kumaş yerleşimi.
+
+        Profil: verilen > rapordaki > Settings.ornek_olcu. Tasarım oranı profil ile uyuşmazsa HİÇ sahne çağrısı yapılmaz;
+        onizleme_oran.png yazılır, rapor durumu "beklemede" olur ve son_uretim["beklemede"]=True döner."""
         rap = self.report_of(job)
+        prof = self._profile(rap, profile)
+        rap["urun_profili"] = prof.to_dict()                 # yeni üretim çağrısı: profil rapora yazılır
+        tk = self._check_design(job, rap, prof)
+        if not tk["uyumlu"]:
+            for u in tk["uyarilar"]:
+                self.log("UYARI: " + u)
+            self.log("Önizleme: onizleme_oran.png (kırmızı: kumaşa sığmayan kısım, turuncu: tasarımın kaplamadığı kumaş). "
+                     "Sahne üretimi yapılmadı.")
+            rap["son_uretim"] = {"hedef": n, "uretilen": 0, "eksik": n, "cagri": 0, "beklemede": True,
+                                 "bekleme_nedeni": "tasarim_oran_uyusmazligi", "neden": " ".join(tk["uyarilar"])}
+            _write_json(os.path.join(job, "rapor.json"), rap)
+            self.progress(1.0, "Beklemede: tasarım oranı kumaşla uyuşmuyor")
+            return rap["son_uretim"]
+        rap.setdefault("fotograflar", [])
+        rap.setdefault("elenenler", [])
         category = prompts.canon(rap.get("kategori", "Düğün"))
         if people or rap.get("insanli") or prompts.default_people(category):
             people = True
@@ -182,17 +236,15 @@ class Orchestrator:
         start = rap.setdefault("sahne_baslangic", random.randrange(100))   # her iş farklı sahneden başlar
         psize = prompts.pool_size(category)
         design = self._design(job)
-        dh, dw = design.shape[:2]
+        design_file = glob.glob(os.path.join(job, "tasarim.*"))[0]
         refs = [self._small_png(b) for b in (ref_images or [])][:4]
         depot = [(self._small_png(b), d) for b, d in (ref_items or [])]      # referans deposu: [(görsel, sahne tarifi)]
         if depot:
             self.log(f"Referans deposu: {len(depot)} görsel kullanılacak (her sahne sırayla birinden ilham alır; "
                      f"{sum(1 for _, d in depot if d)} tanesinin hazır sahne tarifi var).")
-        da = dw / dh
-        frame = prompts.frame_aspect(da)                       # kadraj: dik afiş + yer + duvar
-        if self.s.auto_video_kind == "canli":
-            frame = 9 / 16                                     # yapay zekâ videosu yalnız 9:16 alır: sahne baştan 9:16 üretilsin (video sonradan elle istense de)
-        guide_png, _ = guide_mod.make_guide(frame, da, ribbon_hex=(ribbon or {}).get("hex"))         # kılavuz görseli destekleyen servislere verilir
+        pa = prof.oran                                         # yerleşim/kalite ölçütleri PNG oranına değil ÜRÜN oranına göre
+        frame = 1.0                                            # ilan fotoğrafı her zaman kare; video ayarı (auto_video_kind) kadrajı DEĞİŞTİRMEZ
+        guide_png, _ = guide_mod.make_guide(frame, pa, ribbon_hex=(ribbon or {}).get("hex"))         # kılavuz görseli destekleyen servislere verilir
         # --- servisler: "Otomatik" modda anahtarı girilmiş hepsi yarışır, sonuçlara göre en iyisi daha sık seçilir ---
         names = self._arms("scene")
         if not names:
@@ -203,8 +255,24 @@ class Orchestrator:
         have = len(rap.get("fotograflar", []))
         accepted_now, calls, seen = 0, 0, set()
         new_photos: list[str] = []
-        self.log(f"Fotoğraf üretimi başladı: hedef {n}, en fazla {self.s.max_scene_calls} sahne çağrısı, servis: "
+        self.log(f"Fotoğraf üretimi başladı: hedef {n}, ölçü {product.olcu_etiketi(prof.olcu_id)}, kare kadraj, "
+                 f"en fazla {self.s.max_scene_calls} sahne çağrısı, servis: "
                  + (", ".join(nice(x) for x in names) + " (otomatik seçim)" if auto else nice(names[0])))
+
+        def reject(tur, reason, img=None, det=None, lay=None, extra=None):
+            rec = {"cagri": calls, "servis": name, "neden": reason, "tur": tur}
+            if lay is not None:
+                rec["olcum"] = lay
+            if extra:
+                rec.update(extra)
+            if img is not None:
+                fn = f"elenen_{have + 1:02d}_{calls:02d}.jpg"                # eski "elenen_NN" üzerine yazmasın
+                cvio.imwrite(os.path.join(job, "sahneler_bos", fn),
+                             bd.overlay(img, det) if (det is not None and det.mask.any()) else img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                rec["dosya"] = f"sahneler_bos/{fn}"
+            rap["elenenler"].append(rec)
+            _write_json(os.path.join(job, "rapor.json"), rap)
+
         while accepted_now < n and calls < self.s.max_scene_calls:
             name = sel.pick()
             if name is None:
@@ -228,94 +296,99 @@ class Orchestrator:
             if depot:
                 k = (idx + start + have) % len(depot)
                 call_refs, sdesc = [depot[k][0]], (depot[k][1] or None)
-            prompt = prompts.build_scene_prompt(category, idx + start + have, dw, dh, bool(call_refs), (idx + have) // psize, guided=guided, people=people, ribbon=ribbon,
-                                                scene_desc=sdesc)
+            prompt = prompts.build_scene_prompt(category, idx + start + have, prof.en_cm, prof.boy_cm, bool(call_refs), (idx + have) // psize,
+                                                guided=guided, people=people, ribbon=ribbon, scene_desc=sdesc, profile=prof)
             try:
                 raw = provider.scene(prompt, frame, 1.0, call_refs, seed=idx + 1 + have * 7, guide=guide_png if guided else None)
             except AuthError as e:
                 if not auto:
                     raise
                 self.log(f"Sahne {calls} ({nice(name)}): {e}")
-                rap["elenenler"].append({"cagri": calls, "servis": name, "neden": f"servis hatası: {e}"})
+                reject("servis_hatasi", f"servis hatası: {e}")
                 sel.record(name, False, error=True)
                 sel.disable(name, "anahtar reddedildi")
                 continue
             except ProviderError as e:
                 self.log(f"Sahne {calls} ({nice(name)}): hata: {e}")
-                rap["elenenler"].append({"cagri": calls, "servis": name, "neden": f"servis hatası: {e}"})
+                reject("servis_hatasi", f"servis hatası: {e}")
                 sel.record(name, False, error=True)
                 continue
             h = hashlib.md5(raw).hexdigest()
             if h in seen:
-                rap["elenenler"].append({"cagri": calls, "servis": name, "neden": "aynı görsel tekrar geldi"})
+                reject("kalite_kapisi", "aynı görsel tekrar geldi")
                 sel.record(name, False)
                 continue
             seen.add(h)
             img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
             if img is None:
-                rap["elenenler"].append({"cagri": calls, "servis": name, "neden": "görsel okunamadı"})
+                reject("servis_hatasi", "görsel okunamadı")
                 sel.record(name, False, error=True)
                 continue
             img = self._upscale(img)
-            det = bd.detect(img)
-            reason, lay, fixinfo = None, {}, None
+            # ürün kumaş olarak tanımlı: otomatik sert/kumaş sınıflandırması yerleşim politikasını değiştirmesin
+            det = bd.detect(img, hint={"kind": "fabric"})
+            reason, lay, tur_ = None, {}, "kalite_kapisi"
             if not det.ok:
                 reason = "; ".join(det.reject)
             elif det.mask.any():
-                why0, lay0 = layout.check(det, img.shape, da, ignore_aspect=True)      # önce oran dışındaki kurallar
-                if lay0:
-                    self.log(f"Sahne {calls} ({nice(name)}) ölçüm: oran {lay0['aspect']:.2f} (tasarım {da:.2f}), üst/alt genişlik {lay0['taper']:.2f}, "
-                             f"sol/sağ yükseklik {lay0['side_ratio']:.2f}, boy %{lay0['top_frac'] * 100:.0f}-%{lay0['bottom_frac'] * 100:.0f}")
-                if why0 and self.s.strict_layout:
-                    lay, reason = lay0, why0
-                else:
-                    # afiş tasarımdan ince çizilmişse sahneyi atma: şeridi yatayda genişlet, oran tasarımla birebir olsun
-                    if lay0 and lay0["aspect"] / da < 0.93 and proportion.fixable(lay0["aspect"], da):
-                        try:
-                            img2, f2, fixinfo = proportion.widen(img, det.mask, lay0["aspect"], da)
-                            det2 = bd.detect(img2)
-                            if det2.ok:
-                                img, det = img2, det2
-                                self.log(f"Sahne {calls} ({nice(name)}): afiş tasarımdan ince çıkmış (oran {lay0['aspect']:.2f}, tasarım {da:.2f}); "
-                                         f"yatayda x{f2:.2f} genişletildi.")
-                            else:
-                                fixinfo = None
-                                self.log(f"Sahne {calls} ({nice(name)}): oran düzeltmesi sonrası afiş algılanamadı ({'; '.join(det2.reject)}); sahne olduğu gibi değerlendirilecek.")
-                        except Exception as e:                      # düzeltme bir sahneyi kurtarmak içindir: hata olursa sahne atılır, iş durmaz
-                            fixinfo = None
-                            self.log(f"Sahne {calls} ({nice(name)}): oran düzeltmesi yapılamadı ({e.__class__.__name__}: {e}).")
-                    why, lay = layout.check(det, img.shape, da)
-                    if why and self.s.strict_layout:
-                        reason = why
-                    if not reason:
-                        reason = cp.check_fit(det, design)
+                # oran düzeltme (sahneyi yatayda germe) bu hatta KAPALI; oran ürün profilinden
+                why, lay = layout.check(det, img.shape, pa)
+                if lay:
+                    self.log(f"Sahne {calls} ({nice(name)}) ölçüm: oran {lay['aspect']:.2f} (ürün {pa:.2f}), üst/alt genişlik {lay['taper']:.2f}, "
+                             f"sol/sağ yükseklik {lay['side_ratio']:.2f}, boy %{lay['top_frac'] * 100:.0f}-%{lay['bottom_frac'] * 100:.0f}")
+                if why and self.s.strict_layout:
+                    reason = why
+                    # afişin oranı ürün oranına uymuyor ya da yere ulaşmıyorsa bu bir SAHNE GEOMETRİSİ hatasıdır (kalite değil)
+                    if any(k in why for k in ("çok geniş", "çok dar", "yere kadar uzanmıyor")):
+                        tur_ = "sahne_geometri"
+            else:
+                reason = "afiş bulunamadı"
             if reason:
                 self.log(f"Sahne {calls} ({nice(name)}) elendi: {reason}")
-                cvio.imwrite(os.path.join(job, "sahneler_bos", f"elenen_{calls:02d}.jpg"),
-                            bd.overlay(img, det) if det.mask.any() else img, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                rap["elenenler"].append({"cagri": calls, "servis": name, "neden": reason, "olcum": lay})
+                reject(tur_, reason, img, det, lay)
                 sel.record(name, False)
-                _write_json(os.path.join(job, "rapor.json"), rap)
                 continue
-            quality = layout.score(lay, da) if lay else 50.0
-            if fixinfo:                                            # düzeltilmemiş sahne eşitse tercih edilsin
-                quality = round(max(0.0, quality - min((fixinfo["f"] - 1) * 25, 12)), 1)
+            try:
+                out, info = cp.composite(img, design, det, mode="tam_kumas", profile=prof)
+            except Exception as e:                       # geometri çıkarılamadı: sahne elenir, iş durmaz
+                self.log(f"Sahne {calls} ({nice(name)}) elendi: kumaş geometrisi çıkarılamadı ({e.__class__.__name__}: {e})")
+                reject("sahne_geometri", f"kumaş geometrisi çıkarılamadı: {e}", img, det, lay)
+                sel.record(name, False)
+                continue
+            tk_info = {k: info[k] for k in ("px_per_cm", "asili_cm", "gizli_cm", "v_gizli", "temas_y", "birikme", "temas_yontemi",
+                                            "olcek_farki", "dikey_olcek", "gizli_murekkep", "sorunlar", "uyarilar")}
+            if info["sorunlar"]:
+                tur = info["sorunlar"][0]["tur"]
+                msg = " ".join(x["mesaj"] for x in info["sorunlar"])
+                self.log(f"Sahne {calls} ({nice(name)}) elendi ({product.HATA_TURLERI.get(tur, tur)}): {msg}")
+                reject(tur, msg, img, det, lay, {"tam_kumas": tk_info})
+                sel.record(name, False)
+                continue
+            quality = layout.score(lay, pa) if lay else 50.0
             sel.record(name, True, quality)
             num = have + accepted_now + 1
             stem = f"s{num:02d}"
             cvio.imwrite(os.path.join(job, "sahneler_bos", stem + ".png"), img)
-            out, info = cp.composite(img, design, det)
             if ribbon:
                 out = ribbon_mod.restore(img, out, ribbon["hex"])
-            fname = f"{num:02d}_{det.kind}.jpg"
+            fname = f"{num:02d}_kumas.jpg"
             cvio.imwrite(os.path.join(job, "foto", fname), out, [cv2.IMWRITE_JPEG_QUALITY, 95])
             new_photos.append(fname)
-            rap["fotograflar"].append({"ad": fname, "stem": stem, "tur": det.kind, "uyari": det.warn,
-                                       "olcu": [out.shape[1], out.shape[0]], "yerlesim": lay, "servis": name, "kalite": quality,
-                                       "oran_duzeltme": fixinfo, "kurdele": (ribbon or {}).get("hex")})
+            rec = {"ad": fname, "stem": stem, "tur": det.kind, "uyari": det.warn + info["uyarilar"],
+                   "olcu": [out.shape[1], out.shape[0]], "yerlesim": lay, "servis": name, "kalite": quality,
+                   "oran_duzeltme": None, "kurdele": (ribbon or {}).get("hex"),
+                   "yerlesim_modu": "tam_kumas", "olcu_id": prof.olcu_id, "tam_kumas": tk_info}
+            if info["v_gizli"] < 0.995:
+                os.makedirs(os.path.join(job, "onizleme"), exist_ok=True)
+                gname = f"onizleme/{num:02d}_gizli.jpg"
+                cvio.imwrite(os.path.join(job, gname), product.gizli_bolge_onizleme(design_file, info["v_gizli"]),
+                             [cv2.IMWRITE_JPEG_QUALITY, 90])
+                rec["gizli_onizleme"] = gname
+            rap["fotograflar"].append(rec)
             accepted_now += 1
-            self.log(f"Sahne {calls} ({nice(name)}) kabul edildi -> {fname}, kalite {quality:.0f}/100"
-                     + (f" (uyarı: {'; '.join(det.warn)})" if det.warn else ""))
+            self.log(f"Sahne {calls} ({nice(name)}) kabul edildi -> {fname}, kalite {quality:.0f}/100, "
+                     f"asılı ≈{info['asili_cm']:.0f} cm" + (f", zeminde ≈{info['gizli_cm']:.0f} cm birikme" if info["v_gizli"] < 0.995 else "")
+                     + (f" (uyarı: {'; '.join(rec['uyari'])})" if rec["uyari"] else ""))
             _write_json(os.path.join(job, "rapor.json"), rap)
         sel.save()
         rap.setdefault("servis_karnesi", []).append({"tur": "scene", "zaman": datetime.now().strftime("%Y%m%d-%H%M%S"),
@@ -326,7 +399,7 @@ class Orchestrator:
         for p_ in rap.get("fotograflar", []):
             p_["en_iyi"] = bool(best) and p_ is best
         self._overview(job, rap)
-        rap["son_uretim"] = {"hedef": n, "uretilen": accepted_now, "eksik": max(0, n - accepted_now), "cagri": calls}
+        rap["son_uretim"] = {"hedef": n, "uretilen": accepted_now, "eksik": max(0, n - accepted_now), "cagri": calls, "beklemede": False}
         _write_json(os.path.join(job, "rapor.json"), rap)
         self.progress(1.0, f"Bitti: {accepted_now}/{n} geçerli fotoğraf")
         if self.s.auto_video and new_photos:
@@ -381,9 +454,25 @@ class Orchestrator:
             pipeline.contact_sheet(items, os.path.join(job, "foto", "_ozet.jpg"))
 
     # -- video ----------------------------------------------------------------------------
-    def _video_start(self, blank, design, margin=0.03):
+    def _entry_profile(self, rap, entry):
+        """Tam kumaş yerleşimiyle üretilmiş fotoğrafın profili (videoda aynı yerleşim kullanılsın); eski fotoğraflarda None."""
+        if entry.get("yerlesim_modu") != "tam_kumas":
+            return None
+        prof = self._profile(rap)
+        oid = entry.get("olcu_id")
+        if oid and prof is not None and oid != prof.olcu_id and oid in product.OLCULER:
+            prof = product.profil_olustur(oid)          # fotoğraf hangi ölçüyle basıldıysa video da o ölçüyle
+        return prof
+
+    def _composite_for(self, scene, design, det, profile, **kw):
+        if profile is None:
+            return cp.composite(scene, design, det, **kw)
+        return cp.composite(scene, design, det, mode="tam_kumas", profile=profile, **kw)
+
+    def _video_start(self, blank, design, margin=0.03, profile=None):
         H, W = blank.shape[:2]
-        det0 = bd.detect(blank)
+        hint = {"kind": "fabric"} if profile is not None else None
+        det0 = bd.detect(blank, hint=hint)
         if not det0.ok:
             raise ProviderError("Bu sahnede afiş artık bulunamadı: " + "; ".join(det0.reject))
         ys, xs = np.where(det0.mask > 0)
@@ -395,10 +484,10 @@ class Orchestrator:
         if bx0 < x0 + margin * cw or bx1 > x0 + (1 - margin) * cw or by0 < y0 + margin * ch or by1 > y0 + (1 - margin) * ch:
             raise ProviderError("Afiş 9:16 dikey video kadrajına sığmıyor; bu sahneden video üretilemez.")
         blank_c = blank[y0:y0 + ch, x0:x0 + cw].copy()
-        det = bd.detect(blank_c)
+        det = bd.detect(blank_c, hint=hint)
         if not det.ok:
             raise ProviderError("Kırpılmış kadrajda afiş bulunamadı: " + "; ".join(det.reject))
-        ref, info, model = cp.composite(blank_c, design, det, return_model=True)
+        ref, info, model = self._composite_for(blank_c, design, det, profile, return_model=True)
         f = min(1.0, 1080 / cw)
         send = cv2.resize(ref, None, fx=f, fy=f, interpolation=cv2.INTER_AREA) if f < 1 else ref
         jpg = cv2.imencode(".jpg", send, [cv2.IMWRITE_JPEG_QUALITY, 95])[1].tobytes()
@@ -414,7 +503,7 @@ class Orchestrator:
             raise ProviderError("Boş sahne dosyası bulunamadı.")
         design = self._design(job)
         self.progress(0.02, "Video başlangıç karesi hazırlanıyor")
-        st = self._video_start(blank, design)
+        st = self._video_start(blank, design, profile=self._entry_profile(rap, entry))
         vdir = os.path.join(job, "video", entry["stem"])
         os.makedirs(vdir, exist_ok=True)
         sel = self._selector("video")
@@ -502,7 +591,7 @@ class Orchestrator:
         tries, reasons = [], []
         try:
             self.progress(0.02, "Video başlangıç karesi hazırlanıyor")
-            st = self._video_start(blank, design, margin=0.05)
+            st = self._video_start(blank, design, margin=0.05, profile=self._entry_profile(rap, entry))
         except ProviderError as e:
             self.log(f"Kompozit video başlatılamadı: {e}")
             st = None
@@ -628,7 +717,7 @@ class Orchestrator:
         tries, reasons, best = [], [], None
         try:
             self.progress(0.02, "Video başlangıç karesi hazırlanıyor")
-            st = self._video_start(blank, design, margin=0.06)
+            st = self._video_start(blank, design, margin=0.06, profile=self._entry_profile(rap, entry))
         except ProviderError as e:
             self.log(f"Hareketli video başlatılamadı: {e}")
             st, _ = None, reasons.append(str(e))
@@ -742,12 +831,13 @@ class Orchestrator:
             f = min(self.HIRES_FACTOR, self.HIRES_MAX_SIDE / max(blank.shape[:2]))
             if f < 1.15:
                 return photo
-            det = bd.detect(blank)
+            prof = self._entry_profile(self.report_of(job), entry)
+            det = bd.detect(blank, hint={"kind": "fabric"} if prof is not None else None)
             if not det.ok or not det.mask.any():
                 return photo
             design = self._design(job)
             up = cv2.resize(blank, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC)
-            out, _ = cp.composite(up, design, det.scaled(f, up.shape))
+            out, _ = self._composite_for(up, design, det.scaled(f, up.shape), prof)
             out = ribbon_mod.restore(up, out, entry.get("kurdele"))
             self.log(f"Video kaynağı yüksek çözünürlükte hazırlandı ({photo.shape[1]}x{photo.shape[0]} -> {out.shape[1]}x{out.shape[0]}).")
             return out

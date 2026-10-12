@@ -3,6 +3,9 @@ Tasarımı algılanan afişe yerleştirme (statik kompozit).
 
   sert afiş  -> 4 köşeye perspektif dönüşümü (homografi)
   kumaş afiş -> kumaşın kenar eğrilerini yumuşakça takip eden ağ (mesh) warp + kıvrım kayması
+  tam kumaş  -> (Aşama 2A, composite(..., mode="tam_kumas", profile=...)) PNG tuvali = kumaşın tamamı; gerçek kenarlar,
+                fiziksel dikey ölçek, zemine temas çizgisi, yerde biriken (gizli) kısım. Ayrıntı: _place_full_fabric.
+  Eski iki yol (mode=None) eski çağrılar (video modülleri, pipeline.py, kontrol.py) için aynen korunur.
 
 Baskı modeli (ikisinde de aynı): sonuç = sahne pikseli x tasarım rengi (çarpma)
   - kumaşın/kâğıdın kendi ışığı, gölgesi, dokusu ve tonu sahneden gelir
@@ -196,15 +199,302 @@ def _place_fabric(scene, design, det, ink, paper, ssaa, follow, inset_frac, fold
 
 
 # ----------------------------------------------------------------------------
+# TAM KUMAŞ yolu (Aşama 2A): PNG tuvali kumaşın TAMAMIDIR.
+#   * yatay: u, kumaşın GERÇEK sol/sağ kenarlarından (kenar payı / içeri alma yok)
+#   * dikey: fiziksel ölçek. px_per_cm = asılı kısmın ortanca genişliği / en_cm; v = (y - üst(x)) / (boy_cm * px_per_cm)
+#   * zemine temas çizgisi bulunur; altındaki tasarım (yerde biriken kumaş) GİZLİDİR, oraya baskı yapılmaz.
+#     Gizli bölgede mürekkep varsa sonuç "birikme_cozulemedi" işaretlenir (başarılı sayılmamalı).
+#   * görünen asılı boy ürün boyuyla uyuşmazsa "sahne_geometri" işaretlenir.
+# Tasarım hiçbir zaman kırpılıp küçültülüp ortalanmaz; oranı keyfî değiştirilmez.
+# ----------------------------------------------------------------------------
+# Aşağıdaki eşiklerin hepsi VARSAYIMDIR (sentetik sahnelerle seçildi; gerçek sahnelerle ayarlanmadı):
+TAM_BOY_TOL = 0.03         # VARSAYIM: görünen asılı boy ürün boyundan bu oranı aşacak kadar UZUNSA sahne geometrisi uyuşmuyor
+                           # (tolerans içindeki uzunluk farkı tasarımı dikeyde en fazla bu kadar sıkıştırır ve UYARI olarak yazılır)
+SPREAD_FRAC = 0.04         # VARSAYIM: alt kenarda genişlik asılı kısma göre bu orandan fazla artıyorsa "birikme yayılması" var
+MUREKKEP_ESIK = 0.001      # VARSAYIM: gizli bölgedeki baskılı piksel oranı bunun üstündeyse "gizli bölgede baskı var"
+GIZLI_EN_FAZLA = 0.25      # VARSAYIM: yerde kalan (gizli) boy / ürün boyu bunun üstündeyse sergileme yüksekliği ürüne uymuyor
+                           # (birikme miktarı uydurulmaz; bu yalnız "200 cm kumaş için stand çok kısa" sınırıdır)
+OLCUM_PAYI = 0.005         # VARSAYIM: asılı boy ölçümünün piksel hassasiyeti (200 cm'de ≈1 cm); bu kadarlık fark sığdırılır
+OLCEK_UYARI = 0.01         # dikey ölçek fiziksel ölçekten bu orandan fazla saparsa kullanıcıya uyarı yazılır
+
+
+def _robust_line(x, y, iters=3):
+    """y = a*x + b, aykırı noktalara dayanıklı (MAD ile ayıklayarak yeniden uydurur)."""
+    x, y = np.asarray(x, np.float64), np.asarray(y, np.float64)
+    sel = np.ones(len(x), bool)
+    a, b = 0.0, float(np.median(y))
+    for _ in range(iters):
+        if sel.sum() < 3:
+            break
+        a, b = np.polyfit(x[sel], y[sel], 1)
+        r = y - (a * x + b)
+        mad = float(np.median(np.abs(r[sel] - np.median(r[sel])))) + 0.5
+        sel = np.abs(r) <= 3.0 * 1.4826 * mad + 1.0
+    return float(a), float(b)
+
+
+def _largest(mask):
+    n, lab, st, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), 8)
+    if n <= 1:
+        return None
+    k = 1 + int(np.argmax(st[1:, cv2.CC_STAT_AREA]))
+    return lab == k
+
+
+def _refine_edges(prof_line, pos, win):
+    """Bir kenar konumunu (piksel sınırı) çevresindeki en güçlü parlaklık basamağına alt-piksel düzeyinde taşır.
+    prof_line: (N, L) gradyan büyüklükleri; pos: (N,) başlangıç sınırları. Basamak zayıfsa konum aynen kalır."""
+    n, L = prof_line.shape
+    out = pos.astype(np.float64).copy()
+    for i in range(n):
+        c = int(round(pos[i]))
+        a, b = max(1, c - win), min(L - 1, c + win + 1)
+        if b - a < 3:
+            continue
+        seg = prof_line[i, a:b]
+        j = int(np.argmax(seg))
+        if seg[j] < 4.0:                                 # belirgin basamak yok (8 bit gri seviye/px)
+            continue
+        k = a + j
+        y0_, y1_, y2_ = prof_line[i, k - 1], prof_line[i, k], prof_line[i, min(k + 1, L - 1)]
+        den = y0_ - 2 * y1_ + y2_
+        off = 0.5 * (y0_ - y2_) / den if abs(den) > 1e-6 else 0.0
+        out[i] = k + 0.5 + float(np.clip(off, -0.5, 0.5))     # gradyan k ile k+1 arasındaki sınırı ölçer
+    return out
+
+
+def fabric_geometry(mask, en_cm: float, boy_cm: float, tol: float = TAM_BOY_TOL, scene_bgr=None) -> dict:
+    """Maskeden tam kumaş geometrisi: kenarlar, üst kenar doğrusu, ölçek, zemine temas çizgisi.
+    Koordinatlar piksel SINIRLARIDIR (piksel i, [i, i+1) aralığını kaplar). scene_bgr verilirse sol/sağ/üst/alt kenarlar
+    algılama maskesinden sahnedeki gerçek parlaklık basamağına alt-piksel düzeyinde inceltilir (maske kenarı bariyer nedeniyle
+    birkaç piksel içeride kalabilir)."""
+    m = _largest(mask > 0)
+    if m is None:
+        raise ValueError("kumaş maskesi boş")
+    ys = np.flatnonzero(m.any(1))
+    y0, y1 = int(ys[0]), int(ys[-1]) + 1
+    hgt = y1 - y0
+    rows = np.arange(y0, y1)
+    sub = m[y0:y1]
+    has = sub.any(1)
+    xl = np.where(has, np.argmax(sub, 1), np.nan).astype(np.float64)
+    xr = np.where(has, sub.shape[1] - np.argmax(sub[:, ::-1], 1), np.nan).astype(np.float64)   # sağ sınır (son piksel + 1)
+    good = ~np.isnan(xl)
+    xl = np.interp(rows, rows[good], xl[good])
+    xr = np.interp(rows, rows[good], xr[good])
+    gx_abs = gy_abs = None
+    if scene_bgr is not None:
+        g = cv2.GaussianBlur(cv2.cvtColor(scene_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32), (0, 0), 1.0)
+        if g.max() <= 1.0 + 1e-6:
+            g = g * 255.0
+        gx_abs = np.abs(np.diff(g, axis=1, append=g[:, -1:]))      # [:, k] = |g[k+1] - g[k]|
+        gy_abs = np.abs(np.diff(g, axis=0, append=g[-1:, :]))
+        win = max(3, int(0.012 * float(np.median(xr - xl))))
+        xl = _refine_edges(gx_abs[y0:y1], xl, win)
+        xr = _refine_edges(gx_abs[y0:y1], xr, win)
+    k = max(5, int(0.01 * hgt)) | 1
+    from scipy.ndimage import median_filter
+    xl_m = median_filter(xl, size=k, mode="nearest")
+    xr_m = median_filter(xr, size=k, mode="nearest")
+    w = xr_m - xl_m
+
+    # asılı kısmın referans genişliği (üstteki kurdele/çubuk ve alttaki birikmeden uzak bant)
+    ref = slice(int(0.10 * hgt), max(int(0.55 * hgt), int(0.10 * hgt) + 3))
+    W0 = float(np.median(w[ref]))
+    px_per_cm = W0 / float(en_cm)
+
+    # kenarlar: kumaşın GERÇEK kenarları (follow=1). Düz doğruya zorlanmaz: gerçek kumaş üstte bağla toplanabilir, kenar
+    # kıvrılabilir. Bilinen sınır: fiyonk/kuyruk kumaş kenarını örterse o satırlarda tasarım örtülen kenara göre daralır.
+    L, R = xl_m, xr_m
+    # üst kenar: iç sütunlarda maskenin ilk satırı -> sağlam doğru
+    cl, cr = float(np.median(L[ref])), float(np.median(R[ref]))
+    cols = np.arange(int(cl + 0.08 * W0), int(cr - 0.08 * W0))
+    cols = cols[(cols >= 0) & (cols < m.shape[1])]
+    colm = m[:, cols]
+    anyc = colm.any(0)
+    tops = np.argmax(colm, 0).astype(np.float64)
+    bots = (m.shape[0] - np.argmax(colm[::-1], 0)).astype(np.float64)       # alt sınır (son piksel + 1)
+    if gy_abs is not None:
+        win = max(3, int(0.006 * hgt))
+        tops = _refine_edges(gy_abs[:, cols].T, tops, win)
+        bots = _refine_edges(gy_abs[:, cols].T, bots, win)
+    at, bt = _robust_line(cols[anyc], tops[anyc])
+
+    # zemine temas: alt kısımda genişliğin asılı kısma göre belirgin ve sürekli artması (birikme yayılması)
+    contact_row, method, birikme = None, "maske_alti", False
+    lo = int(0.55 * hgt)
+    hi = max(lo + 1, hgt - max(2, int(0.01 * hgt)))
+    big = (w > W0 * (1 + SPREAD_FRAC)) & (w - W0 > 3)
+    need = max(4, int(0.012 * hgt))
+    for r in range(lo, hi):
+        if big[r] and (hi - r) >= need and big[r:hi].mean() >= 0.8:
+            r0 = r                                        # yayılmanın BAŞLANGICI: genişlik asılı kısma neredeyse eşit olana dek yukarı
+            onset = W0 + max(2.0, 0.005 * W0)
+            while r0 > lo and w[r0 - 1] > onset:
+                r0 -= 1
+            contact_row, method, birikme = r0, "kenar_yayilmasi", True
+            break
+    xs_all = np.arange(m.shape[1], dtype=np.float64)
+    top_x = at * xs_all + bt
+    if birikme:
+        temas_x = np.full_like(xs_all, float(y0 + contact_row))
+    else:
+        ab, bb = _robust_line(cols[anyc], bots[anyc])
+        temas_x = ab * xs_all + bb
+    cxs = cols[anyc]
+    asili_px = float(np.median(temas_x[cxs] - top_x[cxs]))
+    asili_cm = asili_px / px_per_cm
+    return {"mask": m, "y0": y0, "y1": y1, "rows": rows, "L": L, "R": R, "W0": W0, "px_per_cm": px_per_cm,
+            "top_line": (at, bt), "top_x": top_x, "temas_x": temas_x, "temas_y": float(np.median(temas_x[cxs])),
+            "birikme": birikme, "temas_yontemi": method, "asili_px": asili_px, "asili_cm": asili_cm,
+            "x_range": (int(np.floor(min(L.min(), cl))), int(np.ceil(max(R.max(), cr))))}
+
+
+def _place_full_fabric(scene, design, det, ink, paper, ssaa, fold_shift, en_cm, boy_cm, tol):
+    H, W = scene.shape[:2]
+    g = fabric_geometry(det.mask, en_cm, boy_cm, tol, scene_bgr=scene)
+    m = g["mask"]
+    ppc, asili_cm = g["px_per_cm"], g["asili_cm"]
+    boy_px = boy_cm * ppc
+    sorunlar, uyarilar = [], []
+    olcek_farki = asili_cm / boy_cm - 1.0
+    # Dikey ölçek politikası (Aşama 2A, bağımsız inceleme sonrası):
+    #   * asılı kısım ürün boyundan KISA ise ölçek FİZİKSELDİR: tasarım sıkıştırılıp yukarı taşınmaz; görünmeyen alt kısım
+    #     (yerde kalan kumaş) gizli bölge sayılır ve mürekkep denetimine girer.
+    #   * asılı kısım ürün boyundan biraz UZUN ise (<= TAM_BOY_TOL) sahne ölçüm/çizim payı kabul edilir; tasarım temas
+    #     çizgisine sığdırılır (dikeyde en fazla TAM_BOY_TOL sıkışma) ve bu UYARI olarak yazılır. Daha uzunsa sahne reddedilir.
+    fit_to_contact = False
+    if asili_cm > boy_cm * (1 + tol):
+        sorunlar.append({"tur": "sahne_geometri",
+                         "mesaj": f"Sahnedeki kumaş ürün boyundan uzun görünüyor: asılı kısım ≈{asili_cm:.0f} cm, ürün {boy_cm:g} cm "
+                                  f"(en {en_cm:g} cm'ye göre). Sahne ürün geometrisine uymuyor."})
+        fit_to_contact = True
+    elif asili_cm > boy_cm or abs(olcek_farki) <= OLCUM_PAYI:
+        fit_to_contact = True                      # ölçüm payı içindeki fark (≈1 cm) ölçüm hatası sayılır; olcek_farki rapora yazılır
+        if olcek_farki > OLCEK_UYARI:
+            uyarilar.append(f"Sahnedeki kumaş ürün boyundan ≈%{olcek_farki * 100:.1f} uzun çizilmiş (≈{asili_cm:.0f} cm); tasarım "
+                            f"kumaşın görünen boyuna sığdırıldı, dikeyde ≈%{olcek_farki * 100:.1f} sıkıştı. Gözle kontrol edin.")
+    if not fit_to_contact and (1.0 - asili_cm / boy_cm) > GIZLI_EN_FAZLA:
+        sorunlar.append({"tur": "sahne_geometri",
+                         "mesaj": f"Kumaşın görünen asılı boyu (≈{asili_cm:.0f} cm) ürün boyuna ({boy_cm:g} cm) göre çok kısa: "
+                                  f"yaklaşık {boy_cm - asili_cm:.0f} cm yerde kalıyor ya da kumaş havada bitiyor. Sergileme yüksekliği ürüne uymuyor."})
+    if not fit_to_contact and not g["birikme"] and asili_cm < boy_cm * (1 - tol):
+        # zemin algılaması yok: yana yayılan birikme görünmeden kumaş belirgin kısa ise havada bitiyor olabilir -> temkinli ret
+        sorunlar.append({"tur": "sahne_geometri",
+                         "mesaj": f"Kumaşın görünen boyu ürün boyundan kısa (≈{asili_cm:.0f} cm < {boy_cm:g} cm) ve altta birikme görünmüyor: "
+                                  f"kumaş havada bitiyor ya da sahne ürünü kısa çizmiş."})
+    elif not fit_to_contact and not g["birikme"] and asili_cm < boy_cm:
+        uyarilar.append(f"Kumaşın görünen boyu ürün boyundan ≈{boy_cm - asili_cm:.0f} cm kısa; kalan kısım zemine değen kenarda "
+                        f"(görünmeyen) kabul edildi, tasarım sıkıştırılmadı.")
+    v_gizli = 1.0 if fit_to_contact else min(1.0, asili_cm / boy_cm)
+    gizli_cm = (1.0 - v_gizli) * boy_cm
+
+    x0, x1 = max(0, g["x_range"][0] - 4), min(W, g["x_range"][1] + 5)
+    y0, y1 = max(0, g["y0"] - 4), min(H, g["y1"] + 5)
+    gx, gy = np.meshgrid((np.arange(x0 * ssaa, x1 * ssaa) + 0.5) / ssaa, (np.arange(y0 * ssaa, y1 * ssaa) + 0.5) / ssaa)
+
+    # kıvrım kayması: yalnız kumaşın İÇİNDEKİ ışık değişiminden (kenar/duvar karşıtlığı kaydırma yaratmasın)
+    gxs = gx
+    if fold_shift:
+        lum = cv2.cvtColor(scene, cv2.COLOR_BGR2GRAY)
+        mf = m.astype(np.float32)
+        num = cv2.GaussianBlur(lum * mf, (0, 0), 10)
+        den = cv2.GaussianBlur(mf, (0, 0), 10)
+        lum_in = np.where(m, lum, num / np.maximum(den, 1e-4))
+        gr = cv2.Sobel(cv2.GaussianBlur(lum_in, (0, 0), 10), cv2.CV_32F, 1, 0, ksize=5)
+        p99 = max(float(np.percentile(np.abs(gr[m]), 99)), 1e-6)
+        gr = np.clip(gr / max(p99, 0.02), -1, 1) * m                       # düz kumaşta gürültü büyütülmesin
+        gr = cv2.resize(gr[y0:y1, x0:x1], (gx.shape[1], gx.shape[0]), interpolation=cv2.INTER_LINEAR)
+        gxs = gx - fold_shift * g["W0"] * gr
+
+    rows = g["rows"]
+    Lp = np.interp(gy, rows + 0.5, g["L"])
+    Rp = np.interp(gy, rows + 0.5, g["R"])
+    xs_all = np.arange(W, dtype=np.float64) + 0.5
+    topp = np.interp(gx, xs_all, g["top_x"])
+    temp = np.interp(gx, xs_all, g["temas_x"])
+    u0 = (gx - Lp) / np.maximum(Rp - Lp, 1e-3)
+    taper = np.clip(np.minimum(u0, 1 - u0) / 0.04, 0, 1)        # kumaş kenarında kayma 0: tasarım kenarı = kumaş kenarı
+    u = u0 - taper * (gx - gxs) / np.maximum(Rp - Lp, 1e-3)
+    Lv = (temp - topp) if fit_to_contact else boy_px
+    v = (gy - topp) / np.maximum(Lv, 1e-3)
+    inside = ((u >= 0) & (u <= 1) & (v >= 0) & (v <= 1) & (gy <= temp)).astype(np.float32)
+
+    reg_w, reg_h = g["W0"], float(np.max(Lv)) if np.ndim(Lv) else float(Lv)
+    design_s = _prefit(design, reg_w * ssaa, reg_h * ssaa)
+    dh, dw = design_s.shape[:2]
+    warped = cv2.remap(design_s, (u * dw - 0.5).astype(np.float32), (v * dh - 0.5).astype(np.float32),
+                       cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+    sz = (x1 - x0, y1 - y0)
+    warped = np.clip(cv2.resize(warped, sz, interpolation=cv2.INTER_AREA), 0, 1)
+    alpha = cv2.resize(inside, sz, interpolation=cv2.INTER_AREA)
+    mf = cv2.GaussianBlur(m[y0:y1, x0:x1].astype(np.float32), (0, 0), 0.6)
+    alpha = np.clip(alpha * mf, 0, 1)[..., None]
+
+    region = scene[y0:y1, x0:x1]
+    out = scene.copy()
+    out[y0:y1, x0:x1] = _apply_print(region, warped, alpha, ink, paper)
+
+    # gizli bölgede baskı var mı? (yerde biriken kumaşın altındaki tasarım)
+    ink_hidden = 0.0
+    if v_gizli < 1.0 and not any(s["tur"] == "sahne_geometri" for s in sorunlar):     # geometri zaten uymuyorsa ikinci neden eklenmez
+        import product
+        d8 = (np.clip(design, 0, 1) * 255 + 0.5).astype(np.uint8)
+        ink_hidden = float(product.murekkep_orani(d8, v_gizli))
+        if ink_hidden > MUREKKEP_ESIK:
+            sorunlar.append({"tur": "birikme_cozulemedi",
+                             "mesaj": f"Tasarımın alt ≈{gizli_cm:.0f} cm'si zeminde biriken kumaşta kalıyor ve bu bölgede baskı var "
+                                      f"(%{ink_hidden * 100:.1f}). Birikmedeki kıvrımlar üzerinde baskı doğru çizilemediği için "
+                                      f"bu sahne başarılı sayılmadı."})
+        else:
+            uyarilar.append(f"Tasarımın alt ≈{gizli_cm:.0f} cm'si zeminde birikiyor; bu bölgede baskı yok.")
+        if gizli_cm > 0.15 * boy_cm:
+            uyarilar.append(f"Zemindeki birikme büyük görünüyor (≈{gizli_cm:.0f} cm); sahneyi gözle kontrol edin.")
+
+    model = {"bbox": [int(x0), int(y0), int(x1), int(y1)],
+             "u": cv2.resize(u.astype(np.float32), sz, interpolation=cv2.INTER_AREA),
+             "v": cv2.resize(v.astype(np.float32), sz, interpolation=cv2.INTER_AREA),
+             "alpha": alpha[..., 0].astype(np.float32)}
+    at, bt = g["top_line"]
+    info = {"bbox": [int(x0), int(y0), int(x1), int(y1)], "mod": "tam_kumas",
+            "en_cm": float(en_cm), "boy_cm": float(boy_cm),
+            "px_per_cm": round(ppc, 3), "asili_cm": round(asili_cm, 1), "gizli_cm": round(gizli_cm, 1),
+            "v_gizli": round(v_gizli, 4), "temas_y": round(g["temas_y"], 1), "birikme": bool(g["birikme"]),
+            "temas_yontemi": g["temas_yontemi"], "olcek_farki": round(olcek_farki, 4),
+            "dikey_olcek": "temas_cizgisine_kadar" if fit_to_contact else "fiziksel",
+            "ust_kenar": [round(at, 5), round(bt, 2)], "genislik_px": round(g["W0"], 1),
+            "gizli_murekkep": round(ink_hidden, 5), "sorunlar": sorunlar, "uyarilar": uyarilar}
+    return out, info, model
+
+
+# ----------------------------------------------------------------------------
 def composite(scene_bgr, design, det, *, paper="auto", ink=None, ssaa=2,
-              follow=0.3, inset=0.10, fold_shift=0.01, sag=0.02, return_model=False):
+              follow=0.3, inset=0.10, fold_shift=0.01, sag=0.02, return_model=False,
+              mode=None, profile=None, tol=TAM_BOY_TOL):
     """scene_bgr uint8, design float32 BGR [0,1]. Sonuç (uint8 BGR, bilgi sözlüğü).
+
+    mode=None (eski çağrılar): det.kind'a göre sert (homografi) ya da eski kumaş yolu (inset/pay ile "contain").
+    mode="tam_kumas": profile (product.UrunProfili; en_cm/boy_cm) zorunlu. PNG tuvali = kumaşın tamamı; kenar payı, içeri alma,
+      kırpma yok; dikey ölçek fiziksel. det.kind yok sayılır (sert görünen sahnede de kumaş yolu). info["sorunlar"] boş değilse
+      sonuç başarılı sayılmamalıdır (tur: "sahne_geometri" | "birikme_cozulemedi").
 
     return_model=True ise üçüncü eleman olarak "baskı modeli" döner: video onarımının ihtiyaç duyduğu
     {bbox, u, v, alpha, paper, ink}. u,v: bölge pikseli -> tasarım koordinatı (0-1), alpha: baskı kapsaması.
     """
     scene = scene_bgr.astype(np.float32) / 255.0
     p = estimate_paper(design) if paper == "auto" else paper
+    if mode == "tam_kumas":
+        if profile is None:
+            raise ValueError("tam_kumas modu ürün profili ister (en_cm, boy_cm)")
+        ink_v = 0.93 if ink is None else ink
+        out, info, model = _place_full_fabric(scene, design, det, ink_v, p, ssaa, fold_shift,
+                                              float(profile.en_cm), float(profile.boy_cm), tol)
+        info["paper"] = None if p is None else [round(float(v), 3) for v in p]
+        model.update(paper=p, ink=float(ink_v), kind="fabric")
+        img = np.clip(out * 255 + 0.5, 0, 255).astype(np.uint8)
+        return (img, info, model) if return_model else (img, info)
+    if mode not in (None, "eski"):
+        raise ValueError(f"bilinmeyen yerleşim modu: {mode!r}")
     ink_v = (1.0 if det.kind == "rigid" else 0.93) if ink is None else ink
     if det.kind == "rigid":
         out, info, model = _place_rigid(scene, design, det, ink_v, p, ssaa)

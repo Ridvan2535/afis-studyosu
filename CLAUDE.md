@@ -14,14 +14,28 @@ Kullanıcıyla Türkçe, anlaşılır ve somut konuş; ne yaptığını **ve ned
   perspektifine, kıvrımlarına ve ışığına uygulanır.
 - Ölçü seçenekleri (cm, en × boy): **50×100, 50×150, 75×200, 150×300, 150×400**.
 - **Fiziksel ürün ölçüsü, PNG oranı ve baskı alanı ayrı kavramlardır.** PNG oranından fiziksel ölçü çıkarılmaz.
-  Tasarım sessizce esnetilmez veya kırpılmaz. Oran uyuşmazlığında tasarım oranı korunarak tanımlı baskı alanına
-  sığdırılır ve bu önizlemede gösterilir.
-- Tüm ürün sahneleri **kurdelelidir**; ilan görsellerinde tek örnek kurdele rengi yeterli. Mevcut renk ayarı korunur;
-  sipariş seçeneği / renk seçme geliştirmesi şimdilik kapsam dışı.
-- **Kuşgözü opsiyoneldir.** Sahnede kullanılan bağlantı biçimi ürün profilinde açıkça kaydedilir.
+  Aynı oranlı ölçüler (50×100 / 150×300, 75×200 / 150×400) ayrı kimliklerle seçilir.
+- **İlan görsellerindeki örnek ölçü 75×200 cm**dir (Ayarlar: `ornek_olcu`); satış ölçüleri bundan ayrı tutulur.
+- **Tam kumaş modu (2026-10-12'de kesinleşti):** PNG tuvali kumaşın TAMAMIDIR; PNG içindeki boşluklar yerleşimin
+  parçasıdır. Otomatik kenar boşluğu, içeri küçültme, kırpma, ortalama veya oranı bozarak esnetme **yoktur**.
+  Kumaşın perspektifi ve kıvrımı için gereken yüzey dönüşümü, kaynak oranı keyfî değiştirmekten ayrıdır.
+- **Oran uyuşmazlığında** (PNG oranı ≠ kumaş oranı, tolerans %1): açık uyarı ve önizleme verilir, uyuşmazlık sessizce
+  düzeltilmez ve o ürünün **nihai üretimi bekletilir** (hiç ücretli çağrı yapılmaz). *(Önceki "baskı alanına oranı
+  koruyarak sığdır" kuralının yerine geçti; bkz. `docs/kararlar.md` K-10.)*
+- PNG oran uyuşmazlığı ile **sahnenin ürün geometrisine uymaması** ayrı hata türleridir (`product.HATA_TURLERI`).
+- Tüm ürün sahneleri **kurdelelidir**: kurdeleler ortama uygun **fiyonk** olarak görünür; ilan görsellerinde tek örnek
+  kurdele rengi yeterli. Mevcut renk ayarı korunur; sipariş seçeneği / renk seçme geliştirmesi şimdilik kapsam dışı.
+- **Kuşgözü opsiyonel ürün özelliğidir.** Görünür fiyonk ile fiziksel bağlantı bilgisi ürün profilinde ayrı tutulur.
+  Kurdelenin kuşgözünden geçişinin görünmesi zorunlu değildir; görünmeyen bağlantı ayrıntısı kalite reddi nedeni olmaz.
+- **Kumaşın altı zemine değer**, tercihen hafifçe birikir; havada bitmez. Birikme miktarı sabit uydurulmaz (kumaş boyu
+  ölçünün boyudur, ör. 200 cm). Alt yazılar kıvrım/birikmede doğal olarak gizleniyorsa önizlemede gösterilir; yazı
+  yapay olarak yukarı taşınmaz. Birikme doğru çizilemiyorsa sınır raporlanır, sonuç başarılı sayılmaz.
+- **Fotoğraflar 1:1 karedir**; video ayarı fotoğraf kadrajını değiştiremez. Ürün ve stand kadrajda tamamen görünür.
+  Video için 9:16 zorunluluğu konmaz (video oranı sonraki aşamada sağlayıcı desteğine göre belirlenir).
 - **Stand pakete dahil değildir** (sahne dekorudur). Ürünün paket içeriği değiştirilmez.
-- Belirsiz fiziksel ürün bilgisi (malzeme gramajı, kuşgözü sayısı/çapı, baskı payı vb.) **uydurulmaz**; "belirsiz"
-  diye işaretlenip kullanıcıya sorulur.
+- Belirsiz fiziksel ürün bilgisi (malzeme gramajı, karışım oranı, kuşgözü sayısı/çapı vb.) **uydurulmaz**; boş/None
+  kalır. Bunlar bağımsız yazılım geliştirme adımlarını durdurmaz.
+- Eski iş dosyaları ve çıktıları değiştirilmez.
 
 ### Ürün başına çıktı paketi
 - **6 kare (1:1) ürün görseli:** 3 ortam × (önden + hafif yandan).
@@ -81,8 +95,10 @@ yüzeye tasarım uygulama motoru ürün türüne özel.
 ## 5. Geliştirme aşamaları (ayrıntı: `docs/roadmap.md`)
 
 - **Aşama 1 (tamamlandı, 2026-10-12):** mimari inceleme, ajanlar, bu dosya, `docs/`, Selector çift sayım düzeltmesi.
-- **Aşama 2:** fotoğraf hattı — kare kadraj videodan bağımsız, ürün profili + baskı alanı, 6 sahne görevi,
-  önden/açılı kontrol profilleri, kumaşta tutarlı yerleştirme, eksik görevleri tamamlama, bilgi görselleri pakete.
+- **Aşama 2A (tamamlandı, 2026-10-12):** ürün profili (`product.py`), tasarım kontrolü + oran önizlemesi, tam kumaş
+  yerleşimi, kare fotoğraf, arayüzde örnek ölçü seçimi ve oran uyarısı.
+- **Aşama 2 (kalan):** fotoğraf hattı — 6 sahne görevi,
+  önden/açılı kontrol profilleri (açılı görünümde tam kumaş yerleşimi), eksik görevleri tamamlama, bilgi görselleri pakete.
 - **Aşama 3:** sahne kütüphanesi (onaylı sahneler, yeniden kullanım; sahne hazırlama ≠ günlük ürün hazırlama).
 - **Aşama 4:** tek video (sabit kamera, hafif kurdele/ortam hareketi, kumaşla birlikte izleme).
 - **Aşama 5:** sağlayıcı yaşam döngüsü sertleştirme (iş numarası, sorgulamadan yeniden üretim yok, sürüm kaydı).

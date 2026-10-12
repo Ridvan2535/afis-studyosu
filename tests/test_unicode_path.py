@@ -63,8 +63,18 @@ os.makedirs(base)
 orch.JOBS_DIR = os.path.join(base, "işler")
 orch.REPORT_DIR = os.path.join(base, "raporlar")
 orch.LOG_PATH = os.path.join(base, "kayıt.log")
-design = os.path.join(base, "tasarım.jpg")
-shutil.copy(os.path.join(ROOT, "design_candy.jpg"), design)
+design = os.path.join(base, "tasarım.png")
+# Aşama 2A: tasarım örnek ölçüyle (75x200) tam oranlı olmalı; design_candy.jpg (0.51) uyuşmadığı için ondan oranı bozulmadan
+# türetilmiş şeffaf 750x2000 tuval kullanılır (ASCII geçici klasörde üretilip Türkçe yola kopyalanır).
+import numpy as np  # noqa: E402
+_src = _imread(os.path.join(ROOT, "design_candy.jpg"))
+_src = cv2.resize(_src, (750, int(round(_src.shape[0] * 750 / _src.shape[1]))), interpolation=cv2.INTER_AREA)
+_can = np.zeros((2000, 750, 4), np.uint8)
+_can[:_src.shape[0], :, :3] = _src
+_can[:_src.shape[0], :, 3] = 255
+_tmp_png = os.path.join(tempfile.mkdtemp(prefix="afis_u_src_"), "t.png")
+_imwrite(_tmp_png, _can)
+shutil.copy(_tmp_png, design)
 
 s = Settings(scene_provider="mock", video_provider="mock", photo_long_side=1200, seconds=2, auto_video=False, max_video_tries=1)
 o = orch.Orchestrator(s, log=lambda m: None, progress=lambda f, t: None)
