@@ -286,7 +286,10 @@ class Handler(BaseHTTPRequestHandler):
                 "videolar": videos, "son_uretim": rap.get("son_uretim"), "ozet": base + "foto/_ozet.jpg" if ov else None,
                 "servis_karnesi": rap.get("servis_karnesi", []), "insanli": bool(rap.get("insanli")),
                 "urun_profili": rap.get("urun_profili"), "tasarim_kontrol": rap.get("tasarim_kontrol"), "durum": rap.get("durum"),
-                "bekleme_nedeni": rap.get("bekleme_nedeni"), "oran_onizleme": oran_url}
+                "bekleme_nedeni": rap.get("bekleme_nedeni"), "oran_onizleme": oran_url,
+                "islem": rap.get("islem"), "kaynak_is": rap.get("kaynak_is"), "saglayici_cagrisi": rap.get("saglayici_cagrisi"),
+                "yeniden_birlestirilebilir": any(p.get("stem") and os.path.exists(os.path.join(jp, "sahneler_bos", p["stem"] + ".png"))
+                                                 for p in rap.get("fotograflar", []))}
 
     # -- tasarım kontrolü (ürün profili) -------------------------------------------------
     @staticmethod
@@ -335,6 +338,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._start_photos(body)
             if u.path == "/api/start_video":
                 return self._start_video(body)
+            if u.path == "/api/yeniden_birlestir":
+                return self._recompose(body)
             if u.path == "/api/cancel":
                 RUN.cancel_flag = True
                 return self._send(200, {"tamam": True})
@@ -455,6 +460,24 @@ class Handler(BaseHTTPRequestHandler):
             RUN._set(job=os.path.basename(job))
             res = o.generate_photos(job, n, refs, people=people, ribbon=ribbon, ref_items=depot, profile=prof)
             res["job"] = os.path.basename(job)
+            return res
+
+        if not RUN.start("fotograf", work):
+            return self._send(409, {"hata": "Başka bir iş çalışıyor."})
+        return self._send(200, {"basladi": True})
+
+    def _recompose(self, body):
+        """Kayıtlı boş sahnelerden yeniden birleştirme: yeni iş açar, kaynak işe dokunmaz, sağlayıcıya istek göndermez."""
+        job = body.get("job", "")
+        jp = safe_join(orch.JOBS_DIR, job) if job else None
+        if not jp or not os.path.isdir(jp):
+            return self._send(400, {"hata": "İş bulunamadı."})
+        if not any(p.get("stem") for p in Orchestrator.report_of(jp).get("fotograflar", [])):
+            return self._send(400, {"hata": "Bu işte kayıtlı sahne yok."})
+
+        def work(o, settings):
+            res = o.recompose_from_scenes(jp)
+            RUN._set(job=res["job"])
             return res
 
         if not RUN.start("fotograf", work):

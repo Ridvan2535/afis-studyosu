@@ -195,6 +195,10 @@ table.karne tr.win td{color:var(--ok);font-weight:600}
       </div>
       <div id="sumMsg"></div>
       <div class="gallery" id="gallery"></div>
+      <div id="recompWrap" hidden style="margin:12px 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <button class="btn sm" id="btnRecomp">Kayıtlı sahnelerden yeniden birleştir</button>
+        <span class="hint" style="margin:0">Ücretsiz: bu işin kayıtlı boş sahnelerine tasarım güncel programla yeniden basılır; yeni sahne üretilmez, servise istek gitmez. Sonuç yeni bir iş olarak kaydedilir, bu iş olduğu gibi kalır.</span>
+      </div>
       <div id="rejBox"></div>
       <div id="karneJob"></div>
       <div style="margin-top:22px">
@@ -589,6 +593,10 @@ $("#btnPhotos").onclick = () => {
   guardedStart("/api/start_photos", {olcu: $("#olcu").value, category: $("#category").value, n: +$("#count").value || 6, name: $("#jobname").value.trim(), people: $("#people").checked, ribbon: $("#ribbon").value, use_refs: $("#useRefs").checked},
     "Fotoğraf üretimi", cfg.scene_provider, cfg.max_scene_calls);
 };
+$("#btnRecomp").onclick = async () => {
+  if (!curJob || busy()) return;
+  try { await api("/api/yeniden_birlestir", {job: curJob}); toast("Yeniden birleştirme başladı (ücretsiz)"); await poll(); } catch (e) { toast(e.message); }
+};
 $("#btnVideo").onclick = async () => {
   if (!curJob || !selPhoto) return;
   const mode = $("#vidMode").value, move = $("#vidMove").value, hand = $("#vidHand").value;
@@ -611,7 +619,7 @@ function renderRun() {
   pre.textContent = (S.logs || []).join("\n");
   if (atEnd) pre.scrollTop = pre.scrollHeight;
   if (S.running) $("#logBox").open = true;
-  ["btnPhotos"].forEach(id => $("#" + id).disabled = busy());
+  ["btnPhotos", "btnRecomp"].forEach(id => $("#" + id).disabled = busy());
   $("#btnVideo").disabled = busy() || !selPhoto;
   if (S.design && $("#prevDesign").hidden) {
     $("#serverDesign").hidden = false;
@@ -662,7 +670,7 @@ async function loadJob(name, keepSel) {
   renderResult();
 }
 const NICE = {openai: "OpenAI", gemini: "Gemini", magnific: "Magnific (yalnız istem)", "magnific-edit": "Magnific Seedream 4.5 Edit", "magnific-edit-pro": "Magnific Seedream 5 Pro Edit", "veo-3-1": "Veo 3.1", "veo-3-1-fast": "Veo 3.1 Fast", "kling-pro": "Kling Pro",
-  "runway-4-5": "Runway Gen-4.5", mock: "Deneme", mock_bad: "Deneme (kötü)", mock_err: "Deneme (hatalı)", mock_vbad: "Deneme video (kötü)"};
+  "runway-4-5": "Runway Gen-4.5", kayitli_sahne: "Kayıtlı sahne", mock: "Deneme", mock_bad: "Deneme (kötü)", mock_err: "Deneme (hatalı)", mock_vbad: "Deneme video (kötü)"};
 function niceName(n) { return NICE[n] || n; }
 function karneTable(rows, win) {
   const r = (rows || []).filter(x => x.cagri > 0);
@@ -700,7 +708,9 @@ function renderResult() {
   const i = curInfo; if (!i) return;
   if (selPhoto && !i.fotograflar.some(p => p.ad === selPhoto)) selPhoto = null;
   if (!selPhoto) { const b = i.fotograflar.find(p => p.en_iyi); if (b) selPhoto = b.ad; }       // en iyi fotoğraf kendiliğinden seçili gelir
-  $("#jobInfo").textContent = `${i.kategori || ""} · ${i.fotograflar.length} fotoğraf`;
+  $("#jobInfo").textContent = `${i.kategori || ""} · ${i.fotograflar.length} fotoğraf`
+    + (i.islem === "kayitli_sahnelerden_yeniden_birlestirme" ? ` · kayıtlı sahnelerden yeniden birleştirildi (kaynak: ${i.kaynak_is}; servis çağrısı: ${i.saglayici_cagrisi ?? 0})` : "");
+  $("#recompWrap").hidden = !i.yeniden_birlestirilebilir;
   const su = i.son_uretim;
   const sm = $("#sumMsg"); sm.innerHTML = "";
   if (i.durum === "beklemede") sm.innerHTML = `<div class="msg warn"><b>Bu ürün bekletiliyor.</b> ${esc(((i.tasarim_kontrol || {}).uyarilar || [])[0] || "Tasarım kontrolü geçmedi.")}${i.oran_onizleme ? `<br><a href="${esc(i.oran_onizleme)}" target="_blank">Oran önizlemesini aç</a>` : ""}</div>`;

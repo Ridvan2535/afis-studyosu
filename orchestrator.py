@@ -325,69 +325,18 @@ class Orchestrator:
                 sel.record(name, False, error=True)
                 continue
             img = self._upscale(img)
-            # ürün kumaş olarak tanımlı: otomatik sert/kumaş sınıflandırması yerleşim politikasını değiştirmesin
-            det = bd.detect(img, hint={"kind": "fabric"})
-            reason, lay, tur_ = None, {}, "kalite_kapisi"
-            if not det.ok:
-                reason = "; ".join(det.reject)
-            elif det.mask.any():
-                # oran düzeltme (sahneyi yatayda germe) bu hatta KAPALI; oran ürün profilinden
-                why, lay = layout.check(det, img.shape, pa)
-                if lay:
-                    self.log(f"Sahne {calls} ({nice(name)}) ölçüm: oran {lay['aspect']:.2f} (ürün {pa:.2f}), üst/alt genişlik {lay['taper']:.2f}, "
-                             f"sol/sağ yükseklik {lay['side_ratio']:.2f}, boy %{lay['top_frac'] * 100:.0f}-%{lay['bottom_frac'] * 100:.0f}")
-                if why and self.s.strict_layout:
-                    reason = why
-                    # afişin oranı ürün oranına uymuyor ya da yere ulaşmıyorsa bu bir SAHNE GEOMETRİSİ hatasıdır (kalite değil)
-                    if any(k in why for k in ("çok geniş", "çok dar", "yere kadar uzanmıyor")):
-                        tur_ = "sahne_geometri"
-            else:
-                reason = "afiş bulunamadı"
-            if reason:
-                self.log(f"Sahne {calls} ({nice(name)}) elendi: {reason}")
-                reject(tur_, reason, img, det, lay)
+            ev = self._evaluate_scene(img, design, prof, f"Sahne {calls} ({nice(name)})")
+            if not ev["ok"]:
+                reject(ev["tur"], ev["neden"], img, ev["det"], ev["lay"], ev.get("extra"))
                 sel.record(name, False)
                 continue
-            try:
-                out, info = cp.composite(img, design, det, mode="tam_kumas", profile=prof)
-            except Exception as e:                       # geometri çıkarılamadı: sahne elenir, iş durmaz
-                self.log(f"Sahne {calls} ({nice(name)}) elendi: kumaş geometrisi çıkarılamadı ({e.__class__.__name__}: {e})")
-                reject("sahne_geometri", f"kumaş geometrisi çıkarılamadı: {e}", img, det, lay)
-                sel.record(name, False)
-                continue
-            tk_info = {k: info[k] for k in ("px_per_cm", "asili_cm", "gizli_cm", "v_gizli", "temas_y", "birikme", "temas_yontemi",
-                                            "olcek_farki", "dikey_olcek", "gizli_murekkep", "sorunlar", "uyarilar")}
-            if info["sorunlar"]:
-                tur = info["sorunlar"][0]["tur"]
-                msg = " ".join(x["mesaj"] for x in info["sorunlar"])
-                self.log(f"Sahne {calls} ({nice(name)}) elendi ({product.HATA_TURLERI.get(tur, tur)}): {msg}")
-                reject(tur, msg, img, det, lay, {"tam_kumas": tk_info})
-                sel.record(name, False)
-                continue
-            quality = layout.score(lay, pa) if lay else 50.0
-            sel.record(name, True, quality)
+            sel.record(name, True, ev["kalite"])
             num = have + accepted_now + 1
-            stem = f"s{num:02d}"
-            cvio.imwrite(os.path.join(job, "sahneler_bos", stem + ".png"), img)
-            if ribbon:
-                out = ribbon_mod.restore(img, out, ribbon["hex"])
-            fname = f"{num:02d}_kumas.jpg"
-            cvio.imwrite(os.path.join(job, "foto", fname), out, [cv2.IMWRITE_JPEG_QUALITY, 95])
-            new_photos.append(fname)
-            rec = {"ad": fname, "stem": stem, "tur": det.kind, "uyari": det.warn + info["uyarilar"],
-                   "olcu": [out.shape[1], out.shape[0]], "yerlesim": lay, "servis": name, "kalite": quality,
-                   "oran_duzeltme": None, "kurdele": (ribbon or {}).get("hex"),
-                   "yerlesim_modu": "tam_kumas", "olcu_id": prof.olcu_id, "tam_kumas": tk_info}
-            if info["v_gizli"] < 0.995:
-                os.makedirs(os.path.join(job, "onizleme"), exist_ok=True)
-                gname = f"onizleme/{num:02d}_gizli.jpg"
-                cvio.imwrite(os.path.join(job, gname), product.gizli_bolge_onizleme(design_file, info["v_gizli"]),
-                             [cv2.IMWRITE_JPEG_QUALITY, 90])
-                rec["gizli_onizleme"] = gname
-            rap["fotograflar"].append(rec)
+            rec = self._save_accepted(job, rap, img, ev, prof, ribbon, num, name, design_file)
+            new_photos.append(rec["ad"])
             accepted_now += 1
-            self.log(f"Sahne {calls} ({nice(name)}) kabul edildi -> {fname}, kalite {quality:.0f}/100, "
-                     f"asılı ≈{info['asili_cm']:.0f} cm" + (f", zeminde ≈{info['gizli_cm']:.0f} cm birikme" if info["v_gizli"] < 0.995 else "")
+            self.log(f"Sahne {calls} ({nice(name)}) kabul edildi -> {rec['ad']}, kalite {ev['kalite']:.0f}/100, "
+                     f"asılı ≈{ev['info']['asili_cm']:.0f} cm" + (f", zeminde ≈{ev['info']['gizli_cm']:.0f} cm birikme" if ev['info']["v_gizli"] < 0.995 else "")
                      + (f" (uyarı: {'; '.join(rec['uyari'])})" if rec["uyari"] else ""))
             _write_json(os.path.join(job, "rapor.json"), rap)
         sel.save()
@@ -407,6 +356,133 @@ class Orchestrator:
         if accepted_now < n:
             self.log(f"{n - accepted_now} fotoğraf eksik kaldı (çağrı tavanı ya da hata). Tekrar çalıştırırsan eksikler tamamlanır.")
         return rap["son_uretim"]
+
+    # -- ortak sahne değerlendirme ve kayıt (sağlayıcıdan bağımsız) -----------------------------------
+    def _evaluate_scene(self, img, design, prof, label: str) -> dict:
+        """Bir boş sahneyi değerlendirir ve tasarımı tam kumaş moduyla yerleştirir. AĞ/SAĞLAYICI KULLANMAZ.
+        Hem yeni üretimde (generate_photos) hem kayıtlı sahnelerden yeniden birleştirmede aynı kurallar uygulanır:
+        kumaş zorunlu algılama -> layout kalite kapısı (ürün oranı) -> tam kumaş yerleşimi -> geometri/birikme sorunları.
+        Dönüş: {"ok", "tur", "neden", "det", "lay", "info", "out", "kalite", "extra"}."""
+        pa = prof.oran
+        det = bd.detect(img, hint={"kind": "fabric"})      # ürün kumaş: otomatik sert/kumaş sınıflandırması yerleşimi değiştirmez
+        reason, lay, tur_ = None, {}, "kalite_kapisi"
+        if not det.ok:
+            reason = "; ".join(det.reject)
+        elif det.mask.any():
+            why, lay = layout.check(det, img.shape, pa)       # oran düzeltme (sahneyi germe) KAPALI; oran ürün profilinden
+            if lay:
+                self.log(f"{label} ölçüm: oran {lay['aspect']:.2f} (ürün {pa:.2f}), üst/alt genişlik {lay['taper']:.2f}, "
+                         f"sol/sağ yükseklik {lay['side_ratio']:.2f}, boy %{lay['top_frac'] * 100:.0f}-%{lay['bottom_frac'] * 100:.0f}")
+            if why and self.s.strict_layout:
+                reason = why
+                if any(k in why for k in ("çok geniş", "çok dar", "yere kadar uzanmıyor")):
+                    tur_ = "sahne_geometri"           # afiş oranı/boyu ürüne uymuyor: sahne geometrisi hatası (kalite değil)
+        else:
+            reason = "afiş bulunamadı"
+        if reason:
+            self.log(f"{label} elendi: {reason}")
+            return {"ok": False, "tur": tur_, "neden": reason, "det": det, "lay": lay}
+        try:
+            out, info = cp.composite(img, design, det, mode="tam_kumas", profile=prof)
+        except Exception as e:                           # geometri çıkarılamadı: sahne elenir, iş durmaz
+            self.log(f"{label} elendi: kumaş geometrisi çıkarılamadı ({e.__class__.__name__}: {e})")
+            return {"ok": False, "tur": "sahne_geometri", "neden": f"kumaş geometrisi çıkarılamadı: {e}", "det": det, "lay": lay}
+        tk_info = {k: info[k] for k in ("px_per_cm", "asili_cm", "gizli_cm", "v_gizli", "temas_y", "birikme", "temas_yontemi",
+                                        "olcek_farki", "dikey_olcek", "gizli_murekkep", "sorunlar", "uyarilar")}
+        tk_info.update(kivrim_kaymasi=info.get("kivrim_kaymasi"), kenar_sigma_px=info.get("kenar_sigma_px"))
+        if info["sorunlar"]:
+            tur = info["sorunlar"][0]["tur"]
+            msg = " ".join(x["mesaj"] for x in info["sorunlar"])
+            self.log(f"{label} elendi ({product.HATA_TURLERI.get(tur, tur)}): {msg}")
+            return {"ok": False, "tur": tur, "neden": msg, "det": det, "lay": lay, "extra": {"tam_kumas": tk_info}}
+        quality = layout.score(lay, pa) if lay else 50.0
+        return {"ok": True, "tur": None, "neden": None, "det": det, "lay": lay, "info": info, "tk_info": tk_info,
+                "out": out, "kalite": quality}
+
+    def _save_accepted(self, job, rap, img, ev, prof, ribbon, num, servis, design_file) -> dict:
+        """Kabul edilen sahneyi ve yerleştirilmiş fotoğrafı kaydeder, rapor kaydını ekler (yazma çağıranda)."""
+        stem = f"s{num:02d}"
+        cvio.imwrite(os.path.join(job, "sahneler_bos", stem + ".png"), img)
+        out, info, det = ev["out"], ev["info"], ev["det"]
+        if ribbon:
+            out = ribbon_mod.restore(img, out, ribbon["hex"])
+        fname = f"{num:02d}_kumas.jpg"
+        cvio.imwrite(os.path.join(job, "foto", fname), out, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        rec = {"ad": fname, "stem": stem, "tur": det.kind, "uyari": det.warn + info["uyarilar"],
+               "olcu": [out.shape[1], out.shape[0]], "yerlesim": ev["lay"], "servis": servis, "kalite": ev["kalite"],
+               "oran_duzeltme": None, "kurdele": (ribbon or {}).get("hex"),
+               "yerlesim_modu": "tam_kumas", "olcu_id": prof.olcu_id, "tam_kumas": ev["tk_info"]}
+        if info["v_gizli"] < 0.995:
+            os.makedirs(os.path.join(job, "onizleme"), exist_ok=True)
+            gname = f"onizleme/{num:02d}_gizli.jpg"
+            cvio.imwrite(os.path.join(job, gname), product.gizli_bolge_onizleme(design_file, info["v_gizli"]),
+                         [cv2.IMWRITE_JPEG_QUALITY, 90])
+            rec["gizli_onizleme"] = gname
+        rap["fotograflar"].append(rec)
+        _write_json(os.path.join(job, "rapor.json"), rap)
+        return rec
+
+    # -- kayıtlı sahnelerden yeniden birleştirme (ÜCRETSİZ: sağlayıcıya hiçbir istek gitmez) ------------------
+    def recompose_from_scenes(self, src_job: str, name: str | None = None) -> dict:
+        """Var olan bir işin KAYITLI boş sahnelerine (sahneler_bos/sNN.png) aynı tasarımı güncel kodla yeniden yerleştirir.
+        Yeni bir iş klasörü açar; kaynak işe ve görsellerine DOKUNMAZ. Sağlayıcı/selector hiç kullanılmaz.
+        Kalite kapısı, tam kumaş yerleşimi ve sonuç kaydı generate_photos ile aynı fonksiyonlardan geçer."""
+        src = self.report_of(src_job)
+        photos = [p for p in src.get("fotograflar", []) if p.get("stem")]
+        if not photos:
+            raise ProviderError("Kaynak işte kayıtlı sahne yok (fotoğraf kaydı bulunamadı).")
+        files = glob.glob(os.path.join(src_job, "tasarim.*"))
+        if not files:
+            raise ProviderError("Kaynak işte tasarım dosyası yok.")
+        prof = self._profile(src)
+        src_name = os.path.basename(src_job)
+        job = self.new_job(files[0], src.get("kategori", "Düğün"), name or f"yeniden_{src_name.split('_')[0]}", profile=prof)
+        rap = self.report_of(job)
+        rap.update(islem="kayitli_sahnelerden_yeniden_birlestirme", kaynak_is=src_name, saglayici_cagrisi=0,
+                   insanli=bool(src.get("insanli")))
+        self.log(f"Kayıtlı sahnelerden yeniden birleştirme: kaynak {src_name}, {len(photos)} sahne. "
+                 f"Sağlayıcıya istek GÖNDERİLMEZ (ücretsiz).")
+        if not rap["tasarim_kontrol"]["uyumlu"]:
+            rap["son_uretim"] = {"hedef": len(photos), "uretilen": 0, "eksik": len(photos), "cagri": 0, "saglayici_cagrisi": 0,
+                                 "beklemede": True, "bekleme_nedeni": "tasarim_oran_uyusmazligi"}
+            _write_json(os.path.join(job, "rapor.json"), rap)
+            return dict(rap["son_uretim"], job=os.path.basename(job))
+        design = self._design(job)
+        design_file = glob.glob(os.path.join(job, "tasarim.*"))[0]
+        done = 0
+        for i, p in enumerate(photos):
+            self.progress(0.05 + 0.9 * i / len(photos), f"Kayıtlı sahne {i + 1}/{len(photos)} yeniden birleştiriliyor")
+            spath = os.path.join(src_job, "sahneler_bos", p["stem"] + ".png")
+            img = cvio.imread(spath, cv2.IMREAD_COLOR) if os.path.exists(spath) else None
+            kaynak = {"is": src_name, "stem": p["stem"], "foto": p.get("ad"), "servis": p.get("servis")}
+            if img is None:
+                rap["elenenler"].append({"cagri": 0, "servis": None, "tur": "kalite_kapisi", "neden": f"kayıtlı sahne okunamadı: {p['stem']}",
+                                         "kaynak": kaynak})
+                continue
+            img = self._upscale(img)
+            ev = self._evaluate_scene(img, design, prof, f"Kayıtlı sahne {p['stem']}")
+            if not ev["ok"]:
+                rec = {"cagri": 0, "servis": None, "tur": ev["tur"], "neden": ev["neden"], "kaynak": kaynak}
+                if ev.get("lay"):
+                    rec["olcum"] = ev["lay"]
+                rap["elenenler"].append(rec)
+                _write_json(os.path.join(job, "rapor.json"), rap)
+                continue
+            ribbon = {"hex": p["kurdele"]} if p.get("kurdele") else None
+            rec = self._save_accepted(job, rap, img, ev, prof, ribbon, len(rap["fotograflar"]) + 1,
+                                      "kayitli_sahne", design_file)
+            rec["kaynak"] = kaynak
+            done += 1
+            self.log(f"Kayıtlı sahne {p['stem']} yeniden birleştirildi -> {rec['ad']} (kaynak: {p.get('ad')})")
+        best = max(rap.get("fotograflar", []), key=lambda q: q.get("kalite", 0), default=None)
+        for q in rap.get("fotograflar", []):
+            q["en_iyi"] = bool(best) and q is best
+        self._overview(job, rap)
+        rap["son_uretim"] = {"hedef": len(photos), "uretilen": done, "eksik": len(photos) - done, "cagri": 0,
+                             "saglayici_cagrisi": 0, "beklemede": False}
+        _write_json(os.path.join(job, "rapor.json"), rap)
+        self.progress(1.0, f"Bitti: {done}/{len(photos)} kayıtlı sahne yeniden birleştirildi (servis çağrısı yok)")
+        return dict(rap["son_uretim"], job=os.path.basename(job))
 
     def _auto_videos(self, job: str, photos: list[str]):
         """Her yeni fotoğraf için onaylanan kamera videosu (ücretsiz, yapay zekâsız). Bir video hata verirse iş durmaz."""

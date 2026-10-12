@@ -7,6 +7,18 @@ Biçim: **K-numara · tarih · karar** — gerekçe · etki/geri alma.
 
 ---
 
+### 2026-10-13 — Düzeltmenin uygulama akışında doğrulanması
+
+**K-22 · 2026-10-13 · Yeniden birleştirme sonucu YENİ iş olarak kaydedilir; kaynak iş ve görselleri değişmez.**
+Yeni iş adı `<tarih>_yeniden_<kaynak tarih>`; raporda `islem: kayitli_sahnelerden_yeniden_birlestirme`, `kaynak_is`,
+`saglayici_cagrisi: 0`, her fotoğrafta `kaynak` (iş/sahne/foto/servis). Seçici (servis karnesi) hiç çalışmaz, karne değişmez.
+
+**K-21 · 2026-10-13 · "Kayıtlı sahnelerden yeniden birleştir" işlemi eklendi (ücretsiz, sağlayıcıya istek yok).**
+`Orchestrator.recompose_from_scenes(kaynak_is)`; arayüzde sonuç ekranında düğme; `POST /api/yeniden_birlestir`.
+Aynı kuralların uygulanması için sahne değerlendirme + yerleştirme (`_evaluate_scene`) ve kabul kaydı (`_save_accepted`)
+generate_photos'tan ortak fonksiyonlara ayrıldı; yeni üretim ve yeniden birleştirme aynı kodu kullanır. Oranı
+uyuşmayan tasarımda yeni iş "beklemede" kalır.
+
 ### 2026-10-12 — Aşama 2A düzeltmesi: baskıda kopmalar
 
 **K-20 · 2026-10-12 · Yalnız işaret merkezi ölçen testler yeterli değil; süreklilik testi zorunlu.**

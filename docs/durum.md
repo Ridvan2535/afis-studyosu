@@ -4,10 +4,45 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-12 23:55 (Claude) · **Mevcut aşama:** Aşama 2A + kopma düzeltmesi tamamlandı. Sıradaki:
-Aşama 2B (6 sahne görevi + açılı görünüm + eksikleri tamamla) — başlamadı; kullanıcı gerçek görselleri onaylayınca.
+**Son güncelleme:** 2026-10-13 00:15 (Claude) · **Mevcut aşama:** Aşama 2A + kopma düzeltmesi + uygulama akışında
+doğrulama tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı görünüm + eksikleri tamamla) — BAŞLAMADI (kullanıcı
+onayı bekleniyor). Video aşamasına başlanmadı.
 
 ---
+
+## 0a. Son iş: kopma düzeltmesinin uygulamanın normal akışında doğrulanması (2026-10-13)
+
+**Ne yapıldı:** Uygulamaya "Kayıtlı sahnelerden yeniden birleştir" işlemi eklendi (K-21, K-22). İş
+`isler/20261012-224824_20261012-224717_design`'ın iki kayıtlı boş sahnesine aynı tasarım, güncel kodla, uygulamanın
+kendi kalite kapısı + tam kumaş yerleşimi + kayıt akışından geçirilerek yeniden basıldı.
+
+**Sonuç nerede:** bilgisayarda `isler/20261012-235743_yeniden_20261012-224824/` (foto/01_kumas.jpg, foto/02_kumas.jpg,
+foto/_ozet.jpg, onizleme/01_gizli.jpg, rapor.json). Kaynak iş klasörüne dokunulmadı.
+
+**Uygulamada açmak:** `baslat.bat` → Üret sekmesi → "3 Sonuçlar" kartında "Önceki işler" listesinden
+`20261012-235743_yeniden_20261012-224824` seç. Başlıkta "kayıtlı sahnelerden yeniden birleştirildi (kaynak: …; servis
+çağrısı: 0)" yazar. Aynı işlemi başka bir iş için tekrarlamak: o işi seç → "Kayıtlı sahnelerden yeniden birleştir" düğmesi.
+
+**Sağlayıcı çağrısı:** YOK. Doğrulama: (1) uygulama sunucusu, sahne/video sağlayıcı fabrikaları çağrılırsa hata verecek
+şekilde kilitlenip çalıştırıldı → çağrı sayısı 0; (2) ayarlarda hiç anahtar yoktu; (3) rapor `saglayici_cagrisi: 0`,
+`cagri: 0`; servis karnesine kayıt yok.
+
+**Doğrulama sonuçları (bulut çalışma alanı, Linux, Python 3.13; sahte servis yok, kayıtlı gerçek sahneler):**
+- Tarayıcıda (headless Chromium) uygulama arayüzünden: iş seçildi → düğmeye basıldı → 2/2 fotoğraf, yeni iş ekranda
+  otomatik açıldı, galeri "Kumaş (tam tuval) · Kayıtlı sahne", JavaScript hatası yok.
+- Kaynak iş: işlem öncesi/sonrası tüm dosyaların md5'i aynı.
+- Ürün profili 75×200, tasarım kontrolü uyumlu (3000×8000, şeffaf), çıktılar 2400×2400 kare; tam kumaş, kıvrım kayması 0.
+- Yerleşim: asılı boy 177,7 / 201,4 cm, gizli 22,3 / 0 cm, ölçek 11,702 / 9,567 px/cm — kaynak raporla aynı.
+- Onaylanan düzeltilmiş görsellerle (karşılaştırma klasörü V4) ortalama fark 0,55 / 0,77 (JPEG kaydı düzeyi).
+- Gözle (kayıtlı JPEG'lerden yakın görünüm): Candy's y kuyruğu, BABY SHOWER, WELCOME TO ve ayıcık çizgileri iki
+  görselde de kesintisiz; kumaş dokusu ve ışık korunuyor; 01'de etek zeminde birikiyor (alt ≈22 cm gizli, o bölge
+  tasarımda boş), 02'de etek zemine değiyor.
+- Yeni test `tests/test_yeniden_birlestir.py`: TAMAM (sağlayıcı yasak, kaynak bayt bayt aynı, aynı ortak fonksiyonla
+  piksel eşitliği, hata yolları).
+- Tam test takımı: §2'ye bakın.
+
+**Windows:** Testler bilgisayarındaki Windows ortamında ÇALIŞTIRILMADI — bu oturumda bilgisayarda komut çalıştırma
+aracı yok. Yukarıdaki sonuçlar yalnız bulut çalışma alanına aittir.
 
 ## 0. Son iş: baskıdaki kopmaların kök nedeni ve düzeltmesi (2026-10-12 gece)
 
@@ -122,12 +157,13 @@ kumaşın tamamı karede; birikmede alt kısım basılmıyor.
 
 ## 4. Kullanıcıdan beklenen yanıtlar
 
-0. **Kopma düzeltmesinin onayı:** `karsilastirma/20261012-224824_kopma/yakin/once_sonra_*.png` ve `tam/s0*_V4_duzeltilmis.jpg`
-   görsellerine bakıp onay. (Bu iş klasörünün fotoğrafları değiştirilmedi; istersen düzeltilmiş kodla aynı sahnelerden
-   ücretsiz yeniden yerleştirme yapılabilir.)
+0. ~~Kopma düzeltmesinin onayı~~ — **yanıtlandı (2026-10-12):** Codex düzeltilmiş iki görselde kopmaların giderildiğini
+   doğruladı. Yeni: uygulamada açılan `isler/20261012-235743_yeniden_20261012-224824` işinin gözle onayı.
 
-1. Windows'ta: `ajanlar_kurulum\ajanlari_kur.bat` ve şu testlerin sonucu:
-   `.venv\Scripts\python tests\test_product.py`, `...\test_tam_kumas.py`, `...\test_kare_kadraj.py`, `.venv\Scripts\python kontrol.py`.
+1. Windows'ta: `ajanlar_kurulum\ajanlari_kur.bat` ve şu testlerin sonucu (proje klasöründe, komut isteminde):
+   `.venv\Scripts\python tests\test_sureklilik.py`, `.venv\Scripts\python tests\test_yeniden_birlestir.py`,
+   `.venv\Scripts\python tests\test_tam_kumas.py`, `.venv\Scripts\python tests\test_kare_kadraj.py`,
+   `.venv\Scripts\python tests\test_product.py`, `.venv\Scripts\python kontrol.py`.
 2. **Doğru oranlı gerçek bir tasarım dosyası** (75×200 için en/boy 0,375; ör. 2953×7874 px ≈ 100 dpi). `design_candy.jpg`
    0,515 oranında olduğu için bekletiliyor.
 3. "Hafif yandan" görünüm kaç derece, hangi yönden; üç ortamda aynı yön mü?
@@ -137,7 +173,7 @@ kumaşın tamamı karede; birikmede alt kısım basılmıyor.
 
 ## 5. Sonraki önerilen adım
 
-Önce kopma düzeltmesinin onayı (§4-0); onaydan sonra:
+Uygulamada yeniden birleştirilen işin onayı (§4-0) ve mümkünse Windows test sonuçları (§4-1); ardından:
 
 **Aşama 2B:** (a) gerçek servisle küçük kalibrasyon denemesi (onayla) ve eşiklerin ayarı; (b) `layout` önden/açılı
 kontrol profilleri ve açılı görünümde tam kumaş yerleşimi (üst/alt kenar eğrisi); (c) 6 sahne görevi
