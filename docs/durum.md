@@ -54,7 +54,9 @@ foto/_ozet.jpg, onizleme/01_gizli.jpg, rapor.json). Kaynak iş `isler/20261012-2
 - `test_duzlem_yerlesim`: TAMAM (dalgalı kenarda düz çizgi artığı 0,49 px ve model bükülmesi 0,000 px; önden yatay/dikey
   ölçek 5,933 / 5,985 px/cm; açılıda tek homografiden sapma 0,0001; ortada katlanma ve güçlü kenar dalgası → `sahne_kivrim`).
   Eski (K-18) kodla anlamlı biçimde BAŞARISIZ: "iç geometri kenar dalgasıyla bükülüyor: 1,67 px".
-- `test_yeniden_birlestir`: TAMAM. Tam takım sonucu §2'de.
+- `test_yeniden_birlestir`: TAMAM.
+- **Tam test takımı (düzlem yerleşimle, bulut/Linux):** 16 test dosyasının hepsi TAMAM (`test_video_repair` hatasız
+  bitti, sonunda TAMAM yazmıyor), `kontrol.py` "HER ŞEY TAMAM".
 
 **Windows:** Testler bilgisayarındaki Windows ortamında ÇALIŞTIRILMADI — bu oturumda bilgisayarda komut çalıştırma aracı
 yok. Yukarıdaki sonuçların hepsi bulut çalışma alanına aittir.
