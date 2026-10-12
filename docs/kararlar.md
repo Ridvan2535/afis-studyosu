@@ -7,6 +7,24 @@ Biçim: **K-numara · tarih · karar** — gerekçe · etki/geri alma.
 
 ---
 
+### 2026-10-12 — Aşama 2A düzeltmesi: baskıda kopmalar
+
+**K-20 · 2026-10-12 · Yalnız işaret merkezi ölçen testler yeterli değil; süreklilik testi zorunlu.**
+`tests/test_sureklilik.py`: pürüzlü kenarlı ve sert ışık bantlı sahnede ince çizgi ve harf benzeri şekiller; dönüşümde
+satır ikinci farkı ≤ 1 px, katlanma 0, ince çizgi merkezinde satırdan satıra sıçrama ≤ 1,5 px, kopuk satır 0. Eski kodla
+başarısız (ham kenar: 7,98 px; yalnız kıvrım kayması: 2,17 px).
+
+**K-19 · 2026-10-12 · Tam kumaş modunda ışık gradyanından kıvrım kayması KAPALI (`TAM_KUMAS_FOLD_SHIFT = 0`).**
+Işık gradyanı kumaş geometrisi değildir; gerçek s01 sahnesinde dönüşümü 1688 pikselde katlayıp W/O harflerinde çift
+kontur yaptı. Güvenilir bir kıvrım geometrisi yöntemi gelene kadar 0. Kumaş dokusu ve ışık, çarpma baskı modeliyle
+(baskı = sahne × tasarım) aynen korunur. Eski yol (mode=None) 0,01 ile değişmeden kalır.
+
+**K-18 · 2026-10-12 · Kumaş kenarları satır satır değil, yumuşak eğri olarak kullanılır (`KENAR_YUMUSATMA` = boyun %2'si).**
+Kök neden: satır bazlı alt-piksel kenar ölçümündeki sıçramalar tasarımı o satırlarda yatay koparıyordu (iş
+20261012-224824: s01'de 121, s02'de 42 satır). Temas çizgisi altı temas değeriyle sabitlenip Gauss uygulanır; ham kenarlar
+tanı için saklanır. Yerleşim koordinatları (üst kenar, cm ölçeği, asılı boy, gizli bölge) değişmez. Bilinen sınır:
+kurdele kumaş kenarını örterse o bölgedeki çentik de yumuşatılarak izlenir.
+
 ### 2026-10-12 — Aşama 2A
 
 **K-17 · 2026-10-12 · Yerleşim eşikleri VARSAYIM olarak işaretlendi ve raporlanıyor.**

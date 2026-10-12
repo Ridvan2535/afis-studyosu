@@ -91,6 +91,9 @@ yüzeye tasarım uygulama motoru ürün türüne özel.
   2. **Sahte servis testi** (`mock_provider` / taklit `requests`),
   3. **Gerçek sağlayıcı testi** (ücretli; yalnız kullanıcı onayıyla, model ve prompt sürümü kaydedilerek).
 - Görsel değişikliklerde örnek çıktı (ör. `_ozet.jpg`) üretilip gözle kontrol edilir.
+- Yerleştirme dönüşümü değişirse yalnız işaret merkezleri yetmez: `tests/test_sureklilik.py` (ince çizgi / harf
+  sürekliliği, katlanma, satır sıçraması) geçmeli ve gerçek kayıtlı sahnelerde önce/sonra yakın görünüm incelenmeli.
+- Işık gradyanı doğrudan kumaş geometrisi kabul edilmez (K-19).
 
 ## 5. Geliştirme aşamaları (ayrıntı: `docs/roadmap.md`)
 

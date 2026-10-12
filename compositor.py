@@ -214,6 +214,9 @@ SPREAD_FRAC = 0.04         # VARSAYIM: alt kenarda genişlik asılı kısma gör
 MUREKKEP_ESIK = 0.001      # VARSAYIM: gizli bölgedeki baskılı piksel oranı bunun üstündeyse "gizli bölgede baskı var"
 GIZLI_EN_FAZLA = 0.25      # VARSAYIM: yerde kalan (gizli) boy / ürün boyu bunun üstündeyse sergileme yüksekliği ürüne uymuyor
                            # (birikme miktarı uydurulmaz; bu yalnız "200 cm kumaş için stand çok kısa" sınırıdır)
+KENAR_YUMUSATMA = 0.02     # VARSAYIM: kenar eğrisi Gauss yumuşatması (kumaş boyunun %2'si); satır gürültüsü kopma yapmasın
+TAM_KUMAS_FOLD_SHIFT = 0.0 # Işık gradyanından kıvrım kayması tam kumaşta KAPALI (K-19): ışık gradyanı geometri değildir;
+                           # gerçek sahnede tasarımı kendi üzerine katlayıp çift kontur yaptı. Güvenilir yöntem gelene dek 0.
 OLCUM_PAYI = 0.005         # VARSAYIM: asılı boy ölçümünün piksel hassasiyeti (200 cm'de ≈1 cm); bu kadarlık fark sığdırılır
 OLCEK_UYARI = 0.01         # dikey ölçek fiziksel ölçekten bu orandan fazla saparsa kullanıcıya uyarı yazılır
 
@@ -344,7 +347,21 @@ def fabric_geometry(mask, en_cm: float, boy_cm: float, tol: float = TAM_BOY_TOL,
     cxs = cols[anyc]
     asili_px = float(np.median(temas_x[cxs] - top_x[cxs]))
     asili_cm = asili_px / px_per_cm
-    return {"mask": m, "y0": y0, "y1": y1, "rows": rows, "L": L, "R": R, "W0": W0, "px_per_cm": px_per_cm,
+
+    # Kenarların satırdan satıra gürültüsünü gider (2026-10-12 kopma düzeltmesi, K-18): her satırın kenarı ayrı ölçüldüğü
+    # için birkaç piksellik sıçramalar tasarımı o satırda yatay olarak koparıyordu. Kenar, kumaş boyunca yumuşak bir eğri
+    # kabul edilir: temas çizgisinin altındaki (birikme) satırlar temas satırının değeriyle sabitlenir, sonra Gauss ile
+    # düzgünleştirilir. Ortalama kenar konumu (yerleşim koordinatı) değişmez; yalnız satır gürültüsü kalkar.
+    from scipy.ndimage import gaussian_filter1d
+    L_ham, R_ham = L, R
+    ci = int(np.clip(round(float(np.median(temas_x[cxs])) - y0), 1, len(L) - 1))
+    Lc, Rc = L.copy(), R.copy()
+    Lc[ci:], Rc[ci:] = L[ci - 1], R[ci - 1]
+    sig = max(3.0, KENAR_YUMUSATMA * hgt)
+    L = gaussian_filter1d(Lc, sig, mode="nearest")
+    R = gaussian_filter1d(Rc, sig, mode="nearest")
+    return {"mask": m, "y0": y0, "y1": y1, "rows": rows, "L": L, "R": R, "L_ham": L_ham, "R_ham": R_ham,
+            "kenar_sigma_px": sig, "W0": W0, "px_per_cm": px_per_cm,
             "top_line": (at, bt), "top_x": top_x, "temas_x": temas_x, "temas_y": float(np.median(temas_x[cxs])),
             "birikme": birikme, "temas_yontemi": method, "asili_px": asili_px, "asili_cm": asili_cm,
             "x_range": (int(np.floor(min(L.min(), cl))), int(np.ceil(max(R.max(), cr))))}
@@ -457,6 +474,7 @@ def _place_full_fabric(scene, design, det, ink, paper, ssaa, fold_shift, en_cm, 
              "alpha": alpha[..., 0].astype(np.float32)}
     at, bt = g["top_line"]
     info = {"bbox": [int(x0), int(y0), int(x1), int(y1)], "mod": "tam_kumas",
+            "kivrim_kaymasi": float(fold_shift or 0.0), "kenar_sigma_px": round(float(g["kenar_sigma_px"]), 1),
             "en_cm": float(en_cm), "boy_cm": float(boy_cm),
             "px_per_cm": round(ppc, 3), "asili_cm": round(asili_cm, 1), "gizli_cm": round(gizli_cm, 1),
             "v_gizli": round(v_gizli, 4), "temas_y": round(g["temas_y"], 1), "birikme": bool(g["birikme"]),
@@ -469,7 +487,7 @@ def _place_full_fabric(scene, design, det, ink, paper, ssaa, fold_shift, en_cm, 
 
 # ----------------------------------------------------------------------------
 def composite(scene_bgr, design, det, *, paper="auto", ink=None, ssaa=2,
-              follow=0.3, inset=0.10, fold_shift=0.01, sag=0.02, return_model=False,
+              follow=0.3, inset=0.10, fold_shift=None, sag=0.02, return_model=False,
               mode=None, profile=None, tol=TAM_BOY_TOL):
     """scene_bgr uint8, design float32 BGR [0,1]. Sonuç (uint8 BGR, bilgi sözlüğü).
 
@@ -487,7 +505,8 @@ def composite(scene_bgr, design, det, *, paper="auto", ink=None, ssaa=2,
         if profile is None:
             raise ValueError("tam_kumas modu ürün profili ister (en_cm, boy_cm)")
         ink_v = 0.93 if ink is None else ink
-        out, info, model = _place_full_fabric(scene, design, det, ink_v, p, ssaa, fold_shift,
+        fs = TAM_KUMAS_FOLD_SHIFT if fold_shift is None else fold_shift
+        out, info, model = _place_full_fabric(scene, design, det, ink_v, p, ssaa, fs,
                                               float(profile.en_cm), float(profile.boy_cm), tol)
         info["paper"] = None if p is None else [round(float(v), 3) for v in p]
         model.update(paper=p, ink=float(ink_v), kind="fabric")
@@ -499,7 +518,8 @@ def composite(scene_bgr, design, det, *, paper="auto", ink=None, ssaa=2,
     if det.kind == "rigid":
         out, info, model = _place_rigid(scene, design, det, ink_v, p, ssaa)
     else:
-        out, info, model = _place_fabric(scene, design, det, ink_v, p, ssaa, follow, inset, fold_shift, sag)
+        out, info, model = _place_fabric(scene, design, det, ink_v, p, ssaa, follow, inset,
+                                         0.01 if fold_shift is None else fold_shift, sag)     # eski yol: davranış aynı
     info["paper"] = None if p is None else [round(float(v), 3) for v in p]
     model.update(paper=p, ink=float(ink_v), kind=det.kind)
     img = np.clip(out * 255 + 0.5, 0, 255).astype(np.uint8)

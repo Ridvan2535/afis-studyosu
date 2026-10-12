@@ -4,8 +4,36 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-12 22:15 (Claude) · **Mevcut aşama:** Aşama 2A tamamlandı. Sıradaki: Aşama 2B (6 sahne
-görevi + açılı görünüm + eksikleri tamamla) — başlamadı.
+**Son güncelleme:** 2026-10-12 23:55 (Claude) · **Mevcut aşama:** Aşama 2A + kopma düzeltmesi tamamlandı. Sıradaki:
+Aşama 2B (6 sahne görevi + açılı görünüm + eksikleri tamamla) — başlamadı; kullanıcı gerçek görselleri onaylayınca.
+
+---
+
+## 0. Son iş: baskıdaki kopmaların kök nedeni ve düzeltmesi (2026-10-12 gece)
+
+**Gözlem (kullanıcı + Codex):** iş `isler/20261012-224824_20261012-224717_design`; 02'de "Candy's" y kuyruğu ve BABY SHOWER
+üstlerinde, 01'de WELCOME, ayıcık ve alt BABY'de yatay kopmalar. Kaynak PNG'de yok.
+
+**Yöntem:** kayıtlı boş sahne + aynı tasarım; her seferinde tek değişken (V0 mevcut, V1 fold_shift=0, V2 kenarlar düz,
+V3 kurdele geri koyma yok). V0 orijinal fotoğrafı yeniden üretti (ortalama fark 0,55 / 0,77 = JPEG düzeyi).
+Sonuçlar ve yakın görünümler: bilgisayarda `karsilastirma/20261012-224824_kopma/` (README.md içinde tablo).
+
+**Kanıtlanan neden:**
+1. *Ana neden* — satır bazlı kumaş kenarı (K-18): yalnız kenar düzgünleştirmek bütün kopmaları kaldırdı; satır ikinci
+   farkı 428 → 0,6 px (s01), 248 → 0,8 px (s02). fold_shift=0 kopmaları kaldırmadı.
+2. *İkincil neden* — ışık gradyanından kıvrım kayması (K-19): s01'de 1688 katlanan piksel (W/O çift kontur); fold 0 → 0.
+3. Kurdele geri koyma: etkisiz (0 piksel fark).
+
+**Düzeltme** (`compositor.py`, yalnız tam kumaş yolu): kenarlar yumuşak eğri; tam kumaşta kıvrım kayması 0. Yerleşim
+koordinatları değişmedi (asılı boy, gizli bölge, cm ölçeği rapordakiyle aynı; dikey koordinat farkı 0). Işık ve doku
+çarpma modeliyle korunuyor. Eski yol değişmedi. Gerçek iki sahnede önce/sonra gözle incelendi: kopmalar ve çift kontur yok.
+Orijinal iş klasörüne dokunulmadı; düzeltilmiş görseller yalnız karşılaştırma klasöründe.
+
+**Yeni regresyon testi:** `tests/test_sureklilik.py` (K-20) — düzeltilmiş kodla TAMAM; eski kodla, yalnız ham kenarla ve
+yalnız kıvrım kaymasıyla ayrı ayrı BAŞARISIZ.
+
+**Tam test takımı (düzeltme sonrası, Linux/Python 3.13):** 14 test dosyasının hepsi TAMAM (`test_video_repair` hatasız
+bitti), `kontrol.py` "HER ŞEY TAMAM". Windows'ta çalıştırılmadı. Gerçek sağlayıcı çağrısı yapılmadı.
 
 ---
 
@@ -49,6 +77,8 @@ Ortam: Claude'un bulut çalışma alanı, **Linux, Python 3.13**. **Windows'ta �
 
 | Test | Tür | Sonuç (2A son hâli) |
 |---|---|---|
+| `test_sureklilik` (yeni, kopma düzeltmesi) | Yerel | TAMAM — satır ikinci farkı maks 0,50 px, katlanma 0, ince çizgi merkez sıçraması maks 0,50 px, kopuk satır 0 |
+| Gerçek iki sahnede yeniden üretim (iş 20261012-224824) | Yerel (kayıtlı sahne, ücretsiz) | V0 orijinali yeniden üretti; düzeltilmiş: satır ikinci farkı 0,47 / 0,31 px, katlanma 0 |
 | `test_product` | Yerel | TAMAM |
 | `test_tam_kumas` | Yerel | TAMAM — 8 işaret kumaşta beklenen yerde (sapma ≤ en %0,7 / boy %0,1); şeffaf alanda değişen piksel 0; "sert" görünen sahnede de tam kumaş; birikmeli sahnede temas ±1 px, alttaki baskılı bölge `birikme_cozulemedi`; uzun/havada sahne `sahne_geometri`; boyu %2 kısa sahnede tasarım sıkıştırılmıyor, %2 uzun sahnede uyarı veriliyor |
 | `test_kare_kadraj` | Sahte servis | TAMAM — canlı ve kamera video ayarında kadraj 1:1; 50×100 ve 150×300 prompt'ları farklı; uyumsuz tasarımda sağlayıcı çağrısı 0, `onizleme_oran.png` var; havada biten kumaş `sahne_geometri` |
@@ -78,6 +108,8 @@ kumaşın tamamı karede; birikmede alt kısım basılmıyor.
 ### Bilinen sınırlamalar / mevcut hatalar
 | Konu | Ayrıntı |
 |---|---|
+| Kıvrım geometrisi | Tam kumaşta kıvrım kayması kapalı (K-19): baskı kumaş kıvrımında yana kaymıyor, yalnız ışık/gölge çarpma modeliyle geliyor. Güçlü kıvrımlarda baskı biraz "düz" görünebilir; güvenilir yöntem (ör. çok görüntüden derinlik ya da kenar eğrilerinden yüzey modeli) sonraki iş |
+| Kurdelenin kenarı örtmesi | Kenar yumuşatıldığı için örtülen bölgedeki çentik de yumuşak izlenir; o satırlarda tasarım hafifçe daralabilir |
 | Açılı ("hafif yandan") görünüm | Henüz yok; prompt ve kalite kapısı önden görünüm istiyor. Aşama 2B |
 | Birikmenin yönü | Yalnız yana yayılan birikme tanınıyor; öne/arkaya katlanan birikme "uzun kumaş" sayılıp reddedilir (temkinli) |
 | Zemin algılama yok | Ürünle orantılı küçük çizilmiş ve havada biten kumaş geometriyle anlaşılamaz |
@@ -90,6 +122,10 @@ kumaşın tamamı karede; birikmede alt kısım basılmıyor.
 
 ## 4. Kullanıcıdan beklenen yanıtlar
 
+0. **Kopma düzeltmesinin onayı:** `karsilastirma/20261012-224824_kopma/yakin/once_sonra_*.png` ve `tam/s0*_V4_duzeltilmis.jpg`
+   görsellerine bakıp onay. (Bu iş klasörünün fotoğrafları değiştirilmedi; istersen düzeltilmiş kodla aynı sahnelerden
+   ücretsiz yeniden yerleştirme yapılabilir.)
+
 1. Windows'ta: `ajanlar_kurulum\ajanlari_kur.bat` ve şu testlerin sonucu:
    `.venv\Scripts\python tests\test_product.py`, `...\test_tam_kumas.py`, `...\test_kare_kadraj.py`, `.venv\Scripts\python kontrol.py`.
 2. **Doğru oranlı gerçek bir tasarım dosyası** (75×200 için en/boy 0,375; ör. 2953×7874 px ≈ 100 dpi). `design_candy.jpg`
@@ -100,6 +136,8 @@ kumaşın tamamı karede; birikmede alt kısım basılmıyor.
 6. Gerçek servisle küçük bir deneme (ör. 1 ürün, en fazla 4 sahne çağrısı) için onay — eşikleri gerçek sahnelerle ayarlamak için.
 
 ## 5. Sonraki önerilen adım
+
+Önce kopma düzeltmesinin onayı (§4-0); onaydan sonra:
 
 **Aşama 2B:** (a) gerçek servisle küçük kalibrasyon denemesi (onayla) ve eşiklerin ayarı; (b) `layout` önden/açılı
 kontrol profilleri ve açılı görünümde tam kumaş yerleşimi (üst/alt kenar eğrisi); (c) 6 sahne görevi
