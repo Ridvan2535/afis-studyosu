@@ -144,18 +144,28 @@ def insan_yaz(job: str, foto: str, karar: str | None, not_: str = "") -> dict:
 
 # ---------------------------------------------------------------------------- sürüm karşılaştırması (yalnız rapor)
 ADAY_KURALLARI = {
-    "en_az_cagri": 12,          # tek başarılı görsel yetmez: aday için en az bu kadar çağrı
-    "en_az_kabul": 3,
-    "en_az_insan_degerlendirmesi": 3,
+    "en_az_cagri": 12,          # HER İKİ sürüm için: tek (başarısız) eski denemeye karşı aday önerilmez
+    "en_az_kabul": 3,           # aday için
+    "en_az_insan_degerlendirmesi": 3,   # HER İKİ sürüm için; eksik beğeni verisi sıfır beğeni SAYILMAZ
     "kabul_orani_farki": 0.10,  # aday kabul oranı etkinden en az bu kadar yüksek olmalı (algılama şüphelileri hariç)
     "begeni_orani_dusmesin": True,
     "sure_artisi_en_fazla": 0.25,
 }
+# Karşılaştırılabilirlik anahtarı: prompt sürümü DIŞINDAKİ her şey aynı olmalı (K-32)
+KARSILASTIRMA_ALANLARI = ("kategori", "model", "olcu_id", "sahne_gorevi", "referans_kumesi", "ayar_ozeti")
+
+
+def _anahtar_degeri(v):
+    if isinstance(v, dict):
+        return json.dumps(v, sort_keys=True, ensure_ascii=False)
+    return v
 
 
 def ozet(jobs_dir: str) -> list[dict]:
-    """Tüm işlerin deneme kayıtlarından (kategori, prompt sürümü, model) grupları. Eski işlerde kayıt yoksa sayılmaz
-    (sonradan tahminle doldurulmaz). Olası algılama hatası olan retler kabul oranı hesabından ÇIKARILIR."""
+    """Tüm işlerin deneme kayıtlarından gruplar: (kategori, model, ölçü, sahne görevi, referans kümesi, üretim ayarları,
+    prompt sürümü). Eski işlerde kayıt yoksa sayılmaz (sonradan tahminle doldurulmaz). Anahtar alanlarından biri eksik
+    olan kayıtlar ayrı grupta toplanır ve 'eksik_alanlar' ile işaretlenir (karşılaştırılamaz).
+    Olası algılama hatası ve servis hatası olan çağrılar kabul oranı paydasından ÇIKARILIR."""
     grup: dict = {}
     if not os.path.isdir(jobs_dir):
         return []
@@ -168,10 +178,14 @@ def ozet(jobs_dir: str) -> list[dict]:
             continue
         insan = insan_oku(jp).get("fotograflar", {})
         for d in rap.get("denemeler", []):
-            key = (rap.get("kategori"), d.get("prompt_surumu"), d.get("model") or d.get("servis"))
-            g = grup.setdefault(key, {"kategori": key[0], "prompt_surumu": key[1], "model": key[2], "cagri": 0, "kabul": 0,
-                                      "elendi_uretim": 0, "elendi_algilama": 0, "elendi_belirsiz": 0, "servis_hatasi": 0,
-                                      "sure_toplam": 0.0, "begendim": 0, "uygun_degil": 0, "isler": set()})
+            alan = {"kategori": rap.get("kategori"), "model": d.get("model"), "olcu_id": d.get("olcu_id"),
+                    "sahne_gorevi": d.get("sahne_gorevi"), "referans_kumesi": d.get("referans_kumesi"),
+                    "ayar_ozeti": d.get("ayar_ozeti")}
+            eksik = [k for k in KARSILASTIRMA_ALANLARI if alan[k] in (None, "", {})]
+            key = tuple(_anahtar_degeri(alan[k]) for k in KARSILASTIRMA_ALANLARI) + (d.get("prompt_surumu"),)
+            g = grup.setdefault(key, dict(alan, prompt_surumu=d.get("prompt_surumu"), eksik_alanlar=eksik,
+                                          cagri=0, kabul=0, elendi_uretim=0, elendi_algilama=0, elendi_belirsiz=0,
+                                          servis_hatasi=0, sure_toplam=0.0, begendim=0, uygun_degil=0, isler=set()))
             g["cagri"] += 1
             g["isler"].add(j)
             g["sure_toplam"] += float(d.get("sure_sn") or 0)
@@ -191,32 +205,57 @@ def ozet(jobs_dir: str) -> list[dict]:
         g["kabul_orani"] = round(g["kabul"] / etkili, 3) if etkili > 0 else None
         g["ort_sure_sn"] = round(g["sure_toplam"] / g["cagri"], 1) if g["cagri"] else None
         hd = g["begendim"] + g["uygun_degil"]
-        g["begeni_orani"] = round(g["begendim"] / hd, 3) if hd else None
+        g["insan_degerlendirmesi"] = hd
+        g["begeni_orani"] = round(g["begendim"] / hd, 3) if hd else None      # veri yoksa None (0 DEĞİL)
         g["is_sayisi"] = len(g.pop("isler"))
         g.pop("sure_toplam")
         out.append(g)
-    return sorted(out, key=lambda x: (str(x["kategori"]), str(x["model"]), str(x["prompt_surumu"])))
+    return sorted(out, key=lambda x: tuple(str(x[k]) for k in KARSILASTIRMA_ALANLARI) + (str(x["prompt_surumu"]),))
+
+
+def karsilastirilabilir(a: dict, b: dict) -> list[str]:
+    """Boş liste = karşılaştırılabilir; değilse nedenler."""
+    ned = []
+    for g, ad in ((a, "etkin"), (b, "aday")):
+        if g.get("eksik_alanlar"):
+            ned.append(f"{ad} sürüm kayıtlarında eksik alan: {', '.join(g['eksik_alanlar'])}.")
+    if ned:
+        return ned
+    adlar = {"kategori": "kategori", "model": "model", "olcu_id": "ürün ölçüsü", "sahne_gorevi": "sahne görevi",
+             "referans_kumesi": "referans kümesi", "ayar_ozeti": "üretim ayarları"}
+    for k in KARSILASTIRMA_ALANLARI:
+        if _anahtar_degeri(a.get(k)) != _anahtar_degeri(b.get(k)):
+            ned.append(f"{adlar[k]} farklı.")
+    return ned
 
 
 def aday_karari(etkin: dict | None, aday: dict | None, kurallar: dict = ADAY_KURALLARI) -> dict:
-    """Yalnız ÖNERİ üretir; sürümü değiştirmez. Aynı kategori ve aynı modelin iki grubu karşılaştırılmalıdır."""
-    if not etkin or not aday:
-        return {"karar": "yetersiz_veri", "nedenler": ["Karşılaştırılacak iki grup yok."]}
-    if etkin["kategori"] != aday["kategori"] or etkin["model"] != aday["model"]:
-        return {"karar": "karsilastirilamaz", "nedenler": ["Kategori ya da model farklı; karşılaştırma geçersiz."]}
+    """Yalnız ÖNERİ üretir; sürümü değiştirmez. Karar sırası: karşılaştırılamaz -> yetersiz veri -> etkin kalsın / öneri."""
+    if not aday:
+        return {"karar": "yetersiz_veri", "nedenler": ["Aday sürüm için kayıt yok."]}
+    if not etkin:
+        return {"karar": "karsilastirilamaz", "nedenler": ["Aynı koşullarda (kategori, model, ölçü, sahne görevi, "
+                                                           "referans kümesi, üretim ayarları) etkin sürüm kaydı yok."]}
+    ned = karsilastirilabilir(etkin, aday)
+    if ned:
+        return {"karar": "karsilastirilamaz", "nedenler": ned}
     ned = []
-    if aday["cagri"] < kurallar["en_az_cagri"]:
-        ned.append(f"Aday için en az {kurallar['en_az_cagri']} çağrı gerekir ({aday['cagri']}).")
+    for g, ad in ((etkin, "Etkin"), (aday, "Aday")):
+        if g["cagri"] < kurallar["en_az_cagri"]:
+            ned.append(f"{ad} sürüm için en az {kurallar['en_az_cagri']} çağrı gerekir ({g['cagri']}).")
+        if g["insan_degerlendirmesi"] < kurallar["en_az_insan_degerlendirmesi"]:
+            ned.append(f"{ad} sürüm için en az {kurallar['en_az_insan_degerlendirmesi']} insan değerlendirmesi gerekir "
+                       f"({g['insan_degerlendirmesi']}).")
+        if g["kabul_orani"] is None:
+            ned.append(f"{ad} sürümün kabul oranı hesaplanamıyor.")
     if aday["kabul"] < kurallar["en_az_kabul"]:
         ned.append(f"Aday için en az {kurallar['en_az_kabul']} kabul gerekir ({aday['kabul']}).")
-    if (aday["begendim"] + aday["uygun_degil"]) < kurallar["en_az_insan_degerlendirmesi"]:
-        ned.append("Yeterli insan değerlendirmesi yok.")
     if ned:
         return {"karar": "yetersiz_veri", "nedenler": ned}
     ok = []
-    if (aday["kabul_orani"] or 0) - (etkin["kabul_orani"] or 0) < kurallar["kabul_orani_farki"]:
+    if aday["kabul_orani"] - etkin["kabul_orani"] < kurallar["kabul_orani_farki"]:
         ok.append("Kabul oranı yeterince yükselmedi.")
-    if kurallar["begeni_orani_dusmesin"] and (aday["begeni_orani"] or 0) < (etkin["begeni_orani"] or 0):
+    if kurallar["begeni_orani_dusmesin"] and aday["begeni_orani"] < etkin["begeni_orani"]:   # ikisi de None değil (yukarıda)
         ok.append("İnsan beğenisi düştü.")
     if etkin.get("ort_sure_sn") and aday.get("ort_sure_sn") and \
             aday["ort_sure_sn"] > etkin["ort_sure_sn"] * (1 + kurallar["sure_artisi_en_fazla"]):
@@ -224,3 +263,87 @@ def aday_karari(etkin: dict | None, aday: dict | None, kurallar: dict = ADAY_KUR
     if ok:
         return {"karar": "etkin_kalsin", "nedenler": ok}
     return {"karar": "aday_onerilir", "nedenler": ["Ölçütler sağlandı; geçiş kullanıcı onayıyla yapılır, önceki sürüme dönülebilir."]}
+
+
+def oneriler(gruplar: list[dict], etkin_surum: str) -> list[dict]:
+    """Her aday grup için, prompt sürümü dışında BİREBİR aynı koşullardaki etkin grupla karşılaştırma önerisi."""
+    out = []
+    for g in gruplar:
+        if g["prompt_surumu"] == etkin_surum:
+            continue
+        etkin = None
+        if not g["eksik_alanlar"]:
+            etkin = next((x for x in gruplar if x["prompt_surumu"] == etkin_surum and not x["eksik_alanlar"]
+                          and not karsilastirilabilir(x, g)), None)
+        r = aday_karari(etkin, g) if not g["eksik_alanlar"] else \
+            {"karar": "karsilastirilamaz", "nedenler": [f"Aday kayıtlarında eksik alan: {', '.join(g['eksik_alanlar'])}."]}
+        out.append(dict(r, kategori=g["kategori"], model=g["model"], olcu_id=g["olcu_id"], aday=g["prompt_surumu"]))
+    return out
+
+
+# ---------------------------------------------------------------------------- durma sınırları simülasyonu
+def cagri_dizisi(rap: dict) -> list[dict]:
+    """Bir işin çağrı sırası: [{cagri, sonuc, hata_imzasi, turetildi}]. Yeni işlerde 'denemeler' kaydından alınır.
+    Eski işlerde kayıttan TÜRETİLİR (yeni bilgi uydurulmaz): son üretimin çağrı sayısı ve elenen listesi bilinir; elenen
+    listesinde olmayan çağrı numaraları kabul edilen çağrılardır. Birden çok üretimli eski işte türetme yapılmaz."""
+    den = rap.get("denemeler")
+    if den:
+        son = max(d.get("uretim_no", 1) for d in den)
+        return [{"cagri": d["cagri"], "sonuc": d.get("sonuc"), "hata_imzasi": d.get("hata_imzasi"), "turetildi": False}
+                for d in den if d.get("uretim_no", 1) == son]
+    su = rap.get("son_uretim") or {}
+    n = int(su.get("cagri") or 0)
+    el = {e.get("cagri"): e for e in rap.get("elenenler", []) if e.get("cagri")}
+    if not n or len(el) + int(su.get("uretilen") or 0) != n:
+        return []                                          # tutarsız/çok üretimli eski kayıt: türetilmez
+    out = []
+    for c in range(1, n + 1):
+        e = el.get(c)
+        if e:
+            son = "servis_hatasi" if e.get("tur") == "servis_hatasi" else "elendi"
+            out.append({"cagri": c, "sonuc": son, "hata_imzasi": e.get("hata_imzasi") or hata_imzasi(e.get("tur"), e.get("neden")),
+                        "turetildi": True})
+        else:
+            out.append({"cagri": c, "sonuc": "kabul", "hata_imzasi": None, "turetildi": True})
+    return out
+
+
+def durma_simulasyonu(dizi: list[dict], ayni: int, sonucsuz: int, tavan: int, hedef: int | None = None) -> dict:
+    """Kayıtlı çağrı dizisinde verilen sınırlarla üretimin hangi çağrıda duracağını hesaplar (sağlayıcı çağrısı yok).
+    Orkestratördeki kuralın aynısı: kabul iki sayacı da sıfırlar; servis hatası aynı-hata serisini keser ama sonuçsuz
+    sayacını artırır. Dönüş: {dur_cagri, neden, kabul, harcanan, kacan_kabul}."""
+    seri_imza, seri, kuru, kabul = None, 0, 0, 0
+    for i, d in enumerate(dizi):
+        c = d["cagri"]
+        if tavan and c > tavan:
+            return _sim(c - 1, "tavan", kabul, dizi, i)
+        if d["sonuc"] == "kabul":
+            kabul += 1
+            seri_imza, seri, kuru = None, 0, 0
+            if hedef and kabul >= hedef:
+                return _sim(c, "hedef", kabul, dizi, i + 1)
+            continue
+        if d["sonuc"] == "elendi":
+            seri = seri + 1 if d["hata_imzasi"] == seri_imza else 1
+            seri_imza = d["hata_imzasi"]
+        else:
+            seri_imza, seri = None, 0
+        kuru += 1
+        if ayni and seri >= ayni:
+            return _sim(c, "ayni_hata", kabul, dizi, i + 1)
+        if sonucsuz and kuru >= sonucsuz:
+            return _sim(c, "sonucsuz", kabul, dizi, i + 1)
+    son = dizi[-1]["cagri"] if dizi else 0
+    return _sim(son, "tavan" if tavan and son >= tavan else "kayit_bitti", kabul, dizi, len(dizi))
+
+
+def _sim(dur, neden, kabul, dizi, kalan_bas):
+    kacan = sum(1 for d in dizi[kalan_bas:] if d["sonuc"] == "kabul")
+    return {"dur_cagri": dur, "neden": neden, "kabul": kabul, "harcanan": dur, "kacan_kabul": kacan}
+
+
+def sinir_tablosu(dizi: list[dict], tavan: int, hedef: int | None = None,
+                  ayni_degerleri=(0, 3, 4, 5), sonucsuz_degerleri=(0, 4, 5, 6, 7, 8)) -> list[dict]:
+    """Farklı sınır çiftleri için durma noktası tablosu (yalnız kayıtlı veriyle)."""
+    return [dict(durma_simulasyonu(dizi, a, k, tavan, hedef), ayni_hata_siniri=a, sonucsuz_siniri=k)
+            for a in ayni_degerleri for k in sonucsuz_degerleri]

@@ -103,6 +103,14 @@ else:
     for e in el:
         print(f"  #{e['cagri']:>2} {e['siniflama']['kaynak']:<15} {e['sade_neden']}")
 
+ds = info["durma_simulasyonu"]
+assert ds and ds["cagri_dizisi"] and ds["simdiki_ayar"]["dur_cagri"] >= 1, ds
+print(f"durma simülasyonu ({'türetilmiş' if ds['turetildi'] else 'kayıtlı'} sıra, tavan {ds['tavan']}): şimdiki ayarla "
+      f"{ds['simdiki_ayar']['dur_cagri']}. çağrı ({ds['simdiki_ayar']['neden']})")
+if real:
+    for r in ds["tablo"]:
+        print(f"  aynı={r['ayni_hata_siniri']} sonuçsuz={r['sonucsuz_siniri']} -> {r['dur_cagri']}. çağrı {r['neden']}, "
+              f"kabul {r['kabul']}, kaçan {r['kacan_kabul']}")
 foto = info["fotograflar"][0]["ad"]
 rp = os.path.join(orch.JOBS_DIR, name, "rapor.json")
 before = open(rp, "rb").read()

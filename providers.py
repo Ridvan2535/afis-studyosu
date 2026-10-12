@@ -82,6 +82,7 @@ class Settings:
     ornek_olcu: str = "75x200"            # ilan görsellerinde gösterilen örnek ölçü kimliği (product.OLCULER); satış ölçülerinden ayrı
     prompt_surumleri: dict = field(default_factory=dict)   # kategori -> prompt sürümü (prompt_yapisi.SURUMLER); boş = etkin "2A"
     ayni_hata_siniri: int = 5             # aynı hata art arda bu kadar tekrarlanırsa üretim durur (0 = kapalı); K-30
+    sonucsuz_siniri: int = 8              # son kabulden beri bu kadar çağrı sonuç vermezse (neden fark etmez) üretim durur (0 = kapalı); K-33
 
     @classmethod
     def load(cls) -> "Settings":
@@ -115,6 +116,10 @@ class Settings:
             s.ayni_hata_siniri = max(0, min(int(s.ayni_hata_siniri), 50))
         except (TypeError, ValueError):
             s.ayni_hata_siniri = 5
+        try:
+            s.sonucsuz_siniri = max(0, min(int(s.sonucsuz_siniri), 60))
+        except (TypeError, ValueError):
+            s.sonucsuz_siniri = 8
         if not isinstance(s.prompt_surumleri, dict):
             s.prompt_surumleri = {}
         if data and int(data.get("servis_surumu", 0)) < 3:             # kullanıcı isteği: video ben "üret" demeden üretilmesin

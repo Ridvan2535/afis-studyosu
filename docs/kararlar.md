@@ -7,6 +7,29 @@ Biçim: **K-numara · tarih · karar** — gerekçe · etki/geri alma.
 
 ---
 
+### 2026-10-13 — Codex incelemesi: karşılaştırılabilirlik ve sonuçsuz çağrı sınırı
+
+**K-34 · 2026-10-13 · Terfi ölçütleri sıkılaştırıldı (K-28'i günceller; K-28 silinmedi).**
+En az 12 çağrı ve 3 insan değerlendirmesi şartı artık **etkin sürüm için de** geçerli: tek (başarısız) eski denemeye karşı
+aday önerilemez. Beğeni verisi olmayan grup "beğeni %0" sayılmaz; `begeni_orani` boş kalır ve sonuç "yetersiz veri" olur.
+Karar sırası: karşılaştırılamaz → yetersiz veri → etkin kalsın / aday önerilir. Öneri hiçbir ayarı değiştirmez.
+
+**K-33 · 2026-10-13 · Sonuçsuz çağrı sınırı: son kabulden beri 8 çağrı sonuç vermezse durur (ayarlanır, 0 = kapalı).**
+Aynı-hata sınırı (K-30) korunur. Sonuçsuz sayaç nedenden bağımsızdır (farklı ret türleri ve servis hataları sayılır),
+kabulde sıfırlanır. Toplam çağrı tavanı (`max_scene_calls`) ayrıca geçerlidir. Gerekçe: iş 20261013-005509'da kabuller
+7. ve 11. çağrıda geldi; en uzun sonuçsuz dizi 6 (1–6). Kayıtlı sırayla hesap: sınır 4/5/6 → 4./5./6. çağrıda durur ve
+iki kabulü de kaçırırdı; 7 ve 8 → durmaz (14. çağrı, tavan). 8, gözlenen en uzun diziden 2 çağrı pay bırakır ve tamamen
+başarısız bir üretimi tavandan (14) önce keser. Not: ~%14 kabul oranında 8 ardışık sonuçsuzluk şans eseri de ~%30 olasılıkla
+görülür; bu sınır kesin arıza işareti değil, harcamayı kullanıcının bakacağı noktaya bağlayan bir korumadır. Aynı hata
+sınırı 3 bu işte 3. çağrıda durur ve iki kabulü kaçırırdı; 5 durmaz (K-30 değeri korunur).
+Geriye dönük hesap `deneme_kayit.durma_simulasyonu`; orkestratörle aynı kural (testle eşitliği doğrulanır).
+
+**K-32 · 2026-10-13 · Prompt sürümleri yalnız prompt dışındaki her şey aynıyken karşılaştırılır.**
+Karşılaştırma anahtarı: kategori, model, ürün ölçüsü (`olcu_id`), sahne görevi (`sahne_gorevi`; şimdilik tek görev
+`onden_kare`), referans kümesi (`referans_kumesi`: işte kullanılabilen tüm referans kimliklerinin özeti ya da
+`referanssiz`), üretim ayarları (`ayar_ozeti`: kadraj, kılavuz, insanlı, kurdele, katı yerleşim, uzun kenar). Bu alanlar
+her çağrı kaydına yazılır. Alanı eksik kayıt (eski biçim) "karşılaştırılamaz" grubuna düşer; tahminle doldurulmaz.
+
 ### 2026-10-13 — Çağrı kaydı, insan değerlendirmesi ve kontrollü prompt gelişimi
 
 **K-31 · 2026-10-13 · Ret kaynağı sınıflanır; olası algılama hataları öğrenme verisine katılmaz.**

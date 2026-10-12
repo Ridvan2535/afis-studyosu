@@ -311,8 +311,20 @@ class Handler(BaseHTTPRequestHandler):
             e["eski_kayit"] = "ham_dosya" not in e and e.get("tur") != "servis_hatasi"
             elen.append(e)
         denemeler = rap.get("denemeler", [])
+        dizi = deneme_kayit.cagri_dizisi(rap)
+        su = rap.get("son_uretim") or {}
+        s_ = Settings.load()
+        tavan = int(su.get("tavan") or su.get("cagri") or 0)
+        durma = None
+        if dizi:
+            durma = {"turetildi": dizi[0]["turetildi"], "tavan": tavan, "hedef": su.get("hedef"),
+                     "cagri_dizisi": dizi,
+                     "simdiki_ayar": dict(deneme_kayit.durma_simulasyonu(dizi, s_.ayni_hata_siniri, s_.sonucsuz_siniri,
+                                                                         tavan, su.get("hedef")),
+                                          ayni_hata_siniri=s_.ayni_hata_siniri, sonucsuz_siniri=s_.sonucsuz_siniri),
+                     "tablo": deneme_kayit.sinir_tablosu(dizi, tavan, su.get("hedef"))}
         return {"name": name, "kategori": rap.get("kategori"), "fotograflar": photos, "elenenler": elen,
-                "denemeler": denemeler, "deneme_kaydi_var": bool(denemeler),
+                "denemeler": denemeler, "deneme_kaydi_var": bool(denemeler), "durma_simulasyonu": durma,
                 "tekrar": deneme_kayit.tekrar_ozeti(denemeler) if denemeler else None,
                 "videolar": videos, "son_uretim": rap.get("son_uretim"), "ozet": base + "foto/_ozet.jpg" if ov else None,
                 "servis_karnesi": rap.get("servis_karnesi", []), "insanli": bool(rap.get("insanli")),
@@ -348,18 +360,11 @@ class Handler(BaseHTTPRequestHandler):
         for c in CATEGORIES:
             cc = prompts.canon(c)
             kat[cc] = prompt_yapisi.secili_surum(s, cc)
-        oneriler = []
-        for g in gr:
-            if g["prompt_surumu"] == prompt_yapisi.ETKIN_VARSAYILAN:
-                continue
-            etkin = next((x for x in gr if x["kategori"] == g["kategori"] and x["model"] == g["model"]
-                          and x["prompt_surumu"] == prompt_yapisi.ETKIN_VARSAYILAN), None)
-            oneriler.append(dict(deneme_kayit.aday_karari(etkin, g), kategori=g["kategori"], model=g["model"],
-                                 aday=g["prompt_surumu"]))
+        oneriler = deneme_kayit.oneriler(gr, prompt_yapisi.ETKIN_VARSAYILAN)
         return {"gruplar": gr, "surumler": prompt_yapisi.SURUMLER, "etkin_varsayilan": prompt_yapisi.ETKIN_VARSAYILAN,
                 "kategori_surumleri": kat, "oneriler": oneriler, "kurallar": deneme_kayit.ADAY_KURALLARI,
                 "limitler": prompt_yapisi.LIMITLER, "toplam_limit": prompt_yapisi.TOPLAM_LIMIT,
-                "ayni_hata_siniri": s.ayni_hata_siniri}
+                "ayni_hata_siniri": s.ayni_hata_siniri, "sonucsuz_siniri": s.sonucsuz_siniri}
 
     # -- tasarım kontrolü (ürün profili) -------------------------------------------------
     @staticmethod
@@ -502,6 +507,11 @@ class Handler(BaseHTTPRequestHandler):
                 s.ayni_hata_siniri = max(0, min(int(body["ayni_hata_siniri"]), 50))
             except (TypeError, ValueError):
                 return self._send(400, {"hata": "aynı hata sınırı bir sayı olmalı (0 = kapalı)"})
+        if "sonucsuz_siniri" in body:
+            try:
+                s.sonucsuz_siniri = max(0, min(int(body["sonucsuz_siniri"]), 60))
+            except (TypeError, ValueError):
+                return self._send(400, {"hata": "sonuçsuz çağrı sınırı bir sayı olmalı (0 = kapalı)"})
         if isinstance(body.get("prompt_surumleri"), dict):          # yalnız kullanıcının elle seçimi; kategori bazlı
             ps = dict(s.prompt_surumleri or {})
             for k, v in body["prompt_surumleri"].items():

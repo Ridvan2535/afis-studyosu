@@ -4,13 +4,43 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-13 02:05 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
+**Son güncelleme:** 2026-10-13 02:50 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
 denemeler / insan değerlendirmesi / kontrollü prompt sürümleri** tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı
 görünüm) — BAŞLAMADI (kullanıcı onayı bekleniyor). Video aşamasına başlanmadı.
 
+
 ---
 
-## 0. Son iş: elenen denemeler, çağrı kaydı, tekrar sınırı, kısa prompt adayı (2026-10-13)
+## 0. Son iş: Codex incelemesindeki iki eksik düzeltildi (2026-10-13)
+
+Ücretli çağrı yapılmadı; otomatik prompt değişimi ya da iyileştirme döngüsü eklenmedi.
+
+1. **Karşılaştırılabilirlik (K-32, K-34):** her çağrı kaydına `olcu_id`, `sahne_gorevi`, `referans_kumesi`, `ayar_ozeti`
+   eklendi. Sürümler yalnız bunlar + kategori + model aynıyken karşılaştırılır; eksik alanlı kayıt "karşılaştırılamaz".
+   Etkin sürüm için de en az 12 çağrı ve 3 insan değerlendirmesi şartı. Beğeni verisi yoksa sıfır sayılmaz.
+2. **Sonuçsuz çağrı sınırı (K-33):** son kabulden beri 8 çağrı sonuç vermezse durur (Ayarlar, 0 = kapalı); nedenden
+   bağımsız, kabulde sıfırlanır; aynı-hata sınırı (5) ve toplam tavan korunur. 14 çağrılık işte sınır tablosu:
+   `docs/elenen_analizi_20261013-005509.md` sonu (5/8 ile bu iş durmazdı; sonuçsuz 4–6 iki kabulü kaçırırdı).
+
+**Değişen dosyalar:** `deneme_kayit.py` (gruplama anahtarı, `karsilastirilabilir`, `aday_karari`, `oneriler`,
+`cagri_dizisi`, `durma_simulasyonu`, `sinir_tablosu`), `orchestrator.py` (sonuçsuz sayaç, `kabulden_beri`, karşılaştırma
+alanları, tek durma noktası), `providers.py` (`sonucsuz_siniri`), `app.py` (`durma_simulasyonu` iş bilgisinde, öneriler,
+ayar), `ui.html` (Ayarlar'da sonuçsuz sınırı; Elenen denemeler altında durma tablosu; karşılaştırmada ölçü sütunu ve
+"karşılaştırılamaz"/"veri yok"). Yeni test: `tests/test_durma_ve_karsilastirma.py` (simülasyonun orkestratörle aynı
+çağrıda durduğu da doğrulanır). Güncellenen test: `tests/test_elenen_arayuz.py`.
+
+**Çalıştırılan testler (Linux; Windows'ta çalıştırılmadı):** aşağıdaki "elenen denemeler" bölümündeki tüm testler +
+test_durma_ve_karsilastirma — hepsi TAMAM; kontrol.py "HER ŞEY TAMAM". Gerçek iş kopyasıyla test_elenen_arayuz ve
+başsız Chromium arayüz kontrolü (durma tablosu, konsol hatası yok, dış istek yok). Gerçek sağlayıcı testi yok.
+
+**Uygulamada:** Sonuçlar → `20261013-005509_…` → Elenen denemeler → "Durma sınırları bu işte ne yapardı?".
+Ayarlar → Harcama koruması → "Son kabulden beri kaç çağrı sonuç vermezse…".
+
+**Kullanıcıdan beklenen:** sonuçsuz sınırı 8 uygun mu (7 de bu işte durmazdı; daha az pay bırakır).
+
+---
+
+## 0b. Önceki iş: elenen denemeler, çağrı kaydı, tekrar sınırı, kısa prompt adayı (2026-10-13)
 
 **İstek:** iş 20261013-005509'da 14 çağrıdan 2 kabul. Boşa giden tekrarları kaliteyi düşürmeden azaltmak.
 Ücretli çağrı YAPILMADI; eski iş dosyalarına dokunulmadı (analiz kopya üzerinde).

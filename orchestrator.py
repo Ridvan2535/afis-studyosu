@@ -52,6 +52,7 @@ REPORT_DIR = os.path.join(HERE, "raporlar")
 LOG_PATH = os.path.join(HERE, "kayit.log")
 STATS_PATH = os.path.join(HERE, "servis_karnesi.json")      # servislerin başarı geçmişi (otomatik seçim bunu kullanır)
 VERSION = "0.7-test"
+SAHNE_GOREVI = "onden_kare"      # şimdilik tek görev (önden, kare). Aşama 2B'de 6 görev gelince görev kimliği buraya yazılır.
 GOOD_VIDEO = 60.0          # kalite kontrolden geçen video bu puanın üstündeyse başka servis denenmez (ücret tasarrufu)
 DESIGN_CAP = 4096          # tasarım belleğe bu uzun kenara küçültülerek alınır (4116x8000 -> 2107x4096)
 
@@ -262,9 +263,14 @@ class Orchestrator:
         new_photos: list[str] = []
         rap.setdefault("denemeler", [])                      # K-25: çağrı başına tam kayıt (eski işlerde yok; sonradan doldurulmaz)
         uretim_no = 1 + len(rap.get("uretimler", []))
-        siniri = int(getattr(self.s, "ayni_hata_siniri", 5) or 0)
-        seri = {"imza": None, "sayi": 0}
-        durdurma = None
+        siniri = int(getattr(self.s, "ayni_hata_siniri", 5) or 0)          # K-30: art arda AYNI hata
+        sonucsuz_siniri = int(getattr(self.s, "sonucsuz_siniri", 8) or 0)   # K-33: son kabulden beri sonuçsuz çağrı (neden fark etmez)
+        seri = {"imza": None, "sayi": 0, "sonucsuz": 0}
+        durum = {"durdurma": None}
+        # karşılaştırma anahtarı (K-32): ürün ölçüsü, sahne görevi, referans kümesi ve üretim ayarları her çağrıda kaydedilir
+        ref_kumesi_ids = sorted(set(ref_ids) | {x[2] for x in depot})
+        ref_kumesi = (hashlib.sha256("|".join(ref_kumesi_ids).encode("utf-8")).hexdigest()[:12]
+                      if ref_kumesi_ids else "referanssiz")
         cur: dict = {}                                       # o anki çağrının kaydı (reject/kabul tamamlar)
         self.log(f"Fotoğraf üretimi başladı: hedef {n}, ölçü {product.olcu_etiketi(prof.olcu_id)}, kare kadraj, "
                  f"en fazla {self.s.max_scene_calls} sahne çağrısı, servis: "
@@ -298,28 +304,37 @@ class Orchestrator:
             _write_json(os.path.join(job, "rapor.json"), rap)
 
         def finish_call():
-            """Çağrı kaydını kapatır, art arda aynı hatayı sayar. Dönüş: durdurma nedeni ya da None."""
+            """Çağrı kaydını kapatır; art arda aynı hatayı ve son kabulden beri sonuçsuz çağrıları sayar.
+            Bir sınır aşılırsa durum["durdurma"] doldurulur (döngü bir sonraki turda durur). Dönüş: durdurma ya da None."""
             cur["sure_sn"] = round(time.monotonic() - cur.pop("_t0"), 1)
-            rap["denemeler"].append(dict(cur))
             if cur.get("sonuc") == "elendi":
                 sig = cur.get("hata_imzasi")
                 seri["sayi"] = seri["sayi"] + 1 if sig == seri["imza"] else 1
                 seri["imza"] = sig
             else:
-                seri.update(imza=None, sayi=0)
-            cur["art_arda"] = seri["sayi"]
-            rap["denemeler"][-1]["art_arda"] = seri["sayi"]
+                seri.update(imza=None, sayi=0)             # kabul ve servis hatası aynı-hata serisini keser
+            seri["sonucsuz"] = 0 if cur.get("sonuc") == "kabul" else seri["sonucsuz"] + 1
+            cur["art_arda"], cur["kabulden_beri"] = seri["sayi"], seri["sonucsuz"]
+            rap["denemeler"].append(dict(cur))
             _write_json(os.path.join(job, "rapor.json"), rap)
+            d = None
             if seri["sayi"] >= 3 and cur.get("sonuc") == "elendi":
                 self.log(f"UYARI: aynı hata art arda {seri['sayi']}. kez: {cur.get('sade_neden')}"
                          + (f" (durma sınırı {siniri})" if siniri else " (durma sınırı kapalı)"))
             if siniri and seri["sayi"] >= siniri:
-                return {"neden": "ayni_hata_tekrari", "imza": seri["imza"], "sayi": seri["sayi"],
-                        "aciklama": f"Aynı hata art arda {seri['sayi']} kez tekrarlandı: {cur.get('sade_neden')} "
-                                    f"Ücretli tekrar sürdürülmedi (Ayarlar: aynı hata sınırı {siniri})."}
-            return None
+                d = {"neden": "ayni_hata_tekrari", "imza": seri["imza"], "sayi": seri["sayi"], "cagri": calls,
+                     "aciklama": f"Aynı hata art arda {seri['sayi']} kez tekrarlandı: {cur.get('sade_neden')} "
+                                 f"Ücretli tekrar sürdürülmedi (Ayarlar: aynı hata sınırı {siniri})."}
+            elif sonucsuz_siniri and seri["sonucsuz"] >= sonucsuz_siniri and cur.get("sonuc") != "kabul":
+                d = {"neden": "sonucsuz_cagri", "sayi": seri["sonucsuz"], "cagri": calls,
+                     "aciklama": f"Son kabulden beri {seri['sonucsuz']} çağrı sonuç vermedi (nedenler farklı olsa da). "
+                                 f"Ücretli deneme sürdürülmedi (Ayarlar: sonuçsuz çağrı sınırı {sonucsuz_siniri})."}
+            if d:
+                durum["durdurma"] = d
+                self.log("DURDURULDU: " + d["aciklama"])
+            return d
 
-        while accepted_now < n and calls < self.s.max_scene_calls:
+        while accepted_now < n and calls < self.s.max_scene_calls and not durum["durdurma"]:
             name = sel.pick()
             if name is None:
                 self.log("Kullanılabilir servis kalmadı: üretim durduruluyor (kredi harcamamak için).")
@@ -334,6 +349,8 @@ class Orchestrator:
                     continue
             provider = provs[name]
             guided = bool(provider.supports_guide)
+            ayar_ozeti = {"kadraj": "1:1", "kilavuz": guided, "insanli": bool(people), "kurdele": bool(ribbon),
+                          "kati_yerlesim": bool(self.s.strict_layout), "uzun_kenar": int(self.s.photo_long_side or 0)}
             idx = calls
             calls += 1
             self.progress(0.05 + 0.9 * min(calls / max(self.s.max_scene_calls, 1), 1.0) * 0.5 + 0.45 * accepted_now / n,
@@ -358,7 +375,8 @@ class Orchestrator:
                         "servis": name, "model": None, "prompt_surumu": pinfo["prompt_surumu"], "prompt": prompt,
                         "prompt_ozeti": hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:16],
                         "prompt_kelime": len(prompt.split()), "referanslar": call_ref_ids, "kilavuz": guided,
-                        "tohum": seed, "_t0": time.monotonic()})
+                        "tohum": seed, "olcu_id": prof.olcu_id, "sahne_gorevi": SAHNE_GOREVI,
+                        "referans_kumesi": ref_kumesi, "ayar_ozeti": ayar_ozeti, "_t0": time.monotonic()})
             cur.update({k: v for k, v in pinfo.items() if k != "prompt_surumu"})
             try:
                 raw = provider.scene(prompt, frame, 1.0, call_refs, seed=seed, guide=guide_png if guided else None)
@@ -385,11 +403,8 @@ class Orchestrator:
             h = hashlib.md5(raw).hexdigest()
             if h in seen:
                 reject("kalite_kapisi", "aynı görsel tekrar geldi")
-                durdurma = finish_call()
+                finish_call()
                 sel.record(name, False)
-                if durdurma:
-                    self.log("DURDURULDU: " + durdurma["aciklama"])
-                    break
                 continue
             seen.add(h)
             img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
@@ -402,11 +417,8 @@ class Orchestrator:
             ev = self._evaluate_scene(img, design, prof, f"Sahne {calls} ({nice(name)})")
             if not ev["ok"]:
                 reject(ev["tur"], ev["neden"], img, ev["det"], ev["lay"], ev.get("extra"))
-                durdurma = finish_call()
+                finish_call()
                 sel.record(name, False)
-                if durdurma:
-                    self.log("DURDURULDU: " + durdurma["aciklama"])
-                    break
                 continue
             sel.record(name, True, ev["kalite"])
             num = have + accepted_now + 1
@@ -429,9 +441,11 @@ class Orchestrator:
         for p_ in rap.get("fotograflar", []):
             p_["en_iyi"] = bool(best) and p_ is best
         self._overview(job, rap)
+        durdurma = durum["durdurma"]
         tekrar = deneme_kayit.tekrar_ozeti([d for d in rap["denemeler"] if d.get("uretim_no") == uretim_no])
         rap["son_uretim"] = {"hedef": n, "uretilen": accepted_now, "eksik": max(0, n - accepted_now), "cagri": calls, "beklemede": False,
-                             "uretim_no": uretim_no, "ayni_hata_siniri": siniri, "tekrar": tekrar, "durdurma": durdurma}
+                             "uretim_no": uretim_no, "ayni_hata_siniri": siniri,
+                             "sonucsuz_siniri": sonucsuz_siniri, "tavan": self.s.max_scene_calls, "tekrar": tekrar, "durdurma": durdurma}
         rap.setdefault("uretimler", []).append(dict(rap["son_uretim"], zaman=datetime.now().isoformat(timespec="seconds")))
         _write_json(os.path.join(job, "rapor.json"), rap)
         self.progress(1.0, f"Bitti: {accepted_now}/{n} geçerli fotoğraf" + (" (aynı hata tekrarı nedeniyle durduruldu)" if durdurma else ""))

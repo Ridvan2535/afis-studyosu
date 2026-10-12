@@ -306,6 +306,8 @@ table.cmp td,table.cmp th{border-bottom:1px solid var(--line);padding:5px 6px;te
         <div><label class="f" for="longSide">Fotoğraf uzun kenarı (piksel)</label><input type="number" id="longSide" min="0" max="6000" step="100"></div>
         <div><label class="f" for="sameErr">Aynı hata art arda kaç kez olursa üretim dursun (0 = kapalı)</label><input type="number" id="sameErr" min="0" max="50">
           <div class="hint">Önerilen 5. Aynı nedenle üst üste elenen sahneler genelde aynı sorunun sürdüğünü gösterir; program bu sınırda ücretli denemeyi keser, kabul edilen fotoğrafları saklar ve kaç tane eksik kaldığını gösterir. 3. tekrardan itibaren uyarı verir.</div></div>
+        <div><label class="f" for="noRes">Son kabulden beri kaç çağrı sonuç vermezse üretim dursun (0 = kapalı)</label><input type="number" id="noRes" min="0" max="60">
+          <div class="hint">Önerilen 8. Nedenler farklı olsa da sayar; bir sahne kabul edilince sıfırlanır. Toplam çağrı sınırı ayrıca geçerlidir. Sonuçlar ekranındaki "Durma sınırları bu işte ne yapardı?" tablosu, farklı değerlerin kayıtlı bir işte hangi çağrıda duracağını gösterir.</div></div>
       </div>
     </div>
     <div class="card">
@@ -428,7 +430,7 @@ async function loadConfig() {
   $("#openaiModel").value = cfg.openai_model === "auto" ? "" : cfg.openai_model; $("#geminiModel").value = cfg.gemini_model === "auto" ? "" : cfg.gemini_model;
   $("#vidRes").value = cfg.video_resolution; $("#seconds").value = cfg.seconds;
   $("#maxScene").value = cfg.max_scene_calls; $("#maxVideo").value = cfg.max_video_tries;
-  $("#sameErr").value = cfg.ayni_hata_siniri ?? 5;
+  $("#sameErr").value = cfg.ayni_hata_siniri ?? 5; $("#noRes").value = cfg.sonucsuz_siniri ?? 8;
   loadPromptInfo();
   $("#longSide").value = cfg.photo_long_side;
   $("#strictLayout").checked = cfg.strict_layout !== false;
@@ -506,7 +508,7 @@ async function saveSettings(silent) {
     openai_model: $("#openaiModel").value.trim() || "auto", gemini_model: $("#geminiModel").value.trim() || "auto",
     video_resolution: $("#vidRes").value, seconds: $("#seconds").value,
     max_scene_calls: $("#maxScene").value, max_video_tries: $("#maxVideo").value, photo_long_side: $("#longSide").value,
-    strict_layout: $("#strictLayout").checked, ayni_hata_siniri: $("#sameErr").value,
+    strict_layout: $("#strictLayout").checked, ayni_hata_siniri: $("#sameErr").value, sonucsuz_siniri: $("#noRes").value,
     prompt_surumleri: Object.fromEntries([...document.querySelectorAll("#promptSel select")].map(x => [x.dataset.kat, x.value])),
     auto_video: $("#autoVideo").checked, auto_video_move: $("#autoMove").value, auto_video_kind: $("#autoKind").value,
   };
@@ -832,8 +834,21 @@ function renderRejects(i) {
     + Object.entries(say).map(([k, v]) => `${(KAYNAK[k] || KAYNAK.belirsiz)[0]}: ${v}`).join(" · ")
     + (t ? ` · aynı hatanın en uzun art arda serisi: ${t.en_uzun_seri}` : "")
     + `. Kenarı turuncu kartlar aynı hatanın art arda 3. veya daha sonraki tekrarıdır.</div>
-    <div class="rejgrid">${rej.map(card).join("")}</div></details>`;
+    <div class="rejgrid">${rej.map(card).join("")}</div>${durmaTablosu(i.durma_simulasyonu)}</details>`;
   $("#rejBox").querySelectorAll("[data-zoom]").forEach(b => b.onclick = e => { e.stopPropagation(); $("#lbImg").src = b.dataset.zoom; $("#lb").classList.add("on"); });
+}
+const DUR_NEDEN = {ayni_hata: "aynı hata sınırı", sonucsuz: "sonuçsuz çağrı sınırı", tavan: "toplam çağrı sınırı", hedef: "hedefe ulaşıldı", kayit_bitti: "kayıt bitti"};
+function durmaTablosu(d) {
+  if (!d) return "";
+  const seq = d.cagri_dizisi.map(x => `<span class="chip ${x.sonuc === "kabul" ? "ok" : ""}" title="${esc(x.hata_imzasi || "")}">${x.cagri}${x.sonuc === "kabul" ? "✓" : "✗"}</span>`).join(" ");
+  const sa = d.simdiki_ayar;
+  const rows = d.tablo.filter(r => r.ayni_hata_siniri !== 0 || r.sonucsuz_siniri !== 0);
+  return `<details style="margin-top:12px"><summary>Durma sınırları bu işte ne yapardı? (kayıtlı sonuçlarla hesap, servis çağrısı yok)</summary>
+    <div class="hint">${d.turetildi ? "Bu eski işte çağrı sırası kayıttan türetildi: elenen listesinde olmayan çağrılar kabul edilenlerdir. " : ""}Toplam çağrı sınırı ${d.tavan}. Çağrı sırası: ${seq}</div>
+    <div class="hint"><b>Şimdiki ayarla</b> (aynı hata ${sa.ayni_hata_siniri || "kapalı"}, sonuçsuz ${sa.sonucsuz_siniri || "kapalı"}): ${sa.dur_cagri}. çağrıda durur (${DUR_NEDEN[sa.neden] || sa.neden}); ${sa.kabul} kabul${sa.kacan_kabul ? `, <b>${sa.kacan_kabul} kabul kaçardı</b>` : ""}.</div>
+    <table class="cmp"><thead><tr><th>Aynı hata sınırı</th><th>Sonuçsuz sınırı</th><th>Durduğu çağrı</th><th>Neden</th><th>Kabul</th><th>Kaçacak kabul</th></tr></thead><tbody>
+    ${rows.map(r => `<tr><td>${r.ayni_hata_siniri || "kapalı"}</td><td>${r.sonucsuz_siniri || "kapalı"}</td><td>${r.dur_cagri}</td><td>${esc(DUR_NEDEN[r.neden] || r.neden)}</td><td>${r.kabul}</td><td>${r.kacan_kabul || ""}</td></tr>`).join("")}</tbody></table>
+    <div class="hint">Bu bir geriye dönük hesaptır: erken durulsaydı sonraki çağrıların sonucu bilinmezdi; sahne üretimi her seferinde farklı çıkar.</div></details>`;
 }
 function renderRate(i) {
   const p = selPhoto && (i.fotograflar || []).find(x => x.ad === selPhoto);
@@ -859,11 +874,11 @@ async function loadPromptInfo() {
     $("#promptSel").innerHTML = Object.entries(o.kategori_surumleri).map(([kat, v]) =>
       `<div><label class="f">${esc(kat)}</label><select data-kat="${esc(kat)}">${opts.map(([k, ad]) => `<option value="${esc(k)}" ${k === v ? "selected" : ""}>${esc(ad)}</option>`).join("")}</select></div>`).join("");
     const g = o.gruplar || [];
-    $("#promptCmp").innerHTML = (g.length ? `<table class="cmp"><thead><tr><th>Kategori</th><th>Model</th><th>Sürüm</th><th>Çağrı</th><th>Kabul</th><th>Kabul oranı*</th><th>Ort. süre</th><th>Beğeni</th><th>Algılama şüphesi</th></tr></thead><tbody>`
-      + g.map(x => `<tr><td>${esc(x.kategori)}</td><td>${esc(x.model || "—")}</td><td>${esc(x.prompt_surumu || "—")}</td><td>${x.cagri}</td><td>${x.kabul}</td><td>${x.kabul_orani != null ? "%" + Math.round(x.kabul_orani * 100) : "—"}</td><td>${x.ort_sure_sn ?? "—"} sn</td><td>${x.begendim}/${x.begendim + x.uygun_degil}</td><td>${x.elendi_algilama}</td></tr>`).join("")
-      + `</tbody></table><div class="hint">* Olası algılama hataları ve servis hataları kabul oranına katılmaz. Yalnız çağrı kaydı olan işler sayılır (eski işler sonradan doldurulmaz).</div>`
+    $("#promptCmp").innerHTML = (g.length ? `<table class="cmp"><thead><tr><th>Kategori</th><th>Model</th><th>Ölçü</th><th>Sürüm</th><th>Çağrı</th><th>Kabul</th><th>Kabul oranı*</th><th>Ort. süre</th><th>Beğeni</th><th>Algılama şüphesi</th></tr></thead><tbody>`
+      + g.map(x => `<tr><td>${esc(x.kategori)}</td><td>${esc(x.model || "—")}</td><td>${esc(x.olcu_id || "—")}</td><td>${esc(x.prompt_surumu || "—")}${(x.eksik_alanlar || []).length ? ` <span class="chip warn" title="eksik: ${esc(x.eksik_alanlar.join(", "))}">karşılaştırılamaz</span>` : ""}</td><td>${x.cagri}</td><td>${x.kabul}</td><td>${x.kabul_orani != null ? "%" + Math.round(x.kabul_orani * 100) : "—"}</td><td>${x.ort_sure_sn ?? "—"} sn</td><td>${x.insan_degerlendirmesi ? x.begendim + "/" + x.insan_degerlendirmesi : "veri yok"}</td><td>${x.elendi_algilama}</td></tr>`).join("")
+      + `</tbody></table><div class="hint">Karşılaştırma yalnız prompt sürümü dışında her şeyi aynı olan gruplar arasında yapılır (kategori, model, ölçü, sahne görevi, referans kümesi, üretim ayarları). Aynı kategori/model/ölçüde birden çok satır varsa referans ya da ayarlar farklıdır. * Olası algılama hataları ve servis hataları kabul oranına katılmaz. Yalnız çağrı kaydı olan işler sayılır (eski işler sonradan doldurulmaz).</div>`
       : `Henüz çağrı kaydı olan iş yok. Kayıt bu sürümden sonraki üretimlerde başlar.`)
-      + ((o.oneriler || []).length ? `<ul class="rej">${o.oneriler.map(r => `<li>${esc(r.kategori)} / ${esc(r.model || "")} / ${esc(r.aday)}: ${esc(r.karar)} — ${esc((r.nedenler || []).join(" "))}</li>`).join("")}</ul>` : "");
+      + ((o.oneriler || []).length ? `<ul class="rej">${o.oneriler.map(r => `<li>${esc(r.kategori)} / ${esc(r.model || "")} / ${esc(r.olcu_id || "")} / ${esc(r.aday)}: <b>${esc(({aday_onerilir: "aday önerilir (geçişi sen yaparsın)", etkin_kalsin: "etkin kalsın", yetersiz_veri: "yetersiz veri", karsilastirilamaz: "karşılaştırılamaz"})[r.karar] || r.karar)}</b> — ${esc((r.nedenler || []).join(" "))}</li>`).join("")}</ul>` : "");
   } catch (e) { $("#promptCmp").textContent = "Karşılaştırma yüklenemedi: " + e.message; }
 }
 function loadConfigCost() {
