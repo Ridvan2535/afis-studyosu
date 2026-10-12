@@ -31,7 +31,7 @@ cnt = {"a": 0, "b": 0, "c": 0}
 for _ in range(400):
     cnt[sel.pick()] += 1
 print("seçim sayıları:", cnt)
-assert cnt["a"] > 380                              # iyi servis baskın
+assert cnt["a"] > 330                              # iyi servis baskın (tek sayımla P(a)~0.90 -> ~358/400; eski 380 eşiği çift sayımın ~0.98'ine dayanıyordu)
 # keşif payı: şanssız ilk sonucu olan servis tamamen unutulmaz
 sel.explore = 0.1
 cnt = {"a": 0, "b": 0, "c": 0}
@@ -87,6 +87,61 @@ assert w.winner() == "q"          # q: 4/5 kabul x 90 = 0.72 > p: 1.0 x 70 = 0.7
 w.record("q", False)
 assert w.winner() == "p"          # q: 4/6 x 90 = 0.60 < 0.70
 assert S.Selector("scene", ["p"], None).winner() is None
+
+# 6b) regresyon: bu işteki sonuçlar seçim hesabında iki kez sayılmamalı (hist zaten "kalıcı + bu iş" toplamı)
+class _SpyRng(random.Random):
+    """betavariate'e geçen (alpha, beta) parametrelerini kaydeder; değer olarak sabit 0.5 döner."""
+    def __init__(self):
+        super().__init__(0)
+        self.beta_args = []
+
+    def betavariate(self, alpha, beta):
+        self.beta_args.append((alpha, beta))
+        return 0.5
+
+
+def _close(p, q):
+    return all(abs(x - y) < 1e-9 for x, y in zip(p, q))
+
+
+# kalıcı geçmişi olmayan iş: bir kayıttan sonra parametreler hist sayımına eşit
+spy = _SpyRng()
+r1 = S.Selector("scene", ["a"], None, rng=spy, log=logs.append, persist=False)
+r1.record("a", True, 80)
+assert r1._calls("a") == 1 == r1.hist["a"]["calls"], r1._calls("a")
+assert r1.pick() == "a" and len(spy.beta_args) == 1
+assert _close(spy.beta_args[0], (1 + 0.8, 1 + 0.2)), spy.beta_args          # çift sayımla (1+1.6, 1+0.4) olurdu
+
+# kalıcı karnede 2 çağrı + bu işte 1 çağrı -> toplam 3 (4 değil)
+path2 = os.path.join(tmp, "karne2.json")
+json.dump({"version": S.SELECTOR_VERSION,
+           "kinds": {"scene": {"a": {"calls": 2, "ok": 2, "err": 0, "qual": 160.0},
+                               "b": {"calls": 1, "ok": 0, "err": 0, "qual": 0.0}}}},
+          open(path2, "w", encoding="utf-8"))
+spy = _SpyRng()
+r2 = S.Selector("scene", ["a", "b"], path2, rng=spy, log=logs.append)
+r2.record("a", True, 90)
+assert r2._calls("a") == 3 and r2._calls("b") == 1, (r2._calls("a"), r2._calls("b"))
+assert r2.run["a"]["calls"] == 1 and r2.hist["a"]["calls"] == 3              # rapor için run ayrı kalır
+r2.pick()
+pa, pb = spy.beta_args                                                        # isim sırası: a, b
+# a: calls=3, ödül=min(250/100, 3)=2.5 -> (1+2.5, 1+0.5); çift sayımla calls=4, ödül=3.4 -> (4.4, 1.6) olurdu
+assert _close(pa, (3.5, 1.5)), pa
+assert _close(pb, (1.0, 2.0)), pb                                             # b bu işte kayıtsız: yalnız kalıcı geçmiş
+r2.save()
+assert json.load(open(path2, encoding="utf-8"))["kinds"]["scene"]["a"]["calls"] == 3   # dosyada da 3
+
+# keşif dalı da tek sayımla karar vermeli: a kalıcı 5 / bu iş 0, b kalıcı 2 / bu iş 2 -> en az denenen b (4 < 5)
+# (çift sayımla b = 2 + 2*2 = 6 > 5 olur ve a seçilirdi)
+path3 = os.path.join(tmp, "karne3.json")
+json.dump({"version": S.SELECTOR_VERSION,
+           "kinds": {"scene": {"a": {"calls": 5, "ok": 5, "err": 0, "qual": 400.0},
+                               "b": {"calls": 2, "ok": 1, "err": 0, "qual": 70.0}}}},
+          open(path3, "w", encoding="utf-8"))
+r3 = S.Selector("scene", ["a", "b"], path3, rng=random.Random(8), log=logs.append, explore=1.0)
+r3.record("b", False); r3.record("b", True, 75)
+assert r3._calls("a") == 5 and r3._calls("b") == 4, (r3._calls("a"), r3._calls("b"))
+assert r3.pick() == "b"
 
 # 7) model keşfi ayrıştırma
 assert P.pick_openai_model(["gpt-4o", "gpt-image-1", "gpt-image-1-mini", "gpt-image-2", "dall-e-3", "gpt-image-1.5"]) == "gpt-image-2"

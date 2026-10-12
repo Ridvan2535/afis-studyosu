@@ -62,8 +62,12 @@ class Selector:
     def active(self):
         return [n for n in self.names if n not in self.off]
 
+    # Not: record() her sonucu hem hist'e hem run'a yazar; yani hist zaten "kalıcı karne + bu iş" toplamıdır.
+    # Seçim hesabı yalnız hist'i kullanır (hist + run bu işin sonuçlarını iki kez sayardı). run yalnız raporlama içindir.
+    # SELECTOR_VERSION bilerek artırılmadı: save() yalnız hist yazdığından dosyadaki karnede çift sayım hiç olmadı;
+    # sürümü artırmak kullanıcının doğru öğrenilmiş verisini boşa sıfırlardı.
     def _calls(self, n):
-        return self.hist[n]["calls"] + self.run[n]["calls"]
+        return self.hist[n]["calls"]
 
     def pick(self, exclude=()):
         cands = [n for n in self.active() if n not in exclude]
@@ -76,9 +80,9 @@ class Selector:
             return min(cands, key=lambda n: (self._calls(n), self.names.index(n)))     # şanssız bir ilk sonuç servisi sonsuza dek dışlamasın
         best, best_v = None, -1.0
         for n in cands:
-            h, r = self.hist[n], self.run[n]
-            calls = h["calls"] + r["calls"]
-            reward = min((h["qual"] + r["qual"]) / 100.0, calls)          # kabul ve kalite birlikte: %100 kaliteyle kabul = 1 puan
+            h = self.hist[n]                                                 # hist bu işi zaten içerir (bkz. _calls)
+            calls = h["calls"]
+            reward = min(h["qual"] / 100.0, calls)          # kabul ve kalite birlikte: %100 kaliteyle kabul = 1 puan
             v = self.rng.betavariate(1 + reward, 1 + max(calls - reward, 0))
             if v > best_v:
                 best, best_v = n, v
