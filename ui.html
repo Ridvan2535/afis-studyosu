@@ -733,7 +733,7 @@ function renderResult() {
   g.querySelectorAll("[data-stop]").forEach(a => a.onclick = e => e.stopPropagation());
   renderKarneBox(i);
   const rej = i.elenenler || [];
-  $("#rejBox").innerHTML = rej.length ? `<details><summary>${rej.length} sahne elendi</summary><ul class="rej">${rej.map(r => `<li>${r.tur ? "[" + esc(({servis_hatasi: "servis hatası", kalite_kapisi: "kalite kapısı", sahne_geometri: "sahne ürün ölçüsüne uymuyor", birikme_cozulemedi: "zemindeki birikme çözülemedi"})[r.tur] || r.tur) + "] " : ""}çağrı ${r.cagri}${r.servis ? " (" + esc(niceName(r.servis)) + ")" : ""}: ${esc(r.neden)}</li>`).join("")}</ul></details>` : "";
+  $("#rejBox").innerHTML = rej.length ? `<details><summary>${rej.length} sahne elendi</summary><ul class="rej">${rej.map(r => `<li>${r.tur ? "[" + esc(({servis_hatasi: "servis hatası", kalite_kapisi: "kalite kapısı", sahne_geometri: "sahne ürün ölçüsüne uymuyor", birikme_cozulemedi: "zemindeki birikme çözülemedi", sahne_kivrim: "kumaş fazla kıvrımlı, tasarım bozulmadan sığmıyor"})[r.tur] || r.tur) + "] " : ""}çağrı ${r.cagri}${r.servis ? " (" + esc(niceName(r.servis)) + ")" : ""}: ${esc(r.neden)}</li>`).join("")}</ul></details>` : "";
   const vs = i.videolar || [];
   $("#vids").innerHTML = vs.map(v => {
     const ok = v.kontrol_gecti;

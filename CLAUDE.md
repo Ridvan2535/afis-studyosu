@@ -19,6 +19,12 @@ Kullanıcıyla Türkçe, anlaşılır ve somut konuş; ne yaptığını **ve ned
 - **Tam kumaş modu (2026-10-12'de kesinleşti):** PNG tuvali kumaşın TAMAMIDIR; PNG içindeki boşluklar yerleşimin
   parçasıdır. Otomatik kenar boşluğu, içeri küçültme, kırpma, ortalama veya oranı bozarak esnetme **yoktur**.
   Kumaşın perspektifi ve kıvrımı için gereken yüzey dönüşümü, kaynak oranı keyfî değiştirmekten ayrıdır.
+- **Yerleştirme önceliği tasarımın bütünlüğüdür (2026-10-13, K-23):** PNG kumaşın her dalga/kıvrımını geometrik olarak
+  izlemez. Tasarım BÜTÜN olarak tek düzlem dönüşümüyle yerleşir: önden görsellerde oranı ve iç düzeni korunarak
+  (eşit yatay/dikey ölçek), açılı görsellerde tasarımın tamamına tek perspektif dönüşümü. Satır satır değişen kumaş
+  kenarları ve ışık gradyanları tasarımın iç geometrisini bozamaz. Kumaşın ışığı, gölgesi ve dokusu baskıya çarpma
+  modeliyle yansır. Baskı yüzeyi nispeten düz/hafif kıvrımlı sahneler tercih edilir; güçlü katlanma nedeniyle tasarım
+  sığmıyorsa tasarım zorla deforme edilmez, sahne uygunsuz sayılır (`sahne_kivrim`).
 - **Oran uyuşmazlığında** (PNG oranı ≠ kumaş oranı, tolerans %1): açık uyarı ve önizleme verilir, uyuşmazlık sessizce
   düzeltilmez ve o ürünün **nihai üretimi bekletilir** (hiç ücretli çağrı yapılmaz). *(Önceki "baskı alanına oranı
   koruyarak sığdır" kuralının yerine geçti; bkz. `docs/kararlar.md` K-10.)*
@@ -94,6 +100,8 @@ yüzeye tasarım uygulama motoru ürün türüne özel.
 - Yerleştirme dönüşümü değişirse yalnız işaret merkezleri yetmez: `tests/test_sureklilik.py` (ince çizgi / harf
   sürekliliği, katlanma, satır sıçraması) geçmeli ve gerçek kayıtlı sahnelerde önce/sonra yakın görünüm incelenmeli.
 - Işık gradyanı doğrudan kumaş geometrisi kabul edilmez (K-19).
+- Yerleşim değişikliklerinde `tests/test_duzlem_yerlesim.py` geçmeli (dalgalı kenarda tasarım çizgileri düz, önden oran
+  korunur, açılıda tek perspektif, güçlü kıvrımda `sahne_kivrim`).
 
 ## 5. Geliştirme aşamaları (ayrıntı: `docs/roadmap.md`)
 

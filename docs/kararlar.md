@@ -7,6 +7,23 @@ Biçim: **K-numara · tarih · karar** — gerekçe · etki/geri alma.
 
 ---
 
+### 2026-10-13 — Yerleştirme kuralı netleşti: tasarımın bütünlüğü önce
+
+**K-24 · 2026-10-13 · Güçlü kıvrım/katlanmada sahne uygunsuz (`sahne_kivrim`); tasarım zorla deforme edilmez.**
+Ölçütler (VARSAYIM, gerçek sahnelerle ayarlanacak): tasarımın baskılı kısmının %0,3'ünden fazlası kumaş dışına düşüyorsa
+(`TASMA_ESIK`) ya da kumaş kenarının uydurulan doğrudan sapması (p98) enin %6'sını aşıyorsa (`KIVRIM_ESIK`) red;
+%3–6 arası kenar sapması yalnız uyarı (kenarda yan döküm, baskı sığıyorsa kabul). Gerçek iş 20261012-224824'te: 01 kenar
+sapması %3,9 → uyarı + kabul (kumaş dışı baskı %0,006), 02 %3,0 → kabul.
+
+**K-23 · 2026-10-13 · Tam kumaş yerleşimi TEK HOMOGRAFİ: tasarım bütün olarak tek düzlem dönüşümüyle yerleşir.**
+(kullanıcı kararı) PNG kumaşın her dalgasını izlemez. Kenarlara bant içinde (asılı boyun %10–85'i) sağlam düz doğrular
+uydurulur; üst kenar ve zemine temas doğrularıyla dörtgen kurulur; PNG tuvalinin tamamı bu dörtgene tek perspektif
+dönüşümüyle oturur (önden: eşit ölçek, oran korunur; açılı: tek perspektif). Fiziksel dikey ölçek, gizli bölge ve ±%3
+kuralı (K-16) aynen. Işık/gölge/doku çarpma modeliyle. **Önceki K-18'in (yumuşatılmış satır kenarlarıyla yerleşim) yerine
+geçti**: K-18 kopmaları gidermişti ama tasarım kenar eğrisini izlediği için iç geometri hafifçe bükülebiliyordu
+(dalgalı kenarda tasarımdaki düz çizgi 1,7–4,2 px bükülüyordu; tek homografide 0,00 px). K-18'in yumuşatılmış kenarları
+yalnız tanı/temas hesabında kalır.
+
 ### 2026-10-13 — Düzeltmenin uygulama akışında doğrulanması
 
 **K-22 · 2026-10-13 · Yeniden birleştirme sonucu YENİ iş olarak kaydedilir; kaynak iş ve görselleri değişmez.**
@@ -31,7 +48,7 @@ Işık gradyanı kumaş geometrisi değildir; gerçek s01 sahnesinde dönüşüm
 kontur yaptı. Güvenilir bir kıvrım geometrisi yöntemi gelene kadar 0. Kumaş dokusu ve ışık, çarpma baskı modeliyle
 (baskı = sahne × tasarım) aynen korunur. Eski yol (mode=None) 0,01 ile değişmeden kalır.
 
-**K-18 · 2026-10-12 · Kumaş kenarları satır satır değil, yumuşak eğri olarak kullanılır (`KENAR_YUMUSATMA` = boyun %2'si).**
+**K-18 · 2026-10-12 · [K-23 ile yerine geçildi] Kumaş kenarları satır satır değil, yumuşak eğri olarak kullanılır (`KENAR_YUMUSATMA` = boyun %2'si).**
 Kök neden: satır bazlı alt-piksel kenar ölçümündeki sıçramalar tasarımı o satırlarda yatay koparıyordu (iş
 20261012-224824: s01'de 121, s02'de 42 satır). Temas çizgisi altı temas değeriyle sabitlenip Gauss uygulanır; ham kenarlar
 tanı için saklanır. Yerleşim koordinatları (üst kenar, cm ölçeği, asılı boy, gizli bölge) değişmez. Bilinen sınır:

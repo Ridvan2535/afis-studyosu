@@ -215,6 +215,10 @@ MUREKKEP_ESIK = 0.001      # VARSAYIM: gizli bölgedeki baskılı piksel oranı 
 GIZLI_EN_FAZLA = 0.25      # VARSAYIM: yerde kalan (gizli) boy / ürün boyu bunun üstündeyse sergileme yüksekliği ürüne uymuyor
                            # (birikme miktarı uydurulmaz; bu yalnız "200 cm kumaş için stand çok kısa" sınırıdır)
 KENAR_YUMUSATMA = 0.02     # VARSAYIM: kenar eğrisi Gauss yumuşatması (kumaş boyunun %2'si); satır gürültüsü kopma yapmasın
+KENAR_BANT = (0.10, 0.85)  # kenar doğrularının uydurulduğu bant (asılı boyun oranı; üstteki fiyonk/toplanma ve alttaki birikme dışarıda)
+KIVRIM_ESIK = 0.06         # VARSAYIM: kenarın uydurulan doğrudan sapması (p98, kumaş enine oran) bunu aşarsa güçlü kıvrım: sahne uygunsuz
+KIVRIM_UYARI = 0.03        # VARSAYIM: bu ile KIVRIM_ESIK arası yalnız uyarı (kenarda yan döküm; baskı kumaşa sığıyorsa kabul)
+TASMA_ESIK = 0.003         # VARSAYIM: tasarımın baskılı kısmının bu oranından fazlası kumaşın dışına düşüyorsa sahne uygunsuz
 TAM_KUMAS_FOLD_SHIFT = 0.0 # Işık gradyanından kıvrım kayması tam kumaşta KAPALI (K-19): ışık gradyanı geometri değildir;
                            # gerçek sahnede tasarımı kendi üzerine katlayıp çift kontur yaptı. Güvenilir yöntem gelene dek 0.
 OLCUM_PAYI = 0.005         # VARSAYIM: asılı boy ölçümünün piksel hassasiyeti (200 cm'de ≈1 cm); bu kadarlık fark sığdırılır
@@ -411,32 +415,50 @@ def _place_full_fabric(scene, design, det, ink, paper, ssaa, fold_shift, en_cm, 
     gx, gy = np.meshgrid((np.arange(x0 * ssaa, x1 * ssaa) + 0.5) / ssaa, (np.arange(y0 * ssaa, y1 * ssaa) + 0.5) / ssaa)
 
     # kıvrım kayması: yalnız kumaşın İÇİNDEKİ ışık değişiminden (kenar/duvar karşıtlığı kaydırma yaratmasın)
-    gxs = gx
-    if fold_shift:
-        lum = cv2.cvtColor(scene, cv2.COLOR_BGR2GRAY)
-        mf = m.astype(np.float32)
-        num = cv2.GaussianBlur(lum * mf, (0, 0), 10)
-        den = cv2.GaussianBlur(mf, (0, 0), 10)
-        lum_in = np.where(m, lum, num / np.maximum(den, 1e-4))
-        gr = cv2.Sobel(cv2.GaussianBlur(lum_in, (0, 0), 10), cv2.CV_32F, 1, 0, ksize=5)
-        p99 = max(float(np.percentile(np.abs(gr[m]), 99)), 1e-6)
-        gr = np.clip(gr / max(p99, 0.02), -1, 1) * m                       # düz kumaşta gürültü büyütülmesin
-        gr = cv2.resize(gr[y0:y1, x0:x1], (gx.shape[1], gx.shape[0]), interpolation=cv2.INTER_LINEAR)
-        gxs = gx - fold_shift * g["W0"] * gr
-
+    # --- Tasarım BÜTÜN olarak TEK düzlem dönüşümüyle (homografi) yerleşir (K-23, 2026-10-13) ---
+    # Kumaşın satır satır kenarları ve ışık gradyanı tasarımın iç geometrisini DEĞİŞTİRMEZ: kenarlara sağlam düz çizgiler
+    # uydurulur, üst kenar ve zemine temas çizgisiyle bir dörtgen kurulur; PNG tuvalinin tamamı bu dörtgene tek
+    # perspektif dönüşümüyle oturur. Önden sahnede (paralel kenarlar) bu, oranı koruyan ölçekleme olur; açılı sahnede
+    # tasarımın tamamına aynı perspektif uygulanır. Işık, gölge ve doku çarpma baskı modeliyle gelir.
+    # fold_shift (ışık gradyanından kayma) tam kumaşta KULLANILMAZ (K-19).
     rows = g["rows"]
-    Lp = np.interp(gy, rows + 0.5, g["L"])
-    Rp = np.interp(gy, rows + 0.5, g["R"])
-    xs_all = np.arange(W, dtype=np.float64) + 0.5
-    topp = np.interp(gx, xs_all, g["top_x"])
-    temp = np.interp(gx, xs_all, g["temas_x"])
-    u0 = (gx - Lp) / np.maximum(Rp - Lp, 1e-3)
-    taper = np.clip(np.minimum(u0, 1 - u0) / 0.04, 0, 1)        # kumaş kenarında kayma 0: tasarım kenarı = kumaş kenarı
-    u = u0 - taper * (gx - gxs) / np.maximum(Rp - Lp, 1e-3)
-    Lv = (temp - topp) if fit_to_contact else boy_px
-    v = (gy - topp) / np.maximum(Lv, 1e-3)
-    inside = ((u >= 0) & (u <= 1) & (v >= 0) & (v <= 1) & (gy <= temp)).astype(np.float32)
+    Lh, Rh = np.asarray(g["L_ham"], np.float64), np.asarray(g["R_ham"], np.float64)
+    at, bt = g["top_line"]
+    xs_all = np.arange(W, dtype=np.float64)
+    tem_line = np.polyfit(xs_all, g["temas_x"], 1)                     # temas çizgisi (birikmede yatay)
+    ac, bc = float(tem_line[0]), float(tem_line[1])
+    top_mid = float(np.median(g["top_x"][int(g["x_range"][0]):int(g["x_range"][1])]))
+    hang_px = max(g["temas_y"] - top_mid, 10.0)
+    band = (rows >= top_mid + KENAR_BANT[0] * hang_px) & (rows <= top_mid + KENAR_BANT[1] * hang_px)
+    if band.sum() < 10:
+        band = np.ones(len(rows), bool)
+    aL, bL = _robust_line(rows[band], Lh[band])                       # x = aL*y + bL
+    aR, bR = _robust_line(rows[band], Rh[band])
+    resid = max(float(np.percentile(np.abs(Lh[band] - (aL * rows[band] + bL)), 98)),
+                float(np.percentile(np.abs(Rh[band] - (aR * rows[band] + bR)), 98)))
 
+    def side_top(a, b):                                                 # yan çizgi ile üst kenar doğrusunun kesişimi
+        y = (at * b + bt) / (1 - at * a)
+        return a * y + b, y
+
+    def side_y(a, b, k, c):                                             # yan çizgi ile y = k*x + c doğrusunun kesişimi
+        y = (k * b + c) / (1 - k * a)
+        return y
+
+    xtl, ytl = side_top(aL, bL)
+    xtr, ytr = side_top(aR, bR)
+    ycl, ycr = side_y(aL, bL, ac, bc), side_y(aR, bR, ac, bc)          # temas çizgisinde yanlar
+    ratio = 1.0 if fit_to_contact else (boy_px / hang_px)             # temasın altı (yerde biriken kısım) fiziksel ölçekle
+    ybl, ybr = ytl + (ycl - ytl) * ratio, ytr + (ycr - ytr) * ratio
+    quad = np.float64([[xtl, ytl], [xtr, ytr], [aR * ybr + bR, ybr], [aL * ybl + bL, ybl]])
+    Hm = cv2.getPerspectiveTransform(np.float32([[0, 0], [1, 0], [1, 1], [0, 1]]), quad.astype(np.float32))
+    Hi = np.linalg.inv(Hm)
+    den = Hi[2, 0] * gx + Hi[2, 1] * gy + Hi[2, 2]
+    u = (Hi[0, 0] * gx + Hi[0, 1] * gy + Hi[0, 2]) / den
+    v = (Hi[1, 0] * gx + Hi[1, 1] * gy + Hi[1, 2]) / den
+    temp = ac * gx + bc
+    inside = ((u >= 0) & (u <= 1) & (v >= 0) & (v <= 1) & (gy <= temp)).astype(np.float32)
+    Lv = float(max(ybl - ytl, ybr - ytr))
     reg_w, reg_h = g["W0"], float(np.max(Lv)) if np.ndim(Lv) else float(Lv)
     design_s = _prefit(design, reg_w * ssaa, reg_h * ssaa)
     dh, dw = design_s.shape[:2]
@@ -445,6 +467,20 @@ def _place_full_fabric(scene, design, det, ink, paper, ssaa, fold_shift, en_cm, 
     sz = (x1 - x0, y1 - y0)
     warped = np.clip(cv2.resize(warped, sz, interpolation=cv2.INTER_AREA), 0, 1)
     alpha = cv2.resize(inside, sz, interpolation=cv2.INTER_AREA)
+    # --- sığma denetimi: güçlü kıvrım/katlanma varsa tasarım ZORLA deforme edilmez, sahne uygunsuz sayılır ---
+    lum_d = 0.114 * warped[..., 0] + 0.587 * warped[..., 1] + 0.299 * warped[..., 2]
+    ink_w = (lum_d < 0.85) & (alpha > 0.5)                              # tasarımın baskılı (mürekkepli) kısmı, sahnede
+    m_tol = cv2.dilate(m[y0:y1, x0:x1].astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+    ink_total = int(ink_w.sum())
+    ink_out = float((ink_w & ~m_tol).sum()) / max(ink_total, 1)
+    kivrim = resid / max(g["W0"], 1.0)
+    if KIVRIM_UYARI < kivrim <= KIVRIM_ESIK and ink_out <= TASMA_ESIK:
+        uyarilar.append(f"Kumaş kenarında belirgin döküm/kıvrım var (kenar sapması %{kivrim * 100:.1f} en); tasarım düzlem olarak "
+                        f"yerleşti ve kumaşa sığıyor. Gözle kontrol edin.")
+    if kivrim > KIVRIM_ESIK or ink_out > TASMA_ESIK:
+        sorunlar.append({"tur": "sahne_kivrim",
+                         "mesaj": f"Kumaş yüzeyi tasarımı bozmadan taşıyacak kadar düz değil (kenar sapması %{kivrim * 100:.1f} en, "
+                                  f"kumaş dışına düşen baskı %{ink_out * 100:.2f}). Tasarım zorla deforme edilmedi; sahne uygunsuz."})
     mf = cv2.GaussianBlur(m[y0:y1, x0:x1].astype(np.float32), (0, 0), 0.6)
     alpha = np.clip(alpha * mf, 0, 1)[..., None]
 
@@ -474,7 +510,9 @@ def _place_full_fabric(scene, design, det, ink, paper, ssaa, fold_shift, en_cm, 
              "alpha": alpha[..., 0].astype(np.float32)}
     at, bt = g["top_line"]
     info = {"bbox": [int(x0), int(y0), int(x1), int(y1)], "mod": "tam_kumas",
-            "kivrim_kaymasi": float(fold_shift or 0.0), "kenar_sigma_px": round(float(g["kenar_sigma_px"]), 1),
+            "kivrim_kaymasi": 0.0, "kenar_sigma_px": round(float(g["kenar_sigma_px"]), 1),
+            "yerlesim_donusumu": "homografi", "dortgen": [[round(float(a_), 1) for a_ in q_] for q_ in quad],
+            "kenar_sapmasi": round(float(kivrim), 4), "kumas_disi_baski": round(float(ink_out), 5),
             "en_cm": float(en_cm), "boy_cm": float(boy_cm),
             "px_per_cm": round(ppc, 3), "asili_cm": round(asili_cm, 1), "gizli_cm": round(gizli_cm, 1),
             "v_gizli": round(v_gizli, 4), "temas_y": round(g["temas_y"], 1), "birikme": bool(g["birikme"]),

@@ -389,7 +389,7 @@ class Orchestrator:
             return {"ok": False, "tur": "sahne_geometri", "neden": f"kumaş geometrisi çıkarılamadı: {e}", "det": det, "lay": lay}
         tk_info = {k: info[k] for k in ("px_per_cm", "asili_cm", "gizli_cm", "v_gizli", "temas_y", "birikme", "temas_yontemi",
                                         "olcek_farki", "dikey_olcek", "gizli_murekkep", "sorunlar", "uyarilar")}
-        tk_info.update(kivrim_kaymasi=info.get("kivrim_kaymasi"), kenar_sigma_px=info.get("kenar_sigma_px"))
+        tk_info.update({k: info.get(k) for k in ("kivrim_kaymasi", "kenar_sigma_px", "yerlesim_donusumu", "dortgen", "kenar_sapmasi", "kumas_disi_baski")})
         if info["sorunlar"]:
             tur = info["sorunlar"][0]["tur"]
             msg = " ".join(x["mesaj"] for x in info["sorunlar"])

@@ -49,6 +49,7 @@ HATA_TURLERI = {
     "kalite_kapisi": "Sahne kalite kapısından geçmedi",
     "servis_hatasi": "Servis hatası",
     "birikme_cozulemedi": "Zemindeki birikme doğru çizilemedi",
+    "sahne_kivrim": "Kumaş yüzeyi tasarımı bozmadan taşıyacak kadar düz değil",
 }
 
 

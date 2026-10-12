@@ -4,45 +4,60 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-13 00:15 (Claude) · **Mevcut aşama:** Aşama 2A + kopma düzeltmesi + uygulama akışında
-doğrulama tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı görünüm + eksikleri tamamla) — BAŞLAMADI (kullanıcı
-onayı bekleniyor). Video aşamasına başlanmadı.
+**Son güncelleme:** 2026-10-13 00:35 (Claude) · **Mevcut aşama:** Aşama 2A + kopma düzeltmesi + düzlem (tek homografi)
+yerleşim kuralı + uygulama akışında doğrulama tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı görünüm + eksikleri
+tamamla) — BAŞLAMADI (kullanıcı onayı bekleniyor). Video aşamasına başlanmadı.
 
 ---
 
-## 0a. Son iş: kopma düzeltmesinin uygulamanın normal akışında doğrulanması (2026-10-13)
+## 0a. Son iş: düzlem yerleşim kuralı ve uygulama akışında doğrulama (2026-10-13)
 
-**Ne yapıldı:** Uygulamaya "Kayıtlı sahnelerden yeniden birleştir" işlemi eklendi (K-21, K-22). İş
-`isler/20261012-224824_20261012-224717_design`'ın iki kayıtlı boş sahnesine aynı tasarım, güncel kodla, uygulamanın
-kendi kalite kapısı + tam kumaş yerleşimi + kayıt akışından geçirilerek yeniden basıldı.
+**Gereksinim (kullanıcı, 2026-10-13):** öncelik tasarımın bütünlüğü. Tasarım kumaşın her dalgasını izlemez; önden oran ve
+iç düzen korunarak, açılıda tamamına tek perspektifle yerleşir; satır satır kenar ve ışık gradyanı iç geometriyi bozmaz;
+güçlü kıvrımda sahne uygunsuz. → `CLAUDE.md` §1, `docs/kararlar.md` K-23, K-24.
 
-**Sonuç nerede:** bilgisayarda `isler/20261012-235743_yeniden_20261012-224824/` (foto/01_kumas.jpg, foto/02_kumas.jpg,
-foto/_ozet.jpg, onizleme/01_gizli.jpg, rapor.json). Kaynak iş klasörüne dokunulmadı.
+**Mevcut düzeltmenin (K-18/K-19) bu kurala uyumu:** *kısmen*. Kopmaları ve çift konturu gidermişti, ışık gradyanını
+kapatmıştı (K-19 kurala tam uyuyor). Ama tasarım hâlâ yumuşatılmış kumaş kenarını satır satır izliyordu; kenar eğrildikçe
+tasarımın iç geometrisi de bükülüyordu (dalgalı kenarlı test sahnesinde tasarımdaki düz çizgi %1,2 dalgada 1,7 px,
+%3 dalgada 4,2 px bükülüyordu). Bu yüzden yerleşim **tek homografiye** çevrildi (K-23): aynı sahnelerde bükülme 0,00 px.
 
-**Uygulamada açmak:** `baslat.bat` → Üret sekmesi → "3 Sonuçlar" kartında "Önceki işler" listesinden
-`20261012-235743_yeniden_20261012-224824` seç. Başlıkta "kayıtlı sahnelerden yeniden birleştirildi (kaynak: …; servis
-çağrısı: 0)" yazar. Aynı işlemi başka bir iş için tekrarlamak: o işi seç → "Kayıtlı sahnelerden yeniden birleştir" düğmesi.
+**Uygulamada yapılanlar:**
+- `compositor.py`: tam kumaşta kenarlara sağlam düz doğrular + üst kenar + temas çizgisi → tek dörtgen → tek homografi.
+  Sığma denetimi: kumaş dışına düşen baskı ve kenar sapması (K-24). Rapor alanları: `yerlesim_donusumu`, `dortgen`,
+  `kenar_sapmasi`, `kumas_disi_baski`.
+- `orchestrator.py`: "Kayıtlı sahnelerden yeniden birleştir" (`recompose_from_scenes`, K-21/K-22). Yeni üretim ve yeniden
+  birleştirme aynı ortak fonksiyonları kullanır (`_evaluate_scene`, `_save_accepted`).
+- `app.py` (`POST /api/yeniden_birlestir`), `ui.html` (sonuç ekranında düğme + başlıkta kaynak iş ve "servis çağrısı: 0").
+- `product.py`: `sahne_kivrim` hata türü.
+- Testler: `tests/test_duzlem_yerlesim.py` (yeni), `tests/test_yeniden_birlestir.py` (yeni).
 
-**Sağlayıcı çağrısı:** YOK. Doğrulama: (1) uygulama sunucusu, sahne/video sağlayıcı fabrikaları çağrılırsa hata verecek
-şekilde kilitlenip çalıştırıldı → çağrı sayısı 0; (2) ayarlarda hiç anahtar yoktu; (3) rapor `saglayici_cagrisi: 0`,
-`cagri: 0`; servis karnesine kayıt yok.
+**Sonuç nerede:** bilgisayarda `isler/20261013-001355_yeniden_20261012-224824/` (foto/01_kumas.jpg, foto/02_kumas.jpg,
+foto/_ozet.jpg, onizleme/01_gizli.jpg, rapor.json). Kaynak iş `isler/20261012-224824_20261012-224717_design` değişmedi
+(işlem öncesi/sonrası tüm dosyaların md5'i aynı). Önceki karşılaştırma klasörü: `karsilastirma/20261012-224824_kopma/`.
 
-**Doğrulama sonuçları (bulut çalışma alanı, Linux, Python 3.13; sahte servis yok, kayıtlı gerçek sahneler):**
-- Tarayıcıda (headless Chromium) uygulama arayüzünden: iş seçildi → düğmeye basıldı → 2/2 fotoğraf, yeni iş ekranda
-  otomatik açıldı, galeri "Kumaş (tam tuval) · Kayıtlı sahne", JavaScript hatası yok.
-- Kaynak iş: işlem öncesi/sonrası tüm dosyaların md5'i aynı.
-- Ürün profili 75×200, tasarım kontrolü uyumlu (3000×8000, şeffaf), çıktılar 2400×2400 kare; tam kumaş, kıvrım kayması 0.
-- Yerleşim: asılı boy 177,7 / 201,4 cm, gizli 22,3 / 0 cm, ölçek 11,702 / 9,567 px/cm — kaynak raporla aynı.
-- Onaylanan düzeltilmiş görsellerle (karşılaştırma klasörü V4) ortalama fark 0,55 / 0,77 (JPEG kaydı düzeyi).
-- Gözle (kayıtlı JPEG'lerden yakın görünüm): Candy's y kuyruğu, BABY SHOWER, WELCOME TO ve ayıcık çizgileri iki
-  görselde de kesintisiz; kumaş dokusu ve ışık korunuyor; 01'de etek zeminde birikiyor (alt ≈22 cm gizli, o bölge
-  tasarımda boş), 02'de etek zemine değiyor.
-- Yeni test `tests/test_yeniden_birlestir.py`: TAMAM (sağlayıcı yasak, kaynak bayt bayt aynı, aynı ortak fonksiyonla
-  piksel eşitliği, hata yolları).
-- Tam test takımı: §2'ye bakın.
+**Uygulamada açmak:** `baslat.bat` → "3 Sonuçlar" kartında "Önceki işler" listesinden
+`20261013-001355_yeniden_20261012-224824` seç. Başlıkta "kayıtlı sahnelerden yeniden birleştirildi (kaynak: …; servis
+çağrısı: 0)" yazar. Başka bir iş için: o işi seç → "Kayıtlı sahnelerden yeniden birleştir" düğmesi (ücretsiz).
 
-**Windows:** Testler bilgisayarındaki Windows ortamında ÇALIŞTIRILMADI — bu oturumda bilgisayarda komut çalıştırma
-aracı yok. Yukarıdaki sonuçlar yalnız bulut çalışma alanına aittir.
+**Sağlayıcı çağrısı:** YOK. Uygulama sunucusu sahne/video sağlayıcı fabrikaları çağrılırsa hata verecek şekilde kilitli
+çalıştırıldı → 0 çağrı; ayarlarda anahtar yok; rapor `saglayici_cagrisi: 0`, `cagri: 0`; servis karnesine kayıt yok.
+
+**Doğrulama (bulut çalışma alanı, Linux, Python 3.13; kayıtlı GERÇEK sahneler, sahte servis yok):**
+- Tarayıcıda (headless Chromium) uygulama arayüzünden: iş seçildi → düğme → 2/2 fotoğraf, yeni iş ekranda açıldı,
+  JavaScript hatası yok.
+- Ürün profili 75×200, tasarım kontrolü uyumlu (3000×8000 şeffaf PNG), çıktılar 2400×2400 kare, `yerlesim_donusumu:
+  homografi`, kıvrım kayması 0. Yerleşim: asılı 177,7 / 201,4 cm, gizli 22,3 / 0 cm, 11,702 / 9,567 px/cm (kaynakla aynı).
+- Sığma: 01 kenar sapması %3,9 (uyarı, kabul), kumaş dışı baskı %0,006; 02 %3,0, kumaş dışı baskı 0.
+- Gözle (kaydedilen JPEG'lerden yakın görünüm): Candy's y kuyruğu, BABY SHOWER, WELCOME TO ve iki ayıcık çizgileri
+  kesintisiz ve düz; kumaş dokusu ve ışık baskıda görünüyor; 01'de etek zeminde birikiyor (alt ≈22 cm, tasarımda boş),
+  02'de etek zemine değiyor.
+- `test_duzlem_yerlesim`: TAMAM (dalgalı kenarda düz çizgi artığı 0,49 px ve model bükülmesi 0,000 px; önden yatay/dikey
+  ölçek 5,933 / 5,985 px/cm; açılıda tek homografiden sapma 0,0001; ortada katlanma ve güçlü kenar dalgası → `sahne_kivrim`).
+  Eski (K-18) kodla anlamlı biçimde BAŞARISIZ: "iç geometri kenar dalgasıyla bükülüyor: 1,67 px".
+- `test_yeniden_birlestir`: TAMAM. Tam takım sonucu §2'de.
+
+**Windows:** Testler bilgisayarındaki Windows ortamında ÇALIŞTIRILMADI — bu oturumda bilgisayarda komut çalıştırma aracı
+yok. Yukarıdaki sonuçların hepsi bulut çalışma alanına aittir.
 
 ## 0. Son iş: baskıdaki kopmaların kök nedeni ve düzeltmesi (2026-10-12 gece)
 
@@ -158,7 +173,7 @@ kumaşın tamamı karede; birikmede alt kısım basılmıyor.
 ## 4. Kullanıcıdan beklenen yanıtlar
 
 0. ~~Kopma düzeltmesinin onayı~~ — **yanıtlandı (2026-10-12):** Codex düzeltilmiş iki görselde kopmaların giderildiğini
-   doğruladı. Yeni: uygulamada açılan `isler/20261012-235743_yeniden_20261012-224824` işinin gözle onayı.
+   doğruladı. Yeni: düzlem yerleşimle uygulamada üretilen `isler/20261013-001355_yeniden_20261012-224824` işinin gözle onayı.
 
 1. Windows'ta: `ajanlar_kurulum\ajanlari_kur.bat` ve şu testlerin sonucu (proje klasöründe, komut isteminde):
    `.venv\Scripts\python tests\test_sureklilik.py`, `.venv\Scripts\python tests\test_yeniden_birlestir.py`,
