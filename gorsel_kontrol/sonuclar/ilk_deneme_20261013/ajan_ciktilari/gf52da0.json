@@ -1,0 +1,14 @@
+{"kod": "gf52da0", "goruntu_turu": "yaklasik",
+ "kontroller": {
+   "kumas_siniri": {"durum": "net", "not": "Kumaş krem duvar önünde dört kenarıyla seçiliyor; üstte çubuğa sarılı bant, altta zemine uzanan etek görülüyor."},
+   "maske_uyumu": {"durum": "eksik", "not": "Maske kumaşı hiç kapsamıyor; sağ direğin sağındaki balon kümesinin bir bölümünü (altın/mavi balonlar) işaretliyor. ust.jpg ve alt.jpg de kumaş yerine balonları gösteriyor."},
+   "zemine_temas": {"durum": "birikiyor", "not": "Etek zemine değiyor ve direk ayaklarının hizasından biraz öne, yere doğru uzanıyor gibi; hafif birikme. İki yana yayılma belirgin değil."},
+   "perspektif": {"durum": "onden", "not": "Önden çekim; kumaş tek düzlem."},
+   "baski_alani": {"durum": "acik", "not": "Ön yüz boş; yeşil fiyonk kuyrukları kumaşın sol ve sağ kenar şeridine üst yarıda hafifçe biniyor."}},
+ "oran_gozlemi": "uyumlu",
+ "estetik": {"karar": "kullanilabilir", "gerekce": "Balon kemerli baby shower sahnesi düzgün; kumaş temiz ve önden."},
+ "yerlestirilebilir": {"karar": "evet", "gerekce": "Sahnedeki kumaş ürüne yakın oranda (yaklaşık ~0,38 gibi), önden ve açık; tasarım sahneye göre oturabilir."},
+ "durum": "inceleme_gerekli",
+ "gerekce": "Sahne kendi başına uygun görünüyor, ancak maske kumaş yerine sağdaki balon kümesini işaretliyor; maske ile görüntü açıkça çelişiyor.",
+ "belirsizlik": "Eteğin önde ne kadar yere yattığı ve buna bağlı alt kenar konumu tam net değil.",
+ "degerlendirme_siniri": "Yaklaşık görüntü: balon kenarlarında yeşil renk izleri var; maske çelişkisi kaba ölçekte görülüyor, ancak ince kenar ayrıntıları güvenilmez."}

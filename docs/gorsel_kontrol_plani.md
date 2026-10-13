@@ -1,6 +1,8 @@
 # Görsel Kontrol ajanı (`visual-inspector`): değerlendirme düzeni
 
-Tarih: 2026-10-13 (Codex incelemesi sonrası güncellendi). Durum: **hazır, çalıştırılmadı.** Ücretli üretim yapılmadı;
+Tarih: 2026-10-13. Durum: **ilk 8 örnek değerlendirildi** (visual-inspector talimatlı genel amaçlı alt ajanla; sonuç: `gorsel_kontrol/sonuclar/ilk_deneme_20261013/RAPOR.md`). 30 örnek çalıştırılmadı.
+
+(Önceki durum:) **hazır, çalıştırılmadı.** Ücretli üretim yapılmadı;
 ajan henüz hiçbir örnekte çalıştırılmadı.
 
 **Kurulum durumu (açıkça):**

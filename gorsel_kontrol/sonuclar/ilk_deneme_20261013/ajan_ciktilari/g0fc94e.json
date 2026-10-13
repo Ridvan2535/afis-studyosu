@@ -1,0 +1,14 @@
+{"kod": "g0fc94e", "goruntu_turu": "ham",
+ "kontroller": {
+   "kumas_siniri": {"durum": "net", "not": "Bulanık bahçe arka planı önünde kumaşın dört kenarı net; üstte çubuk üzerinden dönen bant, altta düz etek."},
+   "maske_uyumu": {"durum": "uyumlu", "not": "Maske kumaş dikdörtgenini üst bant dahil kaplıyor; yan kenarlarda küçük çentikler var, belirgin taşma ya da eksik görmüyorum."},
+   "zemine_temas": {"durum": "degiyor", "not": "alt.jpg'de etek çimene değiyor, hafif dalgalı; havada değil."},
+   "perspektif": {"durum": "onden", "not": "Önden, dik çekim; kumaş tek düzlem."},
+   "baski_alani": {"durum": "acik", "not": "Ön yüz boş; pembe fiyonklar üst köşelere yakın, kuyruklar çoğunlukla kumaşın dışında."}},
+ "oran_gozlemi": "uyumlu",
+ "estetik": {"karar": "kullanilabilir", "gerekce": "Gün batımı bahçe sahnesi temiz ve çekici; kumaş önden ve düzgün."},
+ "yerlestirilebilir": {"karar": "evet", "gerekce": "Görünen oran ürüne yakın (yaklaşık ~0,38 gibi); kumaş tek düzlem ve baskı alanı açık."},
+ "durum": "uygun",
+ "gerekce": "Kumaş önden, ürün oranına yakın, etek çimene değiyor ve maske kumaşla örtüşüyor.",
+ "belirsizlik": "Düşük; oran yalnız gözle tahmin.",
+ "degerlendirme_siniri": "Ham görüntü; kesin ölçü çıkarılamaz."}

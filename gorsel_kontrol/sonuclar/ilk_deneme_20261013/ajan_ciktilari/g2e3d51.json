@@ -1,0 +1,14 @@
+{"kod": "g2e3d51", "goruntu_turu": "yaklasik",
+ "kontroller": {
+   "kumas_siniri": {"durum": "net", "not": "Kumaşın sol, sağ, üst (çubuk üzerinden dönen bant) ve alt kenarı çimen ve gökyüzü önünde ayırt ediliyor. Kenarlar boyunca yaklaşık görüntüden kaynaklı yeşil/pembe piksel izleri var."},
+   "maske_uyumu": {"durum": "uyumlu", "not": "Maske genel hatlarıyla kumaşın dikdörtgenini kaplıyor; üst bant dahil. Sol kenarda kurdele kuyruklarının hizasında küçük girinti/çıkıntılar var; büyük taşma ya da eksik bölge görmüyorum."},
+   "zemine_temas": {"durum": "degiyor", "not": "alt.jpg'de etek çimene oturuyor, hafif kırışarak yere değiyor; havada bitmiyor."},
+   "perspektif": {"durum": "onden", "not": "Stand ve kumaş önden, dik görünüyor; kumaş tek düzlem."},
+   "baski_alani": {"durum": "acik", "not": "Ön yüz boş. Sağ fiyonkun pembe/gri kuyrukları üst yarıda kumaşın sağ kenar şeridine hafifçe biniyor; orta alan açık."}},
+ "oran_gozlemi": "genis_kisa",
+ "estetik": {"karar": "kullanilabilir", "gerekce": "Açık hava piknik sahnesi düzgün, kumaş temiz ve önden."},
+ "yerlestirilebilir": {"karar": "hayir", "gerekce": "Görünen kumaş ürün oranına (0,375) göre belirgin geniş; yaklaşık oran ~0,46 civarında görünüyor, tasarım esnetilmeden oturmaz."},
+ "durum": "uygun_degil",
+ "gerekce": "Kumaşın görünen genişliği yüksekliğine göre ürünün oranından belirgin fazla (yaklaşık ~0,46); kumaş iki direk arasında geniş bir pano gibi duruyor.",
+ "belirsizlik": "Oran gözle ve kaba piksel tahminiyle; üst bandın baskıya dahil olup olmadığı oranı biraz etkiler ama bandı çıkarsa bile kumaş belirgin geniş kalıyor gibi görünüyor.",
+ "degerlendirme_siniri": "Yaklaşık görüntü: kenar renkleri bozuk (yeşil izler). Karar ince kenar ayrıntısına değil kaba orana dayandığı için bu sınırın etkisi sınırlı."}

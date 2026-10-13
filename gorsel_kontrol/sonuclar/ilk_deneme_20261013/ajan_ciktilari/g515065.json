@@ -1,0 +1,14 @@
+{"kod": "g515065", "goruntu_turu": "yaklasik",
+ "kontroller": {
+   "kumas_siniri": {"durum": "net", "not": "Kumaşın dört kenarı açık duvar önünde seçiliyor; kenarlar boyunca yaklaşık görüntüden kaynaklı kırmızı/yeşil lekeler var (özellikle sol alt ve sağ yan)."},
+   "maske_uyumu": {"durum": "tasiyor", "not": "Maske alt yarıda kumaşın iki yanından dışarı genişliyor: sol altta kumaş ile sol direk arasındaki duvara, sağda kumaş ile sağ direk arasındaki duvar şeridine taşıyor; sağ üstte yeşil kurdele kuyruğunu da içine alıyor."},
+   "zemine_temas": {"durum": "degiyor", "not": "alt.jpg'de etek ahşap zemine değiyor, hafif dalgalı."},
+   "perspektif": {"durum": "onden", "not": "Önden çekim; kumaş tek düzlem."},
+   "baski_alani": {"durum": "acik", "not": "Ön yüz boş; yeşil fiyonk kuyrukları üst yarıda kumaşın yan kenarlarına hafifçe biniyor."}},
+ "oran_gozlemi": "uyumlu",
+ "estetik": {"karar": "kullanilabilir", "gerekce": "Bebek odası sahnesi sade ve düzgün; kumaş temiz."},
+ "yerlestirilebilir": {"karar": "evet", "gerekce": "Sahnedeki kumaş ürüne yakın oranda (yaklaşık ~0,38 gibi), önden ve açık."},
+ "durum": "inceleme_gerekli",
+ "gerekce": "Sahnedeki kumaş uygun görünüyor, ancak maske alt yarıda iki yana duvara taşıyor ve sağ kurdeleyi içeriyor; maske ile görüntü çelişiyor ve bu çelişki maske kenarı çevresinde.",
+ "belirsizlik": "Kenar çevresindeki renk lekeleri yüzünden kumaşın gerçek yan kenarlarının birkaç piksellik konumu belirsiz.",
+ "degerlendirme_siniri": "Yaklaşık görüntü: maske kenarı çevresinde renkler bozuk; taşma kararı kenar ayrıntısına dayandığı için inceleme gerekli."}

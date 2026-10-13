@@ -1,0 +1,14 @@
+{"kod": "g58952a", "goruntu_turu": "yaklasik",
+ "kontroller": {
+   "kumas_siniri": {"durum": "net", "not": "Kumaşın kenarları açık duvar önünde düşük kontrastlı ama seçilebiliyor; üstte çubuk üzerinden dönen bant, altta düz etek görülüyor."},
+   "maske_uyumu": {"durum": "eksik", "not": "Maske yalnız sol direk ile kumaşın sol kenarı arasında, sahnenin orta yüksekliğinde ince dikey bir şerit; kumaşın neredeyse tamamı maske dışında. ust.jpg ve alt.jpg de bu şeridi (duvar/direk kenarı) gösteriyor, kumaşın üst ve alt kenarını değil."},
+   "zemine_temas": {"durum": "belirsiz", "not": "Etek zemin çizgisine çok yakın bitiyor; direk ayaklarının ön hizasına göre kumaşın tam değip değmediğini net seçemiyorum."},
+   "perspektif": {"durum": "onden", "not": "Önden çekim; kumaş tek düzlem."},
+   "baski_alani": {"durum": "kismen_kapali", "not": "Geniş yeşil fiyonk kuyrukları üst yarıda kumaşın iki yan kenarına biniyor, özellikle sağ üstte kumaş yüzeyinin bir kısmını örtüyor."}},
+ "oran_gozlemi": "genis_kisa",
+ "estetik": {"karar": "kullanilabilir", "gerekce": "Bebek odası sahnesi sade ve hoş; kumaş temiz."},
+ "yerlestirilebilir": {"karar": "hayir", "gerekce": "Görünen kumaş ürüne göre belirgin geniş (yaklaşık ~0,5 gibi); tasarım esnetilmeden oturmaz."},
+ "durum": "uygun_degil",
+ "gerekce": "Kumaş iki direk arasında neredeyse kare yarısı kadar geniş bir pano gibi duruyor; görünen oran ürünün 0,375 oranından belirgin geniş. Ayrıca maske kumaşı değil, soldaki ince bir duvar şeridini işaretliyor.",
+ "belirsizlik": "Oran gözle tahmin; etek zemin teması kesin değil.",
+ "degerlendirme_siniri": "Yaklaşık görüntü: kenar çevresinde renk bozulması var, ancak oran farkı ve maskenin yanlış bölgede olması kaba ölçekte görülüyor; karar ince ayrıntıya dayanmıyor."}

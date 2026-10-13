@@ -4,14 +4,32 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-13 05:20 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
+**Son güncelleme:** 2026-10-13 05:45 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
 denemeler / insan değerlendirmesi / kontrollü prompt sürümleri** tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı
 görünüm) — BAŞLAMADI (kullanıcı onayı bekleniyor). Video aşamasına başlanmadı.
 
 
 ---
 
-## 0. Son iş: Codex incelemesi sonrası Görsel Kontrol düzeltmeleri (2026-10-13)
+## 0. Son iş: Görsel Kontrol ilk 8 örneklik değerlendirme (2026-10-13)
+
+Kullanıcı onayıyla (3. yol): kurulu `visual-inspector` bu bulut oturumunda tanınmadığı için, **visual-inspector
+talimatlarıyla çalışan genel amaçlı alt ajan** kullanıldı (temiz bağlam; program kararı/insan etiketi verilmedi).
+Görüş testi geçti. Erişim sınırı: talimatla + cevap anahtarları çalışma süresince diskten kaldırıldı + döküm denetimi
+(tüm okumalar çalışma klasöründe; kabuk/web yok). Yeni üretim, ücretli API çağrısı, ayar/prompt/kabul-ret değişikliği YOK.
+Sonuç ve tablo: `gorsel_kontrol/sonuclar/ilk_deneme_20261013/RAPOR.md` (ham 3 / yaklaşık 5 ayrı).
+
+Öne çıkanlar: 003750 c3'te programın otomatik "kesin hata"sının balonları ölçmesinden kaynaklandığını gördü (kullanıcı
+incelemesine); c13'te maskenin duvar şeridinde olduğunu ve kumaşın ayrıca belirgin geniş olduğunu ayırdı; c1'de maske
+taşmasını gösterdi; program kabulü 224824 s01'de oran şüphesi bildirdi. Sınırdaki oranlarda (~0,41–0,42) kararsız kaldı.
+Doğruluk yüzdesi iddia edilmez. 30 örnek ve ücretli deneme BAŞLATILMADI.
+
+**Sonraki öneri (kullanıcı kararı):** kalıcı ajan bağlantısı (proje klasöründe açılan oturum ya da kullanıcının
+bilgisayarındaki Claude Code); 003750 c3/c13/c1'deki maske hatalarının algılama tarafında incelenmesi.
+
+---
+
+## 0f. Önceki iş: Codex incelemesi sonrası Görsel Kontrol düzeltmeleri (2026-10-13)
 
 Ajan değerlendirmesi ve ücretli çağrı başlatılmadı. **Ajan kurulum durumu:** kullanıcının bilgisayarında kurulu DEĞİL
 (`.claude\agents` yok; tanım `ajanlar_kurulum\visual-inspector.md`, kurulum `ajanlari_kur.bat` + Claude Code'u yeniden

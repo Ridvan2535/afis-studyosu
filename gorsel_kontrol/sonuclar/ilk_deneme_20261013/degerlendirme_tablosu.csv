@@ -1,0 +1,9 @@
+﻿kod,grup,is,ornek,goruntu,program,insan,ajan_estetik,ajan_yerlestirilebilir,ajan_durum,ajan_belirsizlik,cikti_hatasi,celiski,bagimsizlik,benzer_ifade,kullanici_incelemesi
+gb5a86a,ilk_deneme,20261012-224824,s01,ham,kabul/uygun,,kullanilabilir,belirsiz,inceleme_gerekli,Oran farkının kabul edilebilir olup olmadığı; üst bandın dahil edilmesi oranı biraz değiştirir.,,,tamam,,evet
+g0fc94e,ilk_deneme,20261012-224824,s02,ham,kabul/uygun,,kullanilabilir,evet,uygun,Düşük; oran yalnız gözle tahmin.,,,tamam,,
+gc47525,ilk_deneme,20261013-005509,s01,ham,kabul/uygun,,kullanilabilir,evet,uygun,Maskenin üst bandı içerip içermediği küçük bir soru; sahnenin uygunluğunu etkilemiyor.,,,tamam,,
+g515065,ilk_deneme,20261013-003750,c1,yaklasik,ret/inceleme,,kullanilabilir,evet,inceleme_gerekli,Kenar çevresindeki renk lekeleri yüzünden kumaşın gerçek yan kenarlarının birkaç piksellik konumu belirsiz.,,,tamam,,evet
+g58952a,ilk_deneme,20261013-003750,c13,yaklasik,ret/inceleme,,kullanilabilir,hayir,uygun_degil,Oran gözle tahmin; etek zemin teması kesin değil.,,,tamam,,
+gf52da0,ilk_deneme,20261013-003750,c3,yaklasik,ret/kesin_hata,,kullanilabilir,evet,inceleme_gerekli,Eteğin önde ne kadar yere yattığı ve buna bağlı alt kenar konumu tam net değil.,,"Program kesin hata diyor, ajan katılmıyor.",tamam,,evet
+g2e3d51,ilk_deneme,20261013-005509,c6,yaklasik,ret/inceleme,gercekten_hatali,kullanilabilir,hayir,uygun_degil,Oran gözle ve kaba piksel tahminiyle; üst bandın baskıya dahil olup olmadığı oranı biraz etkiler ama bandı çıkarsa bile kumaş belirgin geniş kalıyor gibi görünüyor.,,,tamam,,
+g1cb1c3,ilk_deneme,20261013-005509,c9,yaklasik,ret/inceleme,kullanilabilir,kullanilabilir,belirsiz,inceleme_gerekli,Oran farkı küçük; üst bandın dahil edilip edilmemesi ve yaklaşık görüntüdeki kenar bozulması bu küçük farkı değiştirebilir.,,,tamam,,evet

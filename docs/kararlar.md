@@ -7,6 +7,14 @@ Biçim: **K-numara · tarih · karar** — gerekçe · etki/geri alma.
 
 ---
 
+### 2026-10-13 — Görsel Kontrol ilk değerlendirmesi
+
+**K-48 · 2026-10-13 · İlk 8 örnek, visual-inspector talimatlı genel amaçlı alt ajanla değerlendirildi (kullanıcı onayı).**
+Kurulu proje ajanı bulut oturumunda tanınmadı; sessiz ikame yapılmadı, kullanıcı 3. yolu onayladı. Kayıtlarda yöntem
+"visual-inspector talimatlarıyla çalışan genel amaçlı ajan" olarak geçer. Erişim sınırı talimatla sağlandı (araç
+erişimi kısıtlı değildi); ek önlem: cevap anahtarı çalışma süresince diskten kaldırıldı, döküm denetimi yapıldı.
+Sonuçlar öneridir; hiçbir kabul/ret kaydı, prompt ya da ayar değiştirilmedi.
+
 ### 2026-10-13 — Codex incelemesi: Görsel Kontrol düzeltmeleri
 
 **K-47 · 2026-10-13 · İlk ajan değerlendirmesi 6–8 örnekle sınırlı (`ornek_plani.json → ilk_deneme`, 8 örnek: 3 ham + 5

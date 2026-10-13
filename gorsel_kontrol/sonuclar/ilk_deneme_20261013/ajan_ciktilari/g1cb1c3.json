@@ -1,0 +1,14 @@
+{"kod": "g1cb1c3", "goruntu_turu": "yaklasik",
+ "kontroller": {
+   "kumas_siniri": {"durum": "net", "not": "Kumaş koyu lacivert duvar önünde dört kenarıyla net seçiliyor; sağ kenarın alt yarısında yaklaşık görüntüden kaynaklı yeşil/pembe lekeler var."},
+   "maske_uyumu": {"durum": "uyumlu", "not": "Maske kumaş dikdörtgenini kaplıyor; sol ve sağ kenarda küçük çentikler, sağ üstte fiyonk hizasında düzensizlik ve altta küçük bir oyuk var. Belirgin taşma görmüyorum; etek çizgisine çok yakın bitiyor."},
+   "zemine_temas": {"durum": "degiyor", "not": "alt.jpg'de etek ahşap zemine değiyor, ortada küçük bir kıvrım var; havada değil."},
+   "perspektif": {"durum": "onden", "not": "Önden, dik çekim; kumaş tek düzlem."},
+   "baski_alani": {"durum": "acik", "not": "Ön yüz boş; sağ fiyonkun kuyrukları üst kısımda kumaşın sağ kenarına hafifçe biniyor."}},
+ "oran_gozlemi": "belirsiz",
+ "estetik": {"karar": "kullanilabilir", "gerekce": "Balonlu cinsiyet partisi sahnesi temiz, kumaş düzgün ve önden."},
+ "yerlestirilebilir": {"karar": "belirsiz", "gerekce": "Görünen oran yaklaşık ~0,41 gibi; ürüne (0,375) göre biraz geniş ama belirgin fark diyebileceğim kadar değil."},
+ "durum": "inceleme_gerekli",
+ "gerekce": "Sahne estetik olarak iyi ve etek zemine değiyor, ancak kumaş ürün oranından biraz geniş görünüyor (~0,41) ve bu farkın kabul sınırında olup olmadığını gözle kesinleştiremiyorum.",
+ "belirsizlik": "Oran farkı küçük; üst bandın dahil edilip edilmemesi ve yaklaşık görüntüdeki kenar bozulması bu küçük farkı değiştirebilir.",
+ "degerlendirme_siniri": "Yaklaşık görüntü: sağ kenardaki renk izleri kenar konumunu birkaç piksel belirsizleştiriyor; sınırda bir oran kararında bu etkili olabilir."}

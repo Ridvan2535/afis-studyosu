@@ -1,0 +1,14 @@
+{"kod": "gc47525", "goruntu_turu": "ham",
+ "kontroller": {
+   "kumas_siniri": {"durum": "net", "not": "Kumaşın dört kenarı net; üstte çubuğa sarılı daha koyu bant, altta taş zemine değen etek."},
+   "maske_uyumu": {"durum": "uyumlu", "not": "Maske kumaşın gövdesiyle örtüşüyor, etek dalgası dahil. Maskenin üst kenarı çubuk üzerinden dönen bandın alt çizgisine yakın görünüyor; bandı tam kapsayıp kapsamadığını ölçekten kesin seçemiyorum."},
+   "zemine_temas": {"durum": "degiyor", "not": "alt.jpg'de etek taş zemine değiyor, hafif dalgalı."},
+   "perspektif": {"durum": "onden", "not": "Önden çekim; kumaş tek düzlem."},
+   "baski_alani": {"durum": "acik", "not": "Ön yüz boş; pembe kurdeleler direklerin yanında, kumaşın dışında."}},
+ "oran_gozlemi": "uyumlu",
+ "estetik": {"karar": "kullanilabilir", "gerekce": "Gün batımı avlu parti sahnesi düzgün; kumaş temiz ve önden."},
+ "yerlestirilebilir": {"karar": "evet", "gerekce": "Görünen oran ürüne yakın (yaklaşık ~0,37 gibi); kumaş tek düzlem, baskı alanı açık."},
+ "durum": "uygun",
+ "gerekce": "Kumaş önden, ürün oranına yakın, etek zemine değiyor ve maske kumaş gövdesiyle örtüşüyor.",
+ "belirsizlik": "Maskenin üst bandı içerip içermediği küçük bir soru; sahnenin uygunluğunu etkilemiyor.",
+ "degerlendirme_siniri": "Ham görüntü; kesin ölçü çıkarılamaz."}

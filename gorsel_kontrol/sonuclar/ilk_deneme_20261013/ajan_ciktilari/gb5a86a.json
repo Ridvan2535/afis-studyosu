@@ -1,0 +1,14 @@
+{"kod": "gb5a86a", "goruntu_turu": "ham",
+ "kontroller": {
+   "kumas_siniri": {"durum": "net", "not": "Gri duvar önünde kumaşın dört kenarı net; üstte çubuk üzerinden dönen bant, altta düz etek."},
+   "maske_uyumu": {"durum": "uyumlu", "not": "Maske kumaşla büyük ölçüde örtüşüyor; sol üst köşede fiyonk hizasında çentik ve sol kenarda küçük girintiler var, belirgin taşma yok."},
+   "zemine_temas": {"durum": "degiyor", "not": "alt.jpg'de etek beton zemine değiyor; ortada küçük bir kıvrım var."},
+   "perspektif": {"durum": "onden", "not": "Önden, dik çekim; kumaş tek düzlem."},
+   "baski_alani": {"durum": "acik", "not": "Ön yüz boş; pembe kurdele kuyrukları üst kısımda kumaşın yan kenarlarına hafifçe değiyor."}},
+ "oran_gozlemi": "belirsiz",
+ "estetik": {"karar": "kullanilabilir", "gerekce": "Sade stüdyo sahnesi, temiz ve önden."},
+ "yerlestirilebilir": {"karar": "belirsiz", "gerekce": "Görünen oran yaklaşık ~0,42 gibi; ürüne (0,375) göre biraz geniş, belirgin mi değil mi gözle kesinleştiremiyorum."},
+ "durum": "inceleme_gerekli",
+ "gerekce": "Sahne estetik olarak temiz, etek zemine değiyor ve maske örtüşüyor; ancak kumaş ürün oranından biraz geniş görünüyor (~0,42) ve bu fark sınırda.",
+ "belirsizlik": "Oran farkının kabul edilebilir olup olmadığı; üst bandın dahil edilmesi oranı biraz değiştirir.",
+ "degerlendirme_siniri": "Ham görüntü; fotoğraftan kesin ölçü çıkarılamaz, oran yalnız göreli."}
