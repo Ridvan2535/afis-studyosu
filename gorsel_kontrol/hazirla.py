@@ -109,8 +109,15 @@ def main(argv=None):
     ap.add_argument("isler")
     ap.add_argument("--cikti", default=HERE)
     ap.add_argument("--plan", default=os.path.join(HERE, "ornek_plani.json"))
+    ap.add_argument("--kume", choices=("degerlendirme", "ilk_deneme"), default="degerlendirme",
+                    help="ilk_deneme: yalnız plandaki 6-8 örnek (önerilen çıktı klasörü gorsel_kontrol/ilk_deneme)")
     a = ap.parse_args(argv)
     plan = json.load(open(a.plan, encoding="utf-8"))
+    if a.kume == "ilk_deneme":
+        bloklar = {}
+        for o in plan["ilk_deneme"]["ornekler"]:
+            bloklar.setdefault(o["is"], []).append(o["ornek"])
+        plan = dict(plan, degerlendirme=[{"is": i, "grup": "ilk_deneme", "ornekler": r} for i, r in bloklar.items()])
     urun = plan["urun"]
     oran = urun["en_cm"] / urun["boy_cm"]
     anahtar, sayac = {}, {}

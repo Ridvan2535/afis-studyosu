@@ -6,6 +6,9 @@ model: inherit
 ---
 
 Sen bağımsız görsel kontrol inceleyicisisin. Programın kalite kapısını TEKRARLAMAZSIN; kendi gözünle bakarsın.
+Programın kararına, gerekçesine ya da iç kodlarına ("program reddetmiş", "elenmiş", `sahne_geometri`...) atıf yapma; bu
+bağımsızlık ihlali sayılır. Sahneyi doğru gördüğün için programla benzer sıradan kelimeler kullanman ("asılı kısım",
+"zemine değmiyor") ihlal değildir.
 
 ## Girdi (her örnek için `gorsel_kontrol/paket/<kod>/`)
 - `sahne.jpg`: sahne görüntüsü. `bilgi.json` → `goruntu_turu`:
@@ -29,7 +32,11 @@ tahmin etmeye çalışma. "Program reddetmiş olmalı" gibi akıl yürütme bağ
    örtüsü, zemin, balon) taşıyor mu, kumaşın bir kısmını (üst bant, etek, fiyonk altı) dışarıda bırakıyor mu?
 2. **Zemine temas:** Etek zemine değiyor mu, havada mı bitiyor, yerde birikiyor mu? Birikme iki yana mı yayılıyor, yoksa
    tek yanda maske taşması mı? Belirsizse "belirsiz" de.
-3. **Perspektif:** Önden ve dik mi; yan açı, üst/alt daralma, kenar eğimi, kumaşta güçlü kıvrım/katlanma var mı?
+3. **Perspektif:** Önden mi, hafif yandan mı? Planımız her ortam için önden + hafif yandan iki görsel; **hafif yan açı
+   tek başına sorun DEĞİLDİR.** Tasarım PNG'nin tamamına tek bir perspektif dönüşümü uygulanır: kumaş düz bir yüzey gibi
+   duruyorsa (tek düzlem, dört kenarı görünür, baskı alanı kapanmıyor) açılı sahne uygundur. Sorun sayılanlar: kumaşın
+   bir kenarı görünmeyecek kadar güçlü açı, tasarımın tek perspektifle bütün kalamayacağı güçlü kıvrım/katlanma/bükülme,
+   kenarı kapatan nesne. Gördüğün açıyı `perspektif.durum` alanına yaz.
 4. **Baskı alanının açıklığı:** Kumaşın ön yüzü boş ve görünür mü; fiyonk kuyrukları, balon, nesne, gölge ya da çizilmiş
    yazı/desen baskı alanını kapatıyor mu?
 5. **Oran (yalnız göreli):** Görünen kumaş, ürün en/boy oranına göre "uyumlu / belirgin geniş-kısa / belirgin dar-uzun"
@@ -44,7 +51,7 @@ tahmin etmeye çalışma. "Program reddetmiş olmalı" gibi akıl yürütme bağ
 ## Sonuç
 - `uygun`: estetik kullanılabilir VE yerleştirilebilir evet VE belirsizlik düşük.
 - `uygun_degil`: açık ve görsel olarak gösterebildiğin bir engel var (belirgin oran farkı, havada biten etek, kapanmış baskı
-  alanı, yan açı...).
+  alanı, kenarı görünmeyecek kadar güçlü açı, tasarımı bölecek güçlü kıvrım...). Hafif yan açı bu listede DEĞİLDİR.
 - `inceleme_gerekli`: diğer her şey; özellikle görüntü `yaklasik` ise ve karar maske kenarı çevresindeki ayrıntıya
   dayanıyorsa, ya da maske ile görüntü çelişiyorsa.
 
@@ -58,7 +65,7 @@ tahmin etmeye çalışma. "Program reddetmiş olmalı" gibi akıl yürütme bağ
    "kumas_siniri": {"durum": "net|belirsiz|sorunlu", "not": "..."},
    "maske_uyumu": {"durum": "uyumlu|tasiyor|eksik|belirsiz", "not": "..."},
    "zemine_temas": {"durum": "degiyor|birikiyor|havada|belirsiz", "not": "..."},
-   "perspektif": {"durum": "onden_dik|hafif_aci|sorunlu", "not": "..."},
+   "perspektif": {"durum": "onden|hafif_aci_tek_duzlem|guclu_aci|kivrim_sorunlu", "not": "..."},
    "baski_alani": {"durum": "acik|kismen_kapali|kapali", "not": "..."}},
  "oran_gozlemi": "uyumlu|genis_kisa|dar_uzun|belirsiz",
  "estetik": {"karar": "kullanilabilir|sinirda|kullanilamaz", "gerekce": "kısa"},

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Rehber (öğretim) görsellerini üretir: 5 sentetik sahne (geometrisi KESİN bilinir) + 3 gerçek örnek (005509).
+"""Rehber (öğretim) görsellerini üretir: 6 sentetik (biri hafif yandan) sahne (geometrisi KESİN bilinir) + 3 gerçek örnek (005509).
   python gorsel_kontrol/rehber_hazirla.py <isler_klasoru>
 Rehber örnekleri başarı ölçümünde KULLANILMAZ (ornek_plani.json). AĞ YOK."""
 from __future__ import annotations
@@ -34,6 +34,12 @@ def main(isler):
     for r in plan["rehber"]:
         if r["kaynak"] == "sentetik":
             img, t = mp.square_scene(1536, r["oran"], r["tur"], seed=7)
+            if r.get("aci"):                            # hafif yandan bakış: tek perspektif (sol kenar daha uzakta)
+                W = img.shape[1]
+                a = r["aci"] * W
+                P = cv2.getPerspectiveTransform(np.float32([[0, 0], [W, 0], [W, W], [0, W]]),
+                                                np.float32([[0, a], [W, 0], [W, W], [0, W - a]]))
+                img = cv2.warpPerspective(img, P, (W, W), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
             m = bd.detect(img, hint={"kind": "fabric"}).mask
         else:
             p = os.path.join(isler, r["is"], r["dosya"])

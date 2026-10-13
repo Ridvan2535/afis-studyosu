@@ -7,7 +7,9 @@ Görsel Kontrol değerlendirme düzeni — YEREL test (model çağrısı YOK, a�
   3. Rehber ve değerlendirme örnekleri ÇAKIŞMAZ (aynı örnek hem öğretim hem başarı kanıtı olamaz).
   4. Karşılaştırma: program/insan ile çelişen, "inceleme gerekli" diyen ve kural dışı (santimetre iddiası, eksik alan)
      çıktılar kullanıcı incelemesine ayrılır; tablo doğruluk yüzdesi iddia etmez.
-  4b. Programın ret gerekçesini tekrar eden ya da programın kararına atıf yapan çıktı 'bağımsız değil' işaretlenir.
+  4b. Programın kararına/iç terimlerine AÇIK ATIF bağımsızlık ihlalidir; program gerekçesiyle doğal ifade benzerliği
+      ("asılı kısım") yalnız inceleme işaretidir. Ham ve yaklaşık örnekler ayrı raporlanır.
+  4c. İlk küçük deneme: 6-8 örnek, rehberle çakışmaz, ham örnekler önce.
   5. Ajan tanımı salt okunur ve yetkisiz (yazma/kabuk aracı yok; gizli klasör okuma yasağı yazılı).
 Çalıştır: python tests/test_gorsel_kontrol.py
 """
@@ -99,20 +101,39 @@ assert not r["s01"]["celiski"] and r["s01"]["kullanici_incelemesi"] == ""
 md = open(os.path.join(cikti, "kullanici_incelemesi.md"), encoding="utf-8").read()
 assert "doğruluk değil" in md and "%" not in md.split("Grup özeti")[1].split("\n")[0]
 
-# 4b: programın gerekçesini tekrar eden çıktı bağımsız inceleme sayılmaz
+# 4b: bağımsızlık — AÇIK ATIF ihlaldir; doğal ifade benzerliği yalnız inceleme işaretidir
 neden_c1 = anahtar[k["c1"]]["program"]["neden"]
-cikti_yaz(k["c1"], "uygun_degil", "kullanilabilir", "hayir", ek=" " + neden_c1)
-satir, inc, ozet = karsilastir.main(["--klasor", cikti])
-r = {x["ornek"]: x for x in satir}
-assert "tekrar" in r["c1"]["bagimsizlik"] and r["c1"]["kullanici_incelemesi"] == "evet", r["c1"]
-cikti_yaz(k["c1"], "uygun_degil", "kullanilabilir", "hayir", ek=" program reddetmiş olmalı")
+cikti_yaz(k["c1"], "uygun_degil", "kullanilabilir", "hayir", ek=" " + neden_c1)          # program cümlesiyle aynı kelimeler
 r = {x["ornek"]: x for x in karsilastir.main(["--klasor", cikti])[0]}
-assert "atıf" in r["c1"]["bagimsizlik"], r["c1"]
+assert r["c1"]["bagimsizlik"] == "tamam", r["c1"]                                     # tek başına ihlal DEĞİL
+assert "benzer ifade" in r["c1"]["benzer_ifade"] and r["c1"]["kullanici_incelemesi"] == "evet", r["c1"]
+cikti_yaz(k["c1"], "uygun_degil", "kullanilabilir", "hayir", ek=" asılı kısım zemine değmiyor, kumaş havada bitiyor")
+r = {x["ornek"]: x for x in karsilastir.main(["--klasor", cikti])[0]}
+assert r["c1"]["bagimsizlik"] == "tamam", r["c1"]                                     # sıradan ifade ihlal değil
+for atif in (" program bunu reddetmiş olmalı", " sahne elenmiş", " sahne_geometri hatası", " programın kararı doğru"):
+    cikti_yaz(k["c1"], "uygun_degil", "kullanilabilir", "hayir", ek=atif)
+    r = {x["ornek"]: x for x in karsilastir.main(["--klasor", cikti])[0]}
+    assert r["c1"]["bagimsizlik"].startswith("İHLAL"), (atif, r["c1"])
 assert r["s01"]["bagimsizlik"] == "tamam"
+md = open(os.path.join(cikti, "kullanici_incelemesi.md"), encoding="utf-8").read()
+assert "# Ham görüntülü örnekler" in md and "# Yaklaşık görüntülü örnekler" in md                # ayrı raporlanır
+assert md.index("# Ham görüntülü") < md.index("# Yaklaşık görüntülü")
+
+# 4c: ilk küçük deneme listesi
+ilk = gp["ilk_deneme"]["ornekler"]
+assert 6 <= len(ilk) <= 8, len(ilk)
+ilk_k = {(o["is"], o["ornek"]) for o in ilk}
+assert not (ilk_k & reh) and ilk_k <= deg, (ilk_k & reh, ilk_k - deg)
+assert all(o["secim_nedeni"] for o in ilk)
+ham_ilk = [o for o in ilk if o["ornek"].startswith("s")]                         # kabul edilen sahneler ham kaydedilir
+assert len(ham_ilk) >= 3 and ilk[:len(ham_ilk)] == ham_ilk, "ham örnekler önce gelmeli"
+print(f"ilk deneme: {len(ilk)} örnek ({len(ham_ilk)} ham)")
 
 # 5: ajan tanımı
 ad = open(os.path.join(ROOT, ".claude", "agents", "visual-inspector.md"), encoding="utf-8").read()
 tools = [t.strip() for t in ad.split("tools:")[1].split("\n")[0].split(",")]
 assert set(tools) <= {"Read", "Glob"}, tools
 assert "cevaplar_GIZLI" in ad and "Santimetre YAZMA" in ad and "reddetmez" in ad
+assert "hafif yan açı" in ad.lower() and "tek başına sorun DEĞİLDİR" in ad, "hafif yan açı ret nedeni olmamalı"
+assert ad == open(os.path.join(ROOT, "ajanlar_kurulum", "visual-inspector.md"), encoding="utf-8").read(), "kurulum kopyası güncel değil"
 print("test_gorsel_kontrol: TAMAM")

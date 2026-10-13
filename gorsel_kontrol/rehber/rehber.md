@@ -13,8 +13,10 @@ Açıklamalar gözle incelemeye dayanır; **sentetik örneklerin geometrisi kesi
 | `sentetik_havada` | Etek zeminin belirgin üstünde bitiyor; kumaş zemine değmiyor. | yerleştirilebilir: hayır · **uygun değil** (havada bitiyor) |
 | `sentetik_genis` | Aynı stand, kumaş oranı 0,46 (ürüne göre belirgin geniş/kısa). Estetik olarak düzgün görünür. | estetik: kullanılabilir · yerleştirilebilir: **hayır** (oran) · **uygun değil** |
 | `sentetik_uzun` | Kumaş ürüne göre dar/uzun. | yerleştirilebilir: hayır · **uygun değil** |
+| `sentetik_hafif_aci` | Aynı doğru oranlı kumaş, hafif yandan (sol kenar daha uzakta). Kumaş tek düz yüzey, dört kenarı görünüyor. Planda her ortam için önden + hafif yandan görsel var; tasarım tek perspektif dönüşümüyle bütün kalır. | perspektif: hafif açı (tek düzlem) · yerleştirilebilir: evet · **uygun**. Hafif yan açı ret nedeni DEĞİLDİR. |
 
 Ders: **estetik** ile **yerleştirilebilir** ayrı sorulardır; düzgün görünen bir sahnenin oranı tutmayabilir.
+Hafif yan açı tek başına sorun değildir; sorun, kumaşın tek düzlem gibi durmaması ya da kenarın görünmemesidir.
 
 ## Gerçek (iş 20261013-005509; görüntü türü belirtilmiş)
 | Örnek | Görüntü | Gözle inceleme | Beklenen değerlendirme |

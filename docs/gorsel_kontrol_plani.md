@@ -1,6 +1,14 @@
 # Görsel Kontrol ajanı (`visual-inspector`): değerlendirme düzeni
 
-Tarih: 2026-10-13. Durum: **hazır, çalıştırılmadı.** Ücretli üretim yapılmadı; ajan henüz hiçbir örnekte çalıştırılmadı.
+Tarih: 2026-10-13 (Codex incelemesi sonrası güncellendi). Durum: **hazır, çalıştırılmadı.** Ücretli üretim yapılmadı;
+ajan henüz hiçbir örnekte çalıştırılmadı.
+
+**Kurulum durumu (açıkça):**
+- Senin bilgisayarında: **kurulu DEĞİL.** `.claude\agents\` klasörü yok; tanım yalnız `ajanlar_kurulum\visual-inspector.md`
+  olarak duruyor. Kurmak için `ajanlar_kurulum\ajanlari_kur.bat` çalıştırılır ve Claude Code yeniden açılır.
+- Bu bulut oturumunun kod kopyasında: `.claude/agents/visual-inspector.md` dosyası var ama oturum açıldıktan sonra
+  eklendiği için bu oturumda çağrılabilir ajan olarak **yüklü değil** (yeni oturumda tanınır).
+- İlk çalıştırma yapılırsa bu iki yoldan biriyle olur; ikisi de senin onayını bekliyor.
 
 ## 1. Ajanın görevi ve sınırları
 - Tanım: `.claude/agents/visual-inspector.md` (kurulum kopyası `ajanlar_kurulum/visual-inspector.md`). Araçlar yalnız
@@ -9,6 +17,11 @@ Tarih: 2026-10-13. Durum: **hazır, çalıştırılmadı.** Ücretli üretim yap
   `ust.jpg` / `alt.jpg` (çubuk bandı ve etek/zemin yakın kesitleri), `bilgi.json` (ürün ölçüsü ve en/boy oranı,
   görüntü türü, değerlendirme sınırı). Programın kararı ve ret gerekçesi pakette YOKTUR.
 - Kontroller: kumaş sınırı, maske uyumu, zemine temas, perspektif, baskı alanının açıklığı, göreli oran gözlemi.
+- **Hafif yan açı tek başına uygunsuzluk nedeni değildir** (plan: 3 ortam × önden + hafif yandan). Kumaş tek düz yüzey
+  gibi duruyor, dört kenarı görünüyor ve baskı alanı kapanmıyorsa tasarım tek perspektif dönüşümüyle bütün kalır →
+  açılı sahne uygun olabilir. Sorun sayılan: kenarı görünmeyecek kadar güçlü açı, tasarımı bölecek güçlü kıvrım.
+  Not: programın bugünkü kalite kapısı (`strict_layout`) yan açılı afişi hâlâ reddeder; bu Aşama 2B'deki açılı kontrol
+  profiliyle ele alınacak. O zamana kadar açılı bir sahnede program ret / ajan uygun derse örnek kullanıcı incelemesine düşer.
   **Santimetre yazmaz** (çıktıda "cm" geçerse çıktı kural dışı sayılır).
 - İki ayrı karar: **estetik** (kullanılabilir / sınırda / kullanılamaz) ve **yerleştirilebilir** (tasarım oranı
   korunarak, kırpmadan/esnetmeden/baskılı kısmı gizlemeden: evet / belirsiz / hayır).
@@ -18,15 +31,15 @@ Tarih: 2026-10-13. Durum: **hazır, çalıştırılmadı.** Ücretli üretim yap
 ## 2. Örnek planı (`gorsel_kontrol/ornek_plani.json`)
 | Bölüm | Örnekler | Kullanım |
 |---|---|---|
-| **Rehber (öğretim)** — 8 | 5 sentetik (geometrisi kesin bilinen: dokunan, birikmeli, havada, geniş 0,46, dar/uzun) + 3 gerçek (005509: #13 geniş, #4 maske taşması, s02 kabul) | Açıklamalı; ajan okur. **Başarı ölçümünde kullanılmaz.** |
+| **Rehber (öğretim)** — 9 | 6 sentetik (geometrisi kesin bilinen: dokunan, birikmeli, havada, geniş 0,46, dar/uzun, hafif yan açı) + 3 gerçek (005509: #13 geniş, #4 maske taşması, s02 kabul) | Açıklamalı; ajan okur. **Başarı ölçümünde kullanılmaz.** |
 | **Değerlendirme (kör)** — 30 | 005509'dan kalan 11 (c1,2,3,5,6,8,9,10,12,14, s01) · 224824'ten 6 · 003750 baby-shower'dan 13 | Ajan cevapları görmez; cevap anahtarı `cevaplar_GIZLI/anahtar.json` (git'e girmez). |
 | **Hariç** — 3 | 003750 c9 (algılama katmanı tüm kadrajı kaplıyor; sahne kurtarılamıyor), 165800 s01/s02 (ürün ölçüsü kayıtlı değil) | Gerekçesiyle dışarıda. |
 
 Rehber ile değerlendirme kümeleri çakışmaz (testle denetlenir: `tests/test_gorsel_kontrol.py`).
 
 **Değerlendirmenin sınırları (açıkça):**
-- 30 örneğin **26'sı yaklaşık görüntü** (eski kaydın yeşil/kırmızı algılama katmanından hesaplandı; ham DEĞİL),
-  1'i katmansız ama JPEG kayıplı, yalnız **3'ü ham**. Yaklaşık görüntüde maske kenarı çevresindeki renk ve ince
+- 30 örneğin **27'si yaklaşık görüntü** (eski kaydın yeşil/kırmızı algılama katmanından hesaplandı; ham DEĞİL),
+  yalnız **3'ü ham**. Yaklaşık görüntüde maske kenarı çevresindeki renk ve ince
   ayrıntı güvenilmez; ajan bu örneklerde kenara dayanan kararları "İnceleme gerekli"ye bırakmalı.
 - Yaklaşık görüntülerde maske, katmandan çıkarılan **o üretimdeki** program maskesidir; birkaç örnekte (ör. 003750
   c3, c7, c11) maske küçük/parçalı çıkıyor — o üretimde program afişi bulamamış olabilir ya da çıkarım kısmi kalmış
@@ -44,12 +57,37 @@ ajan yerleştirilebilir · ajan durum · ajan belirsizlik · çıktı hatası ·
 Kullanıcı incelemesine ayrılanlar (`kullanici_incelemesi.md`):
 - Ajan ile program anlaşmıyor (program reddetti / ajan uygun; program kabul etti / ajan uygun değil; program kesin hata /
   ajan katılmıyor), ajan ile insan etiketi çelişiyor, ajan "İnceleme gerekli" diyor.
-- **Bağımsız değil:** ajan programın ret gerekçesini kelimesi kelimesine tekrar ediyorsa ya da programın kararına/iç
-  terimlerine atıf yapıyorsa ("program reddetmiş olmalı", `sahne_geometri` ...). Bu çıktılar bağımsız inceleme sayılmaz.
+- **Bağımsızlık ihlali (yalnız AÇIK ATIF):** ajan programın kararına, gerekçesine ya da iç kodlarına doğrudan gönderme
+  yapıyorsa ("program bunu reddetmiş olmalı", "sahne elenmiş", "programın kararı", `sahne_geometri`...). Ajan bunları
+  bilemez; bu çıktı bağımsız inceleme sayılmaz.
+- **Benzer ifade (ihlal DEĞİL, yalnız inceleme işareti):** ajanın metni program gerekçesiyle 4 kelimelik ortak ifade
+  içeriyorsa. Sahneyi doğru gören biri doğal olarak benzer kelimeler kullanır ("asılı kısım", "zemine değmiyor");
+  bu tek başına bağımsız olmadığını kanıtlamaz.
+- Ham ve yaklaşık görüntülü örnekler tabloda ve `kullanici_incelemesi.md`'de **ayrı bölümlerde** raporlanır.
 - Kural dışı çıktı: eksik alan, geçersiz karar, santimetre iddiası, görüntü türünü yanlış bildirme.
 Ajanın hiçbir sonucu otomatik ret, yeni üretim ya da prompt değişikliği tetiklemez.
 
-## 4. Çalıştırma ve maliyet (ÇALIŞTIRILMADI)
+## 4a. İlk küçük deneme (önerilen ilk çalıştırma; ÇALIŞTIRILMADI)
+Amaç doğruluk yüzdesi değil: ajanın belirgin sorunları ve belirsizliği yararlı biçimde ayırıp ayıramadığını görmek.
+Rehberle çakışmaz; ham örnekler önce, yaklaşık örnekler ayrı raporlanır. Liste: `ornek_plani.json → ilk_deneme`.
+
+| # | İş | Örnek | Görüntü | Neden seçildi |
+|---|---|---|---|---|
+| 1 | 224824 | s01 | ham | program kabul etti (farklı iş) |
+| 2 | 224824 | s02 | ham | program kabul etti (farklı iş) |
+| 3 | 005509 | s01 | ham | program kabul etti ama ölçümü kararsız (A-01) |
+| 4 | 003750 | c13 | yaklaşık | program kumaşı bulamadı ("bölge çok küçük"): sahne mi sorunlu, algılama mı? |
+| 5 | 003750 | c3 | yaklaşık | program otomatik kesin hata ("çok dar ya da yan açılı"): açı kuralı |
+| 6 | 003750 | c1 | yaklaşık | program "boş görünmüyor" dedi: baskı alanının açıklığı |
+| 7 | 005509 | c6 | yaklaşık | kullanıcı "fazla geniş"; program inceleme gerekli |
+| 8 | 005509 | c9 | yaklaşık | kullanıcı "kullanılabilir"; program oran farkıyla reddetti |
+
+Yalnız 3 ham örnek var (eski işlerde elenenlerin ham görüntüsü kaydedilmemişti); yaklaşık örnekler ayrı yorumlanır.
+Hazırlama: `python gorsel_kontrol/hazirla.py <isler> --kume ilk_deneme --cikti gorsel_kontrol/ilk_deneme`.
+Tahmini kullanım: 1 ajan çalıştırması, ≈ 60.000 girdi (rehber dahil) + ≈ 4.000 çıktı jetonu; Claude Code alt ajanı olarak
+ayrı ücret yok (plan kullanımı). API ile yapılsaydı kabaca Sonnet 5.5 ≈ 0,16 $, Opus 5.5 ≈ 0,32 $.
+
+## 4. Çalıştırma ve maliyet — 30 örnek (ERTELENDİ; ilk denemeden sonra)
 ```
 python gorsel_kontrol/rehber_hazirla.py <isler_klasoru>      # rehber görselleri (sentetik + 3 gerçek)
 python gorsel_kontrol/hazirla.py <isler_klasoru>             # kör paket + gizli anahtar
@@ -91,6 +129,12 @@ temas gölgesi. Görsel: `gorsel_kontrol/kilavuz_v1_v2.jpg`.
 - Etkin değil; hiçbir kategoride seçili değil. Seçilirse çağrı kaydına `prompt_surumu=3B-aday`, `ayar_ozeti.kilavuz_surumu=2`
   yazılır; karşılaştırma yalnız aynı kılavuz sürümü/ölçü/referans/ayar koşullarında yapılır (K-32).
 
-**Önerilen (ileride, ücretli, kullanıcı onayıyla) karşılaştırma:** aynı kategori, model, referans ve ayarlarla 2A ve
-3B-aday için en az 12'şer çağrı (K-28/K-34 ölçütleri). Başarı: program kabul oranı + Görsel Kontrol ajanının
-"yerleştirilebilir" kararı + kullanıcı beğenisi birlikte; tek başarı yetmez.
+**İki deney türü (K-44)** — prompt dışındaki koşullar (kategori, model, ölçü, sahne görevi, referans kümesi, üretim
+ayarları) her ikisinde de aynı olmalı:
+- **Yalnız prompt:** kılavuz aynı. Ör. 2A + kılavuz 1 ↔ 3A-aday + kılavuz 1. Fark prompta bağlanabilir.
+- **Prompt + kılavuz paketi:** iki bileşen birlikte değişir ve ikisi de kayıtlıdır (`prompt_surumu`, `kilavuz_surumu`).
+  Ör. 2A + kılavuz 1 ↔ 3B-aday + kılavuz 2. Kılavuz farkı bu karşılaştırmayı geçersiz KILMAZ (önceki sürümde
+  `ayar_ozeti` içindeki kılavuz sürümü farkı yüzünden "karşılaştırılamaz" çıkıyordu; düzeltildi). Sonuç paketin
+  etkisidir; **promptun tek başına etkisi bu deneyden çıkarılamaz**. Öneri metni bunu açıkça yazar.
+Ücretli deneme (ileride, kullanıcı onayıyla): her kol için en az 12 çağrı (K-28/K-34). Başarı: program kabul oranı +
+Görsel Kontrol ajanının "yerleştirilebilir" kararı + kullanıcı beğenisi birlikte; tek başarı yetmez.

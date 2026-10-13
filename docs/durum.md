@@ -4,14 +4,40 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-13 04:40 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
+**Son güncelleme:** 2026-10-13 05:20 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
 denemeler / insan değerlendirmesi / kontrollü prompt sürümleri** tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı
 görünüm) — BAŞLAMADI (kullanıcı onayı bekleniyor). Video aşamasına başlanmadı.
 
 
 ---
 
-## 0. Son iş: Görsel Kontrol ajanı değerlendirme düzeni + oran önerisi (2026-10-13)
+## 0. Son iş: Codex incelemesi sonrası Görsel Kontrol düzeltmeleri (2026-10-13)
+
+Ajan değerlendirmesi ve ücretli çağrı başlatılmadı. **Ajan kurulum durumu:** kullanıcının bilgisayarında kurulu DEĞİL
+(`.claude\agents` yok; tanım `ajanlar_kurulum\visual-inspector.md`, kurulum `ajanlari_kur.bat` + Claude Code'u yeniden
+açmak). Bulut kopyasında dosya var ama bu oturumda yüklü değil.
+
+**Yapılanlar:**
+1. Bağımsızlık (K-45): `gorsel_kontrol/karsilastir.py` — açık atıf = ihlal; doğal ifade benzerliği = yalnız inceleme işareti.
+   Tablo ve inceleme listesi ham / yaklaşık örnekleri ayrı bölümlerde raporlar.
+2. Açı (K-46): ajan tanımında hafif yan açı ret nedeni değil; rehbere `sentetik_hafif_aci` eklendi.
+3. Deney türleri (K-44): `deneme_kayit.py` — kılavuz sürümü ayrı bileşen; `deney_turu` (yalnız prompt / prompt + kılavuz
+   paketi / yalnız kılavuz) ve `degisen_bilesenler`; arayüz karşılaştırma tablosunda kılavuz sütunu ve deney türü.
+4. İlk küçük deneme (K-47): 8 örnek (3 ham + 5 yaklaşık), `hazirla.py --kume ilk_deneme`.
+5. `geri_cevir.py`: küçük algılama katmanları da tanınır (003750 c13'teki çizgi izi temizlendi; artık "yaklaşık").
+
+**Testler (Linux; Windows'ta ÇALIŞTIRILMADI), hepsi TAMAM:** test_gorsel_kontrol (açık atıf / benzer ifade ayrımı, ham-yaklaşık
+ayrı rapor, ilk deneme listesi, hafif açı kuralı, kurulum kopyası eşit), test_durma_ve_karsilastirma (B6: yalnız prompt /
+paket deneyi, kılavuz farkı geçersiz kılmaz, eksik kılavuz sürümü), test_deneme_kayit, test_elenen_arayuz,
+test_kontrol_ornekleri, test_tam_kumas, test_kare_kadraj, test_duzlem_yerlesim, test_sureklilik, test_yeniden_birlestir,
+test_e2e_mock, test_selector, test_product, test_unicode_path, test_refstore, test_magnific_fix, test_topview;
+kontrol.py "HER ŞEY TAMAM". Ajan/model çağrısı ve gerçek sağlayıcı testi yok.
+
+**Kullanıcıdan beklenen:** ajanın kurulması ve 8 örneklik ilk denemeye onay (ayrı ücret yok; Claude planından).
+
+---
+
+## 0e. Önceki iş: Görsel Kontrol ajanı değerlendirme düzeni + oran önerisi (2026-10-13)
 
 Kullanıcı kararı: oran üretimde (prompt + kılavuz) kurulacak; otomatik kırpma/esnetme/gizleme yok; "Şüpheli ölçümde dur"
 açık (K-40). Ücretli üretim yok; **ajan çalıştırılmadı** (çağrı sayısı ve tahmini maliyet `docs/gorsel_kontrol_plani.md` §4).

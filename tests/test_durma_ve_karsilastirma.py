@@ -12,6 +12,8 @@ B. Karşılaştırma (K-28, K-32):
    1. Referans kümesi / ölçü / ayar farklıysa "karşılaştırılamaz". 2. Anahtar alanı eksik eski kayıt "karşılaştırılamaz".
    3. Etkin sürümde tek başarısız deneme varken aday ÖNERİLMEZ. 4. Beğeni verisi yoksa sıfır beğeni sayılmaz (yetersiz veri).
    5. Yeterli ve eşleşen veride aday önerilir ya da etkin kalır; öneri ayarı DEĞİŞTİRMEZ.
+   6. Deney türleri (K-44): yalnız prompt (kılavuz aynı) ile prompt + kılavuz paketi ayrılır; kılavuz farkı paket
+      karşılaştırmasını geçersiz kılmaz, değişen iki bileşen kayıtlı, paketten promptun tek etkisi iddia edilmez.
 Çalıştır: python tests/test_durma_ve_karsilastirma.py
 """
 import json
@@ -140,12 +142,12 @@ J = os.path.join(tmp, "karsilastirma")
 AYAR = {"kadraj": "1:1", "kilavuz": True, "insanli": True, "kurdele": True, "kati_yerlesim": True, "uzun_kenar": 2400}
 
 
-def is_yaz(ad, surum, sonuclar, begeni=(), **fark):
+def is_yaz(ad, surum, sonuclar, begeni=(), kil=1, **fark):
     jp = os.path.join(J, ad); os.makedirs(jp, exist_ok=True)
     den = []
     for i, s in enumerate(sonuclar):
         d = {"cagri": i + 1, "uretim_no": 1, "prompt_surumu": surum, "model": "seedream-v5-pro-edit", "olcu_id": "75x200",
-             "sahne_gorevi": "onden_kare", "referans_kumesi": "r1", "ayar_ozeti": dict(AYAR), "sure_sn": 120,
+             "sahne_gorevi": "onden_kare", "referans_kumesi": "r1", "ayar_ozeti": dict(AYAR, kilavuz_surumu=kil), "sure_sn": 120,
              "sonuc": "kabul" if s == "k" else "elendi",
              "siniflama": {"kaynak": "olasi_algilama" if s == "a" else "uretim"}}
         if s == "k":
@@ -205,9 +207,26 @@ for alan, deger in (("olcu_id", "150x400"), ("referans_kumesi", "r2"), ("ayar_oz
 assert dk.aday_karari(dict(ea, cagri=50), dict(ea, olcu_id="150x400", cagri=50))["karar"] == "karsilastirilamaz"
 
 # B2: eksik alanlı (eski biçim) kayıt -> karşılaştırılamaz
-is_yaz("a3", "3B-aday", IYI_ADAY, ADAY_BEGENI, olcu_id=None, ayar_ozeti=None)
-r, _ = karar("3B-aday")
+is_yaz("a3", "3C-eski", IYI_ADAY, ADAY_BEGENI, olcu_id=None, ayar_ozeti=None)
+r, _ = karar("3C-eski")
 assert r and r[0]["karar"] == "karsilastirilamaz" and "eksik alan" in r[0]["nedenler"][0], r
+
+# B6 (K-44): deney türleri. 3A-aday + kılavuz 1 vs 2A + kılavuz 1 -> yalnız prompt
+r, _ = karar("3A-aday")
+assert all(x["deney_turu"] == "yalniz_prompt" for x in r if x["karar"] != "karsilastirilamaz"), r
+# 3B-aday + kılavuz 2 vs 2A + kılavuz 1 -> PAKET: kılavuz farkı karşılaştırmayı geçersiz KILMAZ, iki bileşen kayıtlı
+is_yaz("a4", "3B-aday", IYI_ADAY, ADAY_BEGENI, kil=2)
+r, _ = karar("3B-aday")
+assert len(r) == 1 and r[0]["karar"] != "karsilastirilamaz", r
+assert r[0]["deney_turu"] == "prompt_kilavuz_paketi", r[0]
+assert any("prompt" in d for d in r[0]["degisen_bilesenler"]) and any("kılavuz: 1 -> 2" in d for d in r[0]["degisen_bilesenler"])
+if r[0]["karar"] == "aday_onerilir":                              # paket önerisi promptun tek etkisini iddia etmez
+    assert any("çıkarılamaz" in n for n in r[0]["nedenler"]), r[0]
+assert "çıkarılamaz" in r[0]["not"]
+# kılavuz kullanılmış ama sürümü kayıtlı değil -> eksik alan (tahminle doldurulmaz)
+is_yaz("a5", "3D-eksik", IYI_ADAY, ADAY_BEGENI, kil=None)
+r, _ = karar("3D-eksik")
+assert r[0]["karar"] == "karsilastirilamaz" and "kilavuz_surumu" in r[0]["nedenler"][0], r
 
 # öneri hiçbir ayarı değiştirmez
 s = Settings()

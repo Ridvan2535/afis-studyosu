@@ -39,7 +39,7 @@ def _dene(v, renk):
     return inv, m, int(st[k2, cv2.CC_STAT_AREA])
 
 
-def yaklasik_sahne(vis_bgr: np.ndarray, en_az_alan: float = 0.01) -> tuple[np.ndarray, np.ndarray, str]:
+def yaklasik_sahne(vis_bgr: np.ndarray, en_az_alan: float = 0.0005) -> tuple[np.ndarray, np.ndarray, str]:
     """(yaklaşık sahne, kurtarılan maske 0/1, katman: "yesil" | "kirmizi" | "yok").
     Katman bulunamazsa ("yok") kaydedilen dosya zaten işaretsiz sahnedir (eski sürüm maske boşken sahneyi aynen yazardı);
     yine de JPEG %80 kayıplıdır ve büyütülmüş olabilir."""

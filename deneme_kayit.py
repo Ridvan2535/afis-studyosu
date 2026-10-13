@@ -259,12 +259,16 @@ def ozet(jobs_dir: str) -> list[dict]:
             continue
         insan = insan_oku(jp).get("fotograflar", {})
         for d in rap.get("denemeler", []):
+            ayar = dict(d.get("ayar_ozeti") or {})
+            kil = ayar.pop("kilavuz_surumu", None)          # kılavuz sürümü deney BİLEŞENİDİR; ayar karşılaştırmasından ayrı (K-44)
             alan = {"kategori": rap.get("kategori"), "model": d.get("model"), "olcu_id": d.get("olcu_id"),
                     "sahne_gorevi": d.get("sahne_gorevi"), "referans_kumesi": d.get("referans_kumesi"),
-                    "ayar_ozeti": d.get("ayar_ozeti")}
+                    "ayar_ozeti": ayar or None}
             eksik = [k for k in KARSILASTIRMA_ALANLARI if alan[k] in (None, "", {})]
-            key = tuple(_anahtar_degeri(alan[k]) for k in KARSILASTIRMA_ALANLARI) + (d.get("prompt_surumu"),)
-            g = grup.setdefault(key, dict(alan, prompt_surumu=d.get("prompt_surumu"), eksik_alanlar=eksik,
+            if ayar.get("kilavuz") and kil is None:
+                eksik.append("kilavuz_surumu")                # kılavuz kullanılmış ama sürümü kayıtlı değil
+            key = tuple(_anahtar_degeri(alan[k]) for k in KARSILASTIRMA_ALANLARI) + (d.get("prompt_surumu"), kil)
+            g = grup.setdefault(key, dict(alan, prompt_surumu=d.get("prompt_surumu"), kilavuz_surumu=kil, eksik_alanlar=eksik,
                                           cagri=0, kabul=0, elendi_uretim=0, elendi_algilama=0, elendi_belirsiz=0,
                                           servis_hatasi=0, sure_toplam=0.0, begendim=0, uygun_degil=0, isler=set()))
             g["cagri"] += 1
@@ -291,7 +295,27 @@ def ozet(jobs_dir: str) -> list[dict]:
         g["is_sayisi"] = len(g.pop("isler"))
         g.pop("sure_toplam")
         out.append(g)
-    return sorted(out, key=lambda x: tuple(str(x[k]) for k in KARSILASTIRMA_ALANLARI) + (str(x["prompt_surumu"]),))
+    return sorted(out, key=lambda x: tuple(str(x[k]) for k in KARSILASTIRMA_ALANLARI)
+                  + (str(x["prompt_surumu"]), str(x.get("kilavuz_surumu"))))
+
+
+def deney_turu(etkin: dict, aday: dict) -> dict:
+    """K-44: hangi bileşenler değişti? Prompt dışındaki koşullar (karsilastirilabilir) zaten aynıdır.
+    yalniz_prompt          : kılavuz aynı (ya da ikisi de kılavuzsuz) -> fark prompta bağlanabilir.
+    prompt_kilavuz_paketi  : prompt VE kılavuz birlikte değişti -> paket olarak değerlendirilir; promptun tek başına
+                             etkisi bu deneyden ÇIKARILAMAZ.
+    yalniz_kilavuz         : prompt aynı, kılavuz farklı."""
+    dp = etkin.get("prompt_surumu") != aday.get("prompt_surumu")
+    dk_ = etkin.get("kilavuz_surumu") != aday.get("kilavuz_surumu")
+    tur = "prompt_kilavuz_paketi" if (dp and dk_) else ("yalniz_kilavuz" if dk_ else "yalniz_prompt")
+    deg = [f"prompt: {etkin.get('prompt_surumu')} -> {aday.get('prompt_surumu')}"] if dp else []
+    if dk_:
+        deg.append(f"kılavuz: {etkin.get('kilavuz_surumu')} -> {aday.get('kilavuz_surumu')}")
+    notu = {"yalniz_prompt": "Yalnız prompt değişti; fark prompta bağlanabilir.",
+            "prompt_kilavuz_paketi": "Prompt ve kılavuz birlikte değişti: sonuç PAKETİN etkisidir; promptun tek başına etkisi "
+                                     "bu deneyden çıkarılamaz.",
+            "yalniz_kilavuz": "Yalnız kılavuz değişti; fark kılavuza bağlanabilir."}[tur]
+    return {"deney_turu": tur, "degisen_bilesenler": deg, "not": notu}
 
 
 def karsilastirilabilir(a: dict, b: dict) -> list[str]:
@@ -352,13 +376,18 @@ def oneriler(gruplar: list[dict], etkin_surum: str) -> list[dict]:
     for g in gruplar:
         if g["prompt_surumu"] == etkin_surum:
             continue
-        etkin = None
-        if not g["eksik_alanlar"]:
-            etkin = next((x for x in gruplar if x["prompt_surumu"] == etkin_surum and not x["eksik_alanlar"]
-                          and not karsilastirilabilir(x, g)), None)
+        adaylar = [] if g["eksik_alanlar"] else [x for x in gruplar if x["prompt_surumu"] == etkin_surum
+                                                 and not x["eksik_alanlar"] and not karsilastirilabilir(x, g)]
+        # önce aynı kılavuzlu etkin grup (yalnız prompt deneyi); yoksa paket deneyi
+        etkin = next((x for x in adaylar if x.get("kilavuz_surumu") == g.get("kilavuz_surumu")), None) or \
+            (adaylar[0] if adaylar else None)
         r = aday_karari(etkin, g) if not g["eksik_alanlar"] else \
             {"karar": "karsilastirilamaz", "nedenler": [f"Aday kayıtlarında eksik alan: {', '.join(g['eksik_alanlar'])}."]}
-        out.append(dict(r, kategori=g["kategori"], model=g["model"], olcu_id=g["olcu_id"], aday=g["prompt_surumu"]))
+        dt = deney_turu(etkin, g) if etkin else {"deney_turu": None, "degisen_bilesenler": [], "not": ""}
+        if dt["deney_turu"] == "prompt_kilavuz_paketi" and r["karar"] == "aday_onerilir":
+            r = dict(r, nedenler=r["nedenler"] + [dt["not"]])
+        out.append(dict(r, **dt, kategori=g["kategori"], model=g["model"], olcu_id=g["olcu_id"], aday=g["prompt_surumu"],
+                        aday_kilavuz=g.get("kilavuz_surumu"), etkin_kilavuz=(etkin or {}).get("kilavuz_surumu")))
     return out
 
 

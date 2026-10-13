@@ -7,6 +7,27 @@ Biçim: **K-numara · tarih · karar** — gerekçe · etki/geri alma.
 
 ---
 
+### 2026-10-13 — Codex incelemesi: Görsel Kontrol düzeltmeleri
+
+**K-47 · 2026-10-13 · İlk ajan değerlendirmesi 6–8 örnekle sınırlı (`ornek_plani.json → ilk_deneme`, 8 örnek: 3 ham + 5
+yaklaşık).** Rehberle çakışmaz; ham örnekler önce, yaklaşık örnekler ayrı raporlanır. Amaç doğruluk yüzdesi değil,
+ajanın belirgin sorunları ve belirsizliği ayırıp ayıramadığını görmek. 30 örneklik çalıştırma ertelendi. Ajan
+kullanıcının bilgisayarında kurulu değil; bu görevde çalıştırılmadı.
+
+**K-46 · 2026-10-13 · Hafif yan açı ajan için uygunsuzluk nedeni değildir.** Plan 3 ortam × (önden + hafif yandan);
+tasarım tek perspektif dönüşümüyle bütün kalabiliyorsa açılı sahne uygun olabilir. Rehbere sentetik hafif açılı örnek
+eklendi. Programın `strict_layout` kapısı yan açıyı hâlâ reddeder (Aşama 2B açılı profil işi); çelişki kullanıcı
+incelemesine düşer.
+
+**K-45 · 2026-10-13 · Bağımsızlık: açık atıf ≠ doğal ifade benzerliği (K-42'yi düzeltir).** İhlal yalnız programın
+kararına/gerekçesine/iç kodlarına açık atıftır. Program gerekçesiyle ortak ifade ("asılı kısım ...") yalnız inceleme
+işaretidir; tek başına bağımsız olmadığını kanıtlamaz.
+
+**K-44 · 2026-10-13 · İki deney türü ayrıldı: yalnız prompt / prompt + kılavuz paketi.** Kılavuz sürümü `ayar_ozeti`
+karşılaştırmasından çıkarılıp ayrı deney bileşeni yapıldı; böylece kılavuz 1 ↔ 2 farkı paket karşılaştırmasını
+otomatik geçersiz kılmaz. Öneride `deney_turu` ve `degisen_bilesenler` yazılır; paket deneyinden promptun tek başına
+etkisi iddia edilmez. Kılavuz kullanılmış ama sürümü kayıtlı olmayan çağrılar "karşılaştırılamaz" (tahminle doldurulmaz).
+
 ### 2026-10-13 — Oranı üretimde kurma kararı ve Görsel Kontrol ajanı
 
 **K-43 · 2026-10-13 · A-01 (küçültmede karar değişmesi) ayrı algılama sorunu olarak izlenir.**
