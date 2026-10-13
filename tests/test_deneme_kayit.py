@@ -108,6 +108,15 @@ try:
 except ValueError:
     pass
 dk.insan_yaz(jobk, ok[1]["foto"], None)
+dk.insan_elenen_yaz(jobk, "1:3", "kullanilabilir", "iyi görünüyor")
+assert open(os.path.join(jobk, "rapor.json"), "rb").read() == before, "elenen etiketi rapor.json'u değiştirdi"
+assert dk.insan_oku(jobk)["elenenler"]["1:3"]["karar"] == "kullanilabilir"
+for bad in (("1:3", "harika"), ("x", "kullanilabilir")):
+    try:
+        dk.insan_elenen_yaz(jobk, *bad)
+        raise AssertionError(f"geçersiz etiket kabul edildi: {bad}")
+    except ValueError:
+        pass
 assert ok[1]["foto"] not in dk.insan_oku(jobk)["fotograflar"]
 no_secrets(jobk)
 
@@ -140,11 +149,22 @@ algi = {"tur": "birikme_cozulemedi", "neden": "Tasarımın alt ≈48 cm'si zemin
         "tam_kumas": {"asili_cm": 152.5, "gizli_cm": 47.5, "birikme": True}}
 belirsiz = {"tur": "sahne_geometri", "neden": "asılı boyu (≈145 cm) ... çok kısa", "olcum": {"aspect": 0.401},
             "tam_kumas": {"asili_cm": 145.0, "birikme": True, "temas_yontemi": "kenar_yayilmasi"}}
-assert dk.siniflandir(uretim, U)["kaynak"] == "uretim"
-assert dk.siniflandir(algi, U)["kaynak"] == "olasi_algilama"
-b = dk.siniflandir(belirsiz, U)
-assert b["kaynak"] == "belirsiz" and b["cm_guvenilir"] is False
-assert dk.siniflandir({"tur": "servis_hatasi", "neden": "x"}, U)["kaynak"] == "servis"
+# K-35: aynı maske ölçümü hem reddi hem teşhisi veriyor -> ±%3 kuralına takılan ama kaba sınır (±%30) içindeki ret
+# "İnceleme gerekli"; kesin hata yalnız güven düşük değilken ve sapma ±%30 dışındayken
+assert dk.kontrol_sonucu(uretim, U)["durum"] == "inceleme"
+assert dk.kontrol_sonucu(dict(uretim, olcum={"aspect": 0.53}), U)["durum"] == "kesin_hata"
+k_alg = dk.kontrol_sonucu(algi, U)
+assert k_alg["durum"] == "inceleme" and k_alg["guven"] == "dusuk", k_alg
+b = dk.kontrol_sonucu(belirsiz, U)
+assert b["durum"] == "inceleme" and b["guven"] == "dusuk", b
+# düşük güvenle kesin hata yazılmaz (sapma büyük olsa bile)
+kk = dk.kontrol_sonucu(dict(uretim, olcum={"aspect": 0.53}, kararlilik={"kararsiz": True, "karar_degisti": True, "varyantlar": []}), U)
+assert kk["durum"] == "inceleme" and kk["guven"] == "dusuk", kk
+# insan etiketi: gösterimi etkiler, otomatik sonucu değiştirmez
+oto = dk.kontrol_sonucu(dict(uretim, olcum={"aspect": 0.53}), U)
+assert dk.birlesik_durum(oto, {"karar": "kullanilabilir"})["durum"] == "inceleme" and oto["durum"] == "kesin_hata"
+assert dk.birlesik_durum(dk.kontrol_sonucu(uretim, U), {"karar": "gercekten_hatali"})["durum"] == "kesin_hata"
+assert dk.kontrol_sonucu({"tur": "servis_hatasi", "neden": "x"}, U)["durum"] == "servis"
 assert dk.hata_imzasi("birikme_cozulemedi", algi["neden"]) == "birikme_cozulemedi:birikme"
 assert "tahmini 157 cm, ürün 200 cm" in dk.sade_neden(uretim, 200)
 assert "[gizlendi]" in dk.temizle("hata https://x.example/a?sig=abc ve data:image/png;base64,QUJD")

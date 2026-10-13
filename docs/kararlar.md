@@ -7,6 +7,47 @@ Biçim: **K-numara · tarih · karar** — gerekçe · etki/geri alma.
 
 ---
 
+### 2026-10-13 — Kullanıcının gözle incelemesi: yanlış retleri azaltma (prompttan önce)
+
+**K-39 · 2026-10-13 · İş 20261013-005509'un 12 eleneni + 2 kabulü kalıcı kontrol örneğidir.**
+`tests/kontrol_ornekleri/is_005509/` + `tests/test_kontrol_ornekleri.py`. Elenenler eski kaydın algılama katmanlı
+görselinden hesaplanan YAKLAŞIK görüntülerdir (ham değil; orijinal sahne kaydedilmemiş, kurtarılamaz). İnsan etiketi:
+1, 6, 13 gerçekten hatalı (fazla geniş), diğer 9 kullanılabilir. Algılama/yerleşim değişikliklerinde bu test geçmeli:
+kabuller kabul, 1/6/13 elenmeye devam, kullanılabilir etiketlilerden hiçbiri otomatik "kesin hata" değil.
+
+**K-38 · 2026-10-13 · Elenen denemeye insan etiketi: "Kullanılabilir" / "Gerçekten hatalı" (ayrı dosya).**
+`insan_degerlendirme.json → elenenler["<üretim no>:<çağrı>"]`. Otomatik kaydı (rapor.json) silmez/değiştirmez; yalnız
+gösterimi etkiler. "Kullanılabilir" görsel kabuldür, fiziksel ölçü doğrulaması sayılmaz; sahne bu nedenle ürün
+fotoğrafına dönüştürülmez. Otomatik "kesin hata" ile insan "kullanılabilir" çelişirse durum "İnceleme gerekli".
+
+**K-37 · 2026-10-13 · Ölçüm kararlılığı testi (ücretsiz): her sahne JPEG %92 ve %80 ölçek varyantıyla yeniden ölçülür.**
+Karar değişiyor ya da asılı boy %3'ten fazla oynuyorsa ölçüm "kararsız": ret kesin sayılmaz (güven düşük), kabul
+uyarıyla işaretlenir. Kök neden: zemine temas satırı birikme yayılmasının BAŞLANGICINDAN bulunuyor; kumaş alta doğru
+yavaşça genişlediğinde başlangıç yukarı kayıyor ve tek satırlık maske çentiği sonucu belirliyor. Kanıt (kontrol
+örnekleri): kabul edilen s01 aynı sahnenin %80 ölçeğinde 199,5 → 208,4 cm (ret); s02 1536 px'te 197 → 156 cm; #5'te
+asılı boy 111 cm gibi fiziksel olmayan değerler. Temas yöntemini değiştirmeyi denedim (yarı-yayılma noktası): s02'yi
+kararlı ama 173 cm yaptı, s01'i bozdu; daha iyi olmadığı için GERİ ALINDI. Kalıcı çözüm (temas çizgisini zeminle
+kumaşın birleştiği gerçek kenardan bulmak) ayrı bir iş olarak açık.
+
+**K-36 · 2026-10-13 · Şüpheli ölçümde dur (Ayarlar, varsayılan AÇIK).**
+Algılama güveni düşük bir ret olursa üretim durur; şüpheli ölçüm yüzünden otomatik yeni ücretli çağrı yapılmaz. Kabul
+edilenler saklanır, eksik sayısı gösterilir. Bedeli: iş 005509'da 2. çağrıda dururdu (0 kabul); sınır tablosunda görünür.
+
+**K-35 · 2026-10-13 · Kontrol sonuçları üç durum: Uygun / İnceleme gerekli / Kesin hata (önceki "üretim/olası
+algılama/belirsiz" sınıflaması K-31'in yerine geçer; K-31 silinmedi).**
+Aynı maske ölçümünden hem ret hem teşhis çıkarmak bağımsız doğrulama değildir. Bu yüzden: Kesin hata (otomatik) yalnız
+algılama güveni düşük DEĞİLKEN ve afiş en/boy oranı üründen ±%30'dan fazla farklıyken (layout'un kendi kaba sınırı).
+±%3 boy kuralına takılan ama ±%30 içinde kalan retler "İnceleme gerekli" (sahne kullanılmaz, ama kesin hata denmez).
+Güven düşük: birikme yalnız kenar yayılmasından çıkarıldıysa, alt kenarda belirgin tek taraflı yayılma varsa (maske
+taşması), maske kenarı satırların %4'ünden fazlasında taşıyorsa, üstte kararı değiştirebilecek kumaş bandı varsa,
+ölçüm kararsızsa (K-37). Eşikler gevşetilmedi (±%3 ve 0,72–1,30 aynı).
+Bulgular (kontrol örnekleri, gözle maske incelemesi): kullanılabilir bulunan 9 örneğin çoğunda maske kumaşla örtüşüyor;
+oran farkı (%7–21) gerçek çizim farkı. Ölçülen orana göre insan etiketleri ayrışmıyor (6: %+17 "geniş", 12/14:
+%+18–21 "kullanılabilir"); 12 etiketle görsel bir oran eşiği türetilemez. Tespit edilen algılama hataları: #4 maske
+sağ altta zemin karolarına taşmış (sahte birikme), #5 maske sağda masa örtüsüyle birleşmiş + birikme belirsiz,
+#8 üstteki çubuk bandı eski kayıtta maske dışında (aynı bant kabul edilen s01'de de dışarıda; kullanıcı onaylı
+yerleşim bandın altından başlar, bu yüzden bant maskeye EKLENMEDİ, yalnız belirsizlik olarak ölçülür).
+
 ### 2026-10-13 — Codex incelemesi: karşılaştırılabilirlik ve sonuçsuz çağrı sınırı
 
 **K-34 · 2026-10-13 · Terfi ölçütleri sıkılaştırıldı (K-28'i günceller; K-28 silinmedi).**

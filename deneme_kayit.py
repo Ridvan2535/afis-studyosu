@@ -48,30 +48,85 @@ def hata_imzasi(tur: str | None, neden: str | None) -> str:
     return f"{tur or 'bilinmiyor'}:{alt}"
 
 
-def siniflandir(rec: dict, urun_orani: float) -> dict:
-    """Ret kaydını kaynağına göre sınıflar. Yalnız kayıttaki ölçümleri kullanır; eksik ölçüm varsa 'belirsiz'."""
+KESIN_ORAN_SAPMA = 0.30        # layout.ASPECT_RATIO_TOL ile aynı: afiş biçimi bu kadar farklıysa "çok geniş/dar" (bağımsız kaba sınır)
+YAN_TASMA_DUSUK_GUVEN = 0.04   # VARSAYIM: kenar satırlarının %4'ünden fazlası doğrudan taşıyorsa maske güvenilir değil
+BOY_TOL = 0.03                 # compositor TAM_BOY_TOL ile aynı (±%3)
+INSAN_ELENEN_KARARLARI = ("kullanilabilir", "gercekten_hatali")
+
+
+def kontrol_sonucu(rec: dict, urun_orani: float, boy_cm: float | None = None) -> dict:
+    """Elenen sahnenin OTOMATİK kontrol sonucu (K-35): "inceleme" (İnceleme gerekli) | "kesin_hata" | "servis".
+    Kesin hata yalnız algılama güveni düşük DEĞİLKEN ve afiş biçimi ürün oranından %30+ farklıyken yazılır; ±%3 boy
+    kuralına takılan ama kaba sınırın içinde kalan retler "İnceleme gerekli"dir (sahne yine kullanılmaz, ama kesin
+    üretim hatası denmez). Aynı maske ölçümü hem reddi hem teşhisi verdiği için güven ayrıca değerlendirilir."""
     tur = rec.get("tur")
     if tur == "servis_hatasi":
-        return {"kaynak": "servis", "aciklama": "Servis hatası; görsel değerlendirilmedi."}
-    olcum = rec.get("olcum") or {}
-    tk = rec.get("tam_kumas") or {}
+        return {"durum": "servis", "guven": None, "kaynak": "servis", "nedenler": [], "aciklama": "Servis hatası; görsel değerlendirilmedi."}
+    olcum, tk, alg = rec.get("olcum") or {}, rec.get("tam_kumas") or {}, rec.get("algilama")
+    n = (rec.get("neden") or "").lower()
+    dusuk = []
     asp = olcum.get("aspect")
-    if not asp:
-        return {"kaynak": "belirsiz", "aciklama": "Afiş ölçülemedi ya da algılanamadı; üretim mi algılama mı ayırt edilemiyor."}
-    sapma = asp / urun_orani - 1.0
-    cm_guvenilir = not (tk.get("birikme") and tk.get("temas_yontemi") == "kenar_yayilmasi")
-    if tur in ("sahne_geometri", "birikme_cozulemedi") and abs(sapma) <= ALGILAMA_ORAN_UYUM and tk.get("birikme"):
-        return {"kaynak": "olasi_algilama", "oran_sapmasi": round(sapma, 3), "cm_guvenilir": False,
-                "aciklama": f"Ölçülen afiş oranı ürünle uyumlu (%{sapma * 100:+.0f}) ama zemin birikmesi algılanıp boy kısa "
-                            f"hesaplandı; algılama maskesi zemine taşmış olabilir."}
-    if abs(sapma) >= URETIM_ORAN_SAPMA:
+    sapma = (asp / urun_orani - 1.0) if asp else None
+    if sapma is None:
+        dusuk.append("Afiş ölçülemedi ya da bulunamadı.")
+    if tk.get("yayilma_supheli"):
+        dusuk.append(f"Alt kenarda yalnız bir yana yayılma var (sol {tk.get('yayilma_sol_px')} px / sağ {tk.get('yayilma_sag_px')} px): "
+                     "maske zemine ya da arka plana taşmış olabilir.")
+    if tk.get("birikme") and tk.get("temas_yontemi") == "kenar_yayilmasi":
+        dusuk.append("Zemindeki birikme yalnız kenar yayılmasından çıkarıldı; boy tahmini güvenilir değil.")
+    if tur == "birikme_cozulemedi" and sapma is not None and abs(sapma) <= ALGILAMA_ORAN_UYUM:
+        dusuk.append(f"Afiş oranı ürünle uyumlu (%{sapma * 100:+.0f}) ama birikme ölçüldü; çelişkili.")
+    kr = rec.get("kararlilik") or {}
+    if kr.get("kararsiz"):
+        vs = ", ".join(f"{v.get('varyant')}: {'kabul' if v.get('kabul') else 'ret'}"
+                       + (f" {v['asili_cm']:.0f} cm" if v.get("asili_cm") else "") for v in kr.get("varyantlar", []))
+        dusuk.append(f"Ölçüm kararsız: aynı sahne küçük görüntü farklarıyla yeniden ölçülünce "
+                     + ("karar değişiyor" if kr.get("karar_degisti") else f"asılı boy %{kr.get('asili_oynama', 0) * 100:.0f} oynuyor")
+                     + (f" ({vs})." if vs else "."))
+    if alg:
+        if (alg.get("yan_tasma_orani") or 0) > YAN_TASMA_DUSUK_GUVEN:
+            dusuk.append(f"Maske kenarı satırların %{alg['yan_tasma_orani'] * 100:.0f}'inde düz kenardan dışarı taşıyor.")
+        ub = alg.get("ust_bant_orani") or 0
+        a = tk.get("asili_cm")
+        boy = boy_cm or 200.0
+        if ub >= 0.01 and a and abs(a / boy - 1) - ub < BOY_TOL:
+            dusuk.append(f"Üstte maskeye girmemiş kumaş bandı var (boyun %{ub * 100:.0f}'i); dahil edilirse karar değişebilir.")
+    guven = "dusuk" if dusuk else ("bilinmiyor" if alg is None and not kr else "yuksek")
+    if guven != "dusuk" and sapma is not None and abs(sapma) >= KESIN_ORAN_SAPMA:
         yon = "geniş/kısa" if sapma > 0 else "dar/uzun"
-        return {"kaynak": "uretim", "oran_sapmasi": round(sapma, 3), "cm_guvenilir": cm_guvenilir,
-                "aciklama": f"Afiş ürüne göre {yon} çizilmiş: ölçülen en/boy {asp:.3f}, ürün {urun_orani:.3f} "
-                            f"(%{sapma * 100:+.0f})." + ("" if cm_guvenilir else " Santimetre tahmini güvenilir değil (birikme ölçümü).")}
-    return {"kaynak": "belirsiz", "oran_sapmasi": round(sapma, 3), "cm_guvenilir": cm_guvenilir,
-            "aciklama": f"Oran farkı küçük (%{sapma * 100:+.0f}); ret ölçüm payına yakın, kaynak kesin değil."
-                        + ("" if cm_guvenilir else " Santimetre tahmini güvenilir değil (birikme ölçümü).")}
+        return {"durum": "kesin_hata", "guven": guven, "kaynak": "uretim", "oran_sapmasi": round(sapma, 3), "nedenler": [],
+                "aciklama": f"Afiş ürüne göre belirgin {yon} çizilmiş (en/boy %{sapma * 100:+.0f}; kaba sınır ±%30)."}
+    if dusuk:
+        acik = "Algılama güveni düşük: " + " ".join(dusuk) + " Kesin hata denmez; gözle bakılmalı."
+    elif sapma is not None:
+        acik = (f"Ölçülen en/boy ürünle %{sapma * 100:+.0f} farklı; ±%3 boy kuralına takıldı ama kaba sınırın (±%30) içinde. "
+                "Sahne bu ürün için kullanılmadı; gözle bakılmalı.")
+    else:
+        acik = "Ret nedeni gözle doğrulanmalı."
+    if guven == "bilinmiyor":
+        acik += " (Eski kayıt: algılama güveni ölçümleri yok.)"
+    return {"durum": "inceleme", "guven": guven, "kaynak": "olasi_algilama" if dusuk else "belirsiz",
+            "oran_sapmasi": round(sapma, 3) if sapma is not None else None, "nedenler": dusuk, "aciklama": acik}
+
+
+def birlesik_durum(oto: dict, insan: dict | None) -> dict:
+    """Otomatik sonuç + insan etiketi -> gösterilecek durum. İnsan etiketi otomatik kaydı DEĞİŞTİRMEZ; yalnız gösterimi
+    etkiler. 'Kullanılabilir' görsel kabuldür, fiziksel ölçü doğrulaması sayılmaz."""
+    k = (insan or {}).get("karar")
+    if oto.get("durum") == "servis":
+        return {"durum": "servis", "not": ""}
+    if k == "gercekten_hatali":
+        return {"durum": "kesin_hata", "not": "İnsan etiketi: gerçekten hatalı."}
+    if k == "kullanilabilir":
+        cel = oto.get("durum") == "kesin_hata"
+        return {"durum": "inceleme", "not": ("Çelişki: otomatik kontrol kesin hata diyor, sen kullanılabilir dedin. " if cel else "")
+                + "İnsan etiketi: kullanılabilir (görsel kabul; ölçü doğrulaması değil)."}
+    return {"durum": oto.get("durum"), "not": ""}
+
+
+def siniflandir(rec: dict, urun_orani: float, boy_cm: float | None = None) -> dict:
+    """Geriye uyum: kontrol_sonucu ile aynı (eski 'kaynak' alanı da döner)."""
+    return kontrol_sonucu(rec, urun_orani, boy_cm)
 
 
 def sade_neden(rec: dict, boy_cm: float | None = None) -> str:
@@ -123,7 +178,36 @@ def insan_oku(job: str) -> dict:
         with open(os.path.join(job, INSAN_DOSYASI), encoding="utf-8") as f:
             return json.load(f)
     except Exception:
-        return {"fotograflar": {}}
+        return {"fotograflar": {}, "elenenler": {}}
+
+
+def elenen_anahtari(rec: dict) -> str:
+    """Elenen kaydının insan etiketi anahtarı: '<üretim no ya da 0>:<çağrı>'."""
+    return f"{int(rec.get('uretim_no') or 0)}:{int(rec.get('cagri') or 0)}"
+
+
+def insan_elenen_yaz(job: str, anahtar: str, karar: str | None, not_: str = "", kaynak: str = "kullanici") -> dict:
+    """Elenen deneme için insan etiketi: 'kullanilabilir' | 'gercekten_hatali' | None (sil). rapor.json'a DOKUNMAZ."""
+    if karar not in INSAN_ELENEN_KARARLARI + (None,):
+        raise ValueError("karar 'kullanilabilir', 'gercekten_hatali' ya da boş olmalı")
+    if not re.fullmatch(r"\d+:\d+", anahtar or ""):
+        raise ValueError("geçersiz elenen anahtarı")
+    d = insan_oku(job)
+    es = d.setdefault("elenenler", {})
+    if karar is None:
+        es.pop(anahtar, None)
+    else:
+        es[anahtar] = {"karar": karar, "not": (not_ or "").strip()[:300], "kaynak": kaynak,
+                       "zaman": datetime.now().isoformat(timespec="seconds")}
+    _insan_kaydet(job, d)
+    return d
+
+
+def _insan_kaydet(job: str, d: dict):
+    tmp = os.path.join(job, INSAN_DOSYASI + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, os.path.join(job, INSAN_DOSYASI))
 
 
 def insan_yaz(job: str, foto: str, karar: str | None, not_: str = "") -> dict:
@@ -135,10 +219,7 @@ def insan_yaz(job: str, foto: str, karar: str | None, not_: str = "") -> dict:
         fs.pop(foto, None)
     else:
         fs[foto] = {"karar": karar, "not": (not_ or "").strip()[:300], "zaman": datetime.now().isoformat(timespec="seconds")}
-    tmp = os.path.join(job, INSAN_DOSYASI + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(d, f, ensure_ascii=False, indent=1)
-    os.replace(tmp, os.path.join(job, INSAN_DOSYASI))
+    _insan_kaydet(job, d)
     return d
 
 
@@ -289,26 +370,29 @@ def cagri_dizisi(rap: dict) -> list[dict]:
     den = rap.get("denemeler")
     if den:
         son = max(d.get("uretim_no", 1) for d in den)
-        return [{"cagri": d["cagri"], "sonuc": d.get("sonuc"), "hata_imzasi": d.get("hata_imzasi"), "turetildi": False}
+        return [{"cagri": d["cagri"], "sonuc": d.get("sonuc"), "hata_imzasi": d.get("hata_imzasi"), "turetildi": False,
+                 "supheli": (d.get("siniflama") or {}).get("guven") == "dusuk"}
                 for d in den if d.get("uretim_no", 1) == son]
     su = rap.get("son_uretim") or {}
     n = int(su.get("cagri") or 0)
     el = {e.get("cagri"): e for e in rap.get("elenenler", []) if e.get("cagri")}
     if not n or len(el) + int(su.get("uretilen") or 0) != n:
         return []                                          # tutarsız/çok üretimli eski kayıt: türetilmez
+    oran = (rap.get("urun_profili") or {}).get("oran") or 0.375
     out = []
     for c in range(1, n + 1):
         e = el.get(c)
         if e:
             son = "servis_hatasi" if e.get("tur") == "servis_hatasi" else "elendi"
             out.append({"cagri": c, "sonuc": son, "hata_imzasi": e.get("hata_imzasi") or hata_imzasi(e.get("tur"), e.get("neden")),
-                        "turetildi": True})
+                        "turetildi": True, "supheli": kontrol_sonucu(e, oran).get("guven") == "dusuk"})
         else:
-            out.append({"cagri": c, "sonuc": "kabul", "hata_imzasi": None, "turetildi": True})
+            out.append({"cagri": c, "sonuc": "kabul", "hata_imzasi": None, "turetildi": True, "supheli": False})
     return out
 
 
-def durma_simulasyonu(dizi: list[dict], ayni: int, sonucsuz: int, tavan: int, hedef: int | None = None) -> dict:
+def durma_simulasyonu(dizi: list[dict], ayni: int, sonucsuz: int, tavan: int, hedef: int | None = None,
+                      supheli_dur: bool = False) -> dict:
     """Kayıtlı çağrı dizisinde verilen sınırlarla üretimin hangi çağrıda duracağını hesaplar (sağlayıcı çağrısı yok).
     Orkestratördeki kuralın aynısı: kabul iki sayacı da sıfırlar; servis hatası aynı-hata serisini keser ama sonuçsuz
     sayacını artırır. Dönüş: {dur_cagri, neden, kabul, harcanan, kacan_kabul}."""
@@ -329,6 +413,8 @@ def durma_simulasyonu(dizi: list[dict], ayni: int, sonucsuz: int, tavan: int, he
         else:
             seri_imza, seri = None, 0
         kuru += 1
+        if supheli_dur and d.get("supheli"):
+            return _sim(c, "supheli_olcum", kabul, dizi, i + 1)
         if ayni and seri >= ayni:
             return _sim(c, "ayni_hata", kabul, dizi, i + 1)
         if sonucsuz and kuru >= sonucsuz:
@@ -343,7 +429,7 @@ def _sim(dur, neden, kabul, dizi, kalan_bas):
 
 
 def sinir_tablosu(dizi: list[dict], tavan: int, hedef: int | None = None,
-                  ayni_degerleri=(0, 3, 4, 5), sonucsuz_degerleri=(0, 4, 5, 6, 7, 8)) -> list[dict]:
+                  ayni_degerleri=(0, 3, 4, 5), sonucsuz_degerleri=(0, 4, 5, 6, 7, 8), supheli=(False, True)) -> list[dict]:
     """Farklı sınır çiftleri için durma noktası tablosu (yalnız kayıtlı veriyle)."""
-    return [dict(durma_simulasyonu(dizi, a, k, tavan, hedef), ayni_hata_siniri=a, sonucsuz_siniri=k)
-            for a in ayni_degerleri for k in sonucsuz_degerleri]
+    return [dict(durma_simulasyonu(dizi, a, k, tavan, hedef, sp), ayni_hata_siniri=a, sonucsuz_siniri=k, supheli_dur=sp)
+            for sp in supheli for a in ayni_degerleri for k in sonucsuz_degerleri]

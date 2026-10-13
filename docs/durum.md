@@ -4,14 +4,52 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-13 02:50 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
+**Son güncelleme:** 2026-10-13 03:20 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
 denemeler / insan değerlendirmesi / kontrollü prompt sürümleri** tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı
 görünüm) — BAŞLAMADI (kullanıcı onayı bekleniyor). Video aşamasına başlanmadı.
 
 
 ---
 
-## 0. Son iş: Codex incelemesindeki iki eksik düzeltildi (2026-10-13)
+## 0. Son iş: gözle inceleme sonrası yanlış retleri azaltma (2026-10-13)
+
+Ücretli çağrı yok; prompt değiştirilmedi; eşikler gevşetilmedi; eski iş dosyaları değiştirilmedi (işe yalnız yeni
+`insan_degerlendirme.json` eklendi).
+
+**Yapılanlar:**
+- Kullanıcının 12 etiketi ayrı insan etiketi olarak kaydedildi (K-38): iş klasöründe `insan_degerlendirme.json`
+  (`elenenler`), ayrıca kontrol örneklerinin `kontrol.json`'unda.
+- Kalıcı kontrol örnekleri + test (K-39): `tests/kontrol_ornekleri/is_005509/`, `tests/test_kontrol_ornekleri.py`.
+- Kontrol sonuçları Uygun / İnceleme gerekli / Kesin hata (K-35); düşük algılama güveninde kesin hata yazılmaz.
+- Ölçüm kararlılığı testi (K-37) ve şüpheli ölçümde dur (K-36, varsayılan açık).
+- `compositor.py`: belirgin tek taraflı alt yayılma birikme sayılmaz (maske taşması; #4'teki sahte birikme kalktı).
+- `banner_detect.py`: üst bant ve yan taşma yalnız ÖLÇÜLÜR (maske değişmez).
+- `geri_cevir.py`: eski algılama katmanlı görselden yaklaşık görüntü (ham değil; diske yazmaz; arayüzde
+  "yaklaşık sahne (ham değil)").
+- Arayüz: elenen kartlarda durum rozeti, algılama güveni, "Kullanılabilir" / "Gerçekten hatalı" düğmeleri,
+  "orijinal sahne kaydedilmemiş; kurtarılamaz" notu; kabul edilen fotoğraflarda "Uygun"; Ayarlar'da "Şüpheli ölçümde dur".
+- Bulgular ve önce/sonra tablosu: `docs/elenen_analizi_20261013-005509.md` sonu.
+
+**Çalıştırılan testler (Linux; Windows'ta ÇALIŞTIRILMADI), hepsi TAMAM:** test_kontrol_ornekleri (yeni; yerel, kalıcı
+kontrol örnekleri), test_deneme_kayit, test_durma_ve_karsilastirma (A7 şüpheli ölçümde dur eklendi), test_elenen_arayuz,
+test_tam_kumas, test_kare_kadraj, test_duzlem_yerlesim, test_sureklilik, test_yeniden_birlestir, test_e2e_mock,
+test_selector, test_product, test_unicode_path, test_refstore, test_magnific_fix, test_topview; kontrol.py "HER ŞEY TAMAM".
+Başsız Chromium ile gerçek iş kopyasında arayüz: kartlar, etiket düğmeleri, yaklaşık görüntü; konsol hatası yok, dış istek yok.
+Gerçek sağlayıcı testi yok.
+
+**Uygulamada:** Sonuçlar → `20261013-005509_…` → Elenen denemeler: durum rozeti, güven, etiket düğmeleri, "yaklaşık sahne
+(ham değil)" / "algılama katmanı" düğmeleri. Ayarlar → Harcama koruması → "Şüpheli ölçümde dur".
+
+**Açık (kullanıcı kararı gerekiyor):**
+1. Temas/birikme ölçümü kararsız (K-37). Kalıcı düzeltme ayrı iş: temas çizgisini kumaş-zemin kenarından bulmak.
+2. Görsel olarak kabul edilebilen %7–21 oran farkı 75×200 tasarımı için ne yapılmalı? Seçenekler: (a) mevcut kural
+   (elenir, İnceleme gerekli); (b) kullanıcı onayıyla bu sahnede tasarımı enine göre yerleştirip alttaki görünmeyen
+   kısmı önizlemede göstermek; (c) prompt/kılavuzla oranı düzeltmek. Kod henüz hiçbirini otomatik yapmıyor.
+3. Şüpheli ölçümde dur açıkken 005509 benzeri işler 2. çağrıda durabilir (kayıtlı sırayla hesap tabloda).
+
+---
+
+## 0c. Önceki iş: Codex incelemesindeki iki eksik düzeltildi (2026-10-13)
 
 Ücretli çağrı yapılmadı; otomatik prompt değişimi ya da iyileştirme döngüsü eklenmedi.
 

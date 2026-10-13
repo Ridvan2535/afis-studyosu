@@ -82,6 +82,8 @@ class Settings:
     ornek_olcu: str = "75x200"            # ilan görsellerinde gösterilen örnek ölçü kimliği (product.OLCULER); satış ölçülerinden ayrı
     prompt_surumleri: dict = field(default_factory=dict)   # kategori -> prompt sürümü (prompt_yapisi.SURUMLER); boş = etkin "2A"
     ayni_hata_siniri: int = 5             # aynı hata art arda bu kadar tekrarlanırsa üretim durur (0 = kapalı); K-30
+    olcum_kararlilik_testi: bool = True   # her sahne iki küçük bozulmayla yeniden ölçülür (ücretsiz); kararsız ret kesin sayılmaz; K-37
+    supheli_olcumde_dur: bool = True      # algılama güveni düşük bir retten sonra otomatik yeni ücretli çağrı yapılmaz; K-36
     sonucsuz_siniri: int = 8              # son kabulden beri bu kadar çağrı sonuç vermezse (neden fark etmez) üretim durur (0 = kapalı); K-33
 
     @classmethod

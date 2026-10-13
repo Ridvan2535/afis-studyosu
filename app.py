@@ -29,6 +29,7 @@ os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")
 
 import refstore                                              # noqa: E402
 import camera_move                                            # noqa: E402
+import cv2                                                    # noqa: E402
 import cvio                                                   # noqa: E402
 import deneme_kayit                                           # noqa: E402
 import prompt_yapisi                                          # noqa: E402
@@ -220,6 +221,8 @@ class Handler(BaseHTTPRequestHandler):
                 rel = urllib.parse.unquote(u.path[len("/files/"):])
                 p = safe_join(orch.JOBS_DIR, rel)
                 return self._file(p)
+            if u.path.startswith("/yaklasik/"):
+                return self._approx(urllib.parse.unquote(u.path[len("/yaklasik/"):]))
             if u.path.startswith("/rapor/"):
                 p = safe_join(orch.REPORT_DIR, urllib.parse.unquote(u.path[len("/rapor/"):]))
                 return self._file(p, download=True)
@@ -287,7 +290,9 @@ class Handler(BaseHTTPRequestHandler):
         oran_url = base + "onizleme_oran.png" if os.path.exists(os.path.join(jp, "onizleme_oran.png")) else None
         videos = [dict(v, url=base + v["dosya"]) for v in rap.get("videolar", [])]
         ov = os.path.exists(os.path.join(jp, "foto", "_ozet.jpg"))
-        insan = deneme_kayit.insan_oku(jp).get("fotograflar", {})
+        insan_d = deneme_kayit.insan_oku(jp)
+        insan = insan_d.get("fotograflar", {})
+        insan_el = insan_d.get("elenenler", {})
         for p in photos:
             p["insan"] = insan.get(p["ad"])                    # otomatik kalite kontrolünden AYRI dosyadan
         prof = rap.get("urun_profili") or {}
@@ -299,8 +304,12 @@ class Handler(BaseHTTPRequestHandler):
                 e["sade_neden"] = deneme_kayit.sade_neden(e, boy)            # kayıttaki ölçümlerden türetilir (yeni bilgi uydurulmaz)
             if not e.get("hata_imzasi"):
                 e["hata_imzasi"] = deneme_kayit.hata_imzasi(e.get("tur"), e.get("neden"))   # tür+nedenden türetilir
-            if not e.get("siniflama"):
-                e["siniflama"] = deneme_kayit.siniflandir(e, oran)
+            if e.get("siniflama"):
+                e["siniflama_kayit"] = e["siniflama"]                         # üretim anındaki otomatik sonuç (değişmez)
+            e["siniflama"] = deneme_kayit.kontrol_sonucu(e, oran, boy)         # güncel kurallarla otomatik kontrol (K-35)
+            e["insan_anahtar"] = deneme_kayit.elenen_anahtari(e)
+            e["insan"] = insan_el.get(e["insan_anahtar"])                      # ayrı dosya; otomatik kaydı değiştirmez
+            e["durum"] = deneme_kayit.birlesik_durum(e["siniflama"], e["insan"])
             e["ham_url"] = base + urllib.parse.quote(e["ham_dosya"]) if e.get("ham_dosya") and os.path.exists(os.path.join(jp, e["ham_dosya"])) else None
             alg = e.get("algilama_dosya")
             if not alg and not e.get("ham_dosya") and e.get("dosya") and e.get("olcum"):
@@ -308,6 +317,8 @@ class Handler(BaseHTTPRequestHandler):
             e["algilama_url"] = base + urllib.parse.quote(alg) if alg and os.path.exists(os.path.join(jp, alg)) else None
             if not e["ham_url"] and not e["algilama_url"] and e.get("dosya") and os.path.exists(os.path.join(jp, e["dosya"])):
                 e["diger_url"] = base + urllib.parse.quote(e["dosya"])        # eski kayıt: türü belirsiz tek görsel
+            if not e["ham_url"] and e["algilama_url"]:
+                e["yaklasik_url"] = "/yaklasik/" + urllib.parse.quote(name) + "/" + urllib.parse.quote(alg)   # ham DEĞİL
             e["eski_kayit"] = "ham_dosya" not in e and e.get("tur") != "servis_hatasi"
             elen.append(e)
         denemeler = rap.get("denemeler", [])
@@ -320,8 +331,9 @@ class Handler(BaseHTTPRequestHandler):
             durma = {"turetildi": dizi[0]["turetildi"], "tavan": tavan, "hedef": su.get("hedef"),
                      "cagri_dizisi": dizi,
                      "simdiki_ayar": dict(deneme_kayit.durma_simulasyonu(dizi, s_.ayni_hata_siniri, s_.sonucsuz_siniri,
-                                                                         tavan, su.get("hedef")),
-                                          ayni_hata_siniri=s_.ayni_hata_siniri, sonucsuz_siniri=s_.sonucsuz_siniri),
+                                                                         tavan, su.get("hedef"), s_.supheli_olcumde_dur),
+                                          ayni_hata_siniri=s_.ayni_hata_siniri, sonucsuz_siniri=s_.sonucsuz_siniri,
+                                          supheli_dur=s_.supheli_olcumde_dur),
                      "tablo": deneme_kayit.sinir_tablosu(dizi, tavan, su.get("hedef"))}
         return {"name": name, "kategori": rap.get("kategori"), "fotograflar": photos, "elenenler": elen,
                 "denemeler": denemeler, "deneme_kaydi_var": bool(denemeler), "durma_simulasyonu": durma,
@@ -334,14 +346,41 @@ class Handler(BaseHTTPRequestHandler):
                 "yeniden_birlestirilebilir": any(p.get("stem") and os.path.exists(os.path.join(jp, "sahneler_bos", p["stem"] + ".png"))
                                                  for p in rap.get("fotograflar", []))}
 
+    _APPROX_CACHE: dict = {}
+
+    def _approx(self, rel):
+        """Eski kayıttaki algılama katmanlı görselden YAKLAŞIK sahne (ham değil; diske yazılmaz)."""
+        p = safe_join(orch.JOBS_DIR, rel)
+        if not p or not os.path.isfile(p) or "sahneler_bos" not in rel.replace("\\", "/"):
+            return self._send(404, {"hata": "dosya yok"})
+        key = (p, os.path.getmtime(p))
+        if key not in self._APPROX_CACHE:
+            import geri_cevir
+            img = cvio.imread(p, cv2.IMREAD_COLOR)
+            out, _ = geri_cevir.yaklasik_sahne(img)
+            ok, buf = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 88])
+            if len(self._APPROX_CACHE) > 40:
+                self._APPROX_CACHE.clear()
+            self._APPROX_CACHE[key] = buf.tobytes()
+        return self._send(200, self._APPROX_CACHE[key], "image/jpeg")
+
     def _rate(self, body):
         """İnsan değerlendirmesi: Beğendim / Uygun değil + kısa not. Otomatik kalite kaydından ayrı dosyaya yazılır."""
         name = str(body.get("job") or "")
         jp = safe_join(orch.JOBS_DIR, name) if name else None
         if not jp or not os.path.isdir(jp):
             return self._send(404, {"hata": "iş bulunamadı"})
-        foto = str(body.get("foto") or "")
         rap = Orchestrator.report_of(jp)
+        if body.get("elenen"):                                       # elenen deneme: Kullanılabilir / Gerçekten hatalı
+            key = str(body["elenen"])
+            if key not in {deneme_kayit.elenen_anahtari(e) for e in rap.get("elenenler", [])}:
+                return self._send(400, {"hata": "elenen deneme bu işte yok"})
+            try:
+                d = deneme_kayit.insan_elenen_yaz(jp, key, body.get("karar") or None, str(body.get("not") or ""))
+            except ValueError as e:
+                return self._send(400, {"hata": str(e)})
+            return self._send(200, {"tamam": True, "insan": d["elenenler"].get(key)})
+        foto = str(body.get("foto") or "")
         if foto not in {p.get("ad") for p in rap.get("fotograflar", [])}:
             return self._send(400, {"hata": "fotoğraf bu işte yok"})
         karar = body.get("karar") or None
@@ -507,6 +546,8 @@ class Handler(BaseHTTPRequestHandler):
                 s.ayni_hata_siniri = max(0, min(int(body["ayni_hata_siniri"]), 50))
             except (TypeError, ValueError):
                 return self._send(400, {"hata": "aynı hata sınırı bir sayı olmalı (0 = kapalı)"})
+        if "supheli_olcumde_dur" in body:
+            s.supheli_olcumde_dur = bool(body["supheli_olcumde_dur"])
         if "sonucsuz_siniri" in body:
             try:
                 s.sonucsuz_siniri = max(0, min(int(body["sonucsuz_siniri"]), 60))

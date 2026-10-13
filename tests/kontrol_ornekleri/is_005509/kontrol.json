@@ -1,0 +1,200 @@
+{
+ "is": "20261013-005509_20261013-005503_design",
+ "urun": "75x200",
+ "tarih": "2026-10-13",
+ "aciklama": "Kalıcı kontrol örnekleri. 'yaklasik_geri_cevrilmis' dosyalar eski kaydın algılama katmanlı görselinden hesaplanmıştır; HAM GÖRSEL DEĞİLDİR (orijinal sahne kaydedilmemiş, kurtarılamaz). Tam çözünürlük (2400 px); kabul edilenler ham PNG. Küçültme ölçümü değiştirdiği için (bkz. K-37) küçültülmedi. İnsan etiketleri görsel kabuldür; fiziksel ölçü doğrulaması sayılmaz.",
+ "ornekler": [
+  {
+   "dosya": "elenen_01_yaklasik.jpg",
+   "cagri": 1,
+   "kaynak": "yaklasik_geri_cevrilmis",
+   "insan": "gercekten_hatali",
+   "insan_notu": "fazla geniş",
+   "kayit": {
+    "tur": "sahne_geometri",
+    "aspect": 0.463,
+    "asili_cm": 157.1,
+    "birikme": false,
+    "temas_yontemi": "maske_alti"
+   }
+  },
+  {
+   "dosya": "elenen_02_yaklasik.jpg",
+   "cagri": 2,
+   "kaynak": "yaklasik_geri_cevrilmis",
+   "insan": "kullanilabilir",
+   "insan_notu": "görsel olarak kullanılabilir (fiziksel ölçü doğrulaması değil)",
+   "kayit": {
+    "tur": "sahne_geometri",
+    "aspect": 0.401,
+    "asili_cm": 145.0,
+    "birikme": true,
+    "temas_yontemi": "kenar_yayilmasi"
+   }
+  },
+  {
+   "dosya": "elenen_03_yaklasik.jpg",
+   "cagri": 3,
+   "kaynak": "yaklasik_geri_cevrilmis",
+   "insan": "kullanilabilir",
+   "insan_notu": "görsel olarak kullanılabilir (fiziksel ölçü doğrulaması değil)",
+   "kayit": {
+    "tur": "sahne_geometri",
+    "aspect": 0.426,
+    "asili_cm": 175.8,
+    "birikme": false,
+    "temas_yontemi": "maske_alti"
+   }
+  },
+  {
+   "dosya": "elenen_04_yaklasik.jpg",
+   "cagri": 4,
+   "kaynak": "yaklasik_geri_cevrilmis",
+   "insan": "kullanilabilir",
+   "insan_notu": "görsel olarak kullanılabilir (fiziksel ölçü doğrulaması değil)",
+   "kayit": {
+    "tur": "birikme_cozulemedi",
+    "aspect": 0.384,
+    "asili_cm": 152.5,
+    "birikme": true,
+    "temas_yontemi": "kenar_yayilmasi"
+   }
+  },
+  {
+   "dosya": "elenen_05_yaklasik.jpg",
+   "cagri": 5,
+   "kaynak": "yaklasik_geri_cevrilmis",
+   "insan": "kullanilabilir",
+   "insan_notu": "görsel olarak kullanılabilir (fiziksel ölçü doğrulaması değil)",
+   "kayit": {
+    "tur": "sahne_geometri",
+    "aspect": 0.434,
+    "asili_cm": 147.7,
+    "birikme": true,
+    "temas_yontemi": "kenar_yayilmasi"
+   }
+  },
+  {
+   "dosya": "elenen_06_yaklasik.jpg",
+   "cagri": 6,
+   "kaynak": "yaklasik_geri_cevrilmis",
+   "insan": "gercekten_hatali",
+   "insan_notu": "fazla geniş",
+   "kayit": {
+    "tur": "sahne_geometri",
+    "aspect": 0.439,
+    "asili_cm": 167.5,
+    "birikme": false,
+    "temas_yontemi": "maske_alti"
+   }
+  },
+  {
+   "dosya": "elenen_08_yaklasik.jpg",
+   "cagri": 8,
+   "kaynak": "yaklasik_geri_cevrilmis",
+   "insan": "kullanilabilir",
+   "insan_notu": "görsel olarak kullanılabilir (fiziksel ölçü doğrulaması değil)",
+   "kayit": {
+    "tur": "sahne_geometri",
+    "aspect": 0.423,
+    "asili_cm": 173.3,
+    "birikme": false,
+    "temas_yontemi": "maske_alti"
+   }
+  },
+  {
+   "dosya": "elenen_09_yaklasik.jpg",
+   "cagri": 9,
+   "kaynak": "yaklasik_geri_cevrilmis",
+   "insan": "kullanilabilir",
+   "insan_notu": "görsel olarak kullanılabilir (fiziksel ölçü doğrulaması değil)",
+   "kayit": {
+    "tur": "sahne_geometri",
+    "aspect": 0.413,
+    "asili_cm": 180.6,
+    "birikme": false,
+    "temas_yontemi": "maske_alti"
+   }
+  },
+  {
+   "dosya": "elenen_10_yaklasik.jpg",
+   "cagri": 10,
+   "kaynak": "yaklasik_geri_cevrilmis",
+   "insan": "kullanilabilir",
+   "insan_notu": "görsel olarak kullanılabilir (fiziksel ölçü doğrulaması değil)",
+   "kayit": {
+    "tur": "sahne_geometri",
+    "aspect": 0.342,
+    "asili_cm": 215.0,
+    "birikme": false,
+    "temas_yontemi": "maske_alti"
+   }
+  },
+  {
+   "dosya": "elenen_12_yaklasik.jpg",
+   "cagri": 12,
+   "kaynak": "yaklasik_geri_cevrilmis",
+   "insan": "kullanilabilir",
+   "insan_notu": "görsel olarak kullanılabilir (fiziksel ölçü doğrulaması değil)",
+   "kayit": {
+    "tur": "sahne_geometri",
+    "aspect": 0.449,
+    "asili_cm": 164.8,
+    "birikme": false,
+    "temas_yontemi": "maske_alti"
+   }
+  },
+  {
+   "dosya": "elenen_13_yaklasik.jpg",
+   "cagri": 13,
+   "kaynak": "yaklasik_geri_cevrilmis",
+   "insan": "gercekten_hatali",
+   "insan_notu": "fazla geniş",
+   "kayit": {
+    "tur": "sahne_geometri",
+    "aspect": 0.53,
+    "asili_cm": null,
+    "birikme": null,
+    "temas_yontemi": null
+   }
+  },
+  {
+   "dosya": "elenen_14_yaklasik.jpg",
+   "cagri": 14,
+   "kaynak": "yaklasik_geri_cevrilmis",
+   "insan": "kullanilabilir",
+   "insan_notu": "görsel olarak kullanılabilir (fiziksel ölçü doğrulaması değil)",
+   "kayit": {
+    "tur": "sahne_geometri",
+    "aspect": 0.455,
+    "asili_cm": 157.7,
+    "birikme": false,
+    "temas_yontemi": "maske_alti"
+   }
+  },
+  {
+   "dosya": "kabul_s01_ham.png",
+   "cagri": null,
+   "kaynak": "ham",
+   "insan": null,
+   "insan_notu": "kabul edilen sahne; kullanıcı kabul edilenlerin estetiğini beğendiğini söyledi (fotoğraf bazında etiket yok)",
+   "kayit": {
+    "tur": "kabul",
+    "aspect": 0.353,
+    "asili_cm": 199.5
+   }
+  },
+  {
+   "dosya": "kabul_s02_ham.png",
+   "cagri": null,
+   "kaynak": "ham",
+   "insan": null,
+   "insan_notu": "kabul edilen sahne; kullanıcı kabul edilenlerin estetiğini beğendiğini söyledi (fotoğraf bazında etiket yok)",
+   "kayit": {
+    "tur": "kabul",
+    "aspect": 0.344,
+    "asili_cm": 197.1
+   }
+  }
+ ]
+}

@@ -57,11 +57,11 @@ class Desen:
         return cv2.imencode(".png", img)[1].tobytes()
 
 
-def run(desen, n, ayni, sonucsuz, tavan):
+def run(desen, n, ayni, sonucsuz, tavan, supheli=False):
     impl = Desen(desen)
     orch.make_scene_provider = lambda s, log, name=None: SceneProvider(impl)
     s = Settings(scene_provider="mock", max_scene_calls=tavan, photo_long_side=0, auto_video=False,
-                 ayni_hata_siniri=ayni, sonucsuz_siniri=sonucsuz)
+                 ayni_hata_siniri=ayni, sonucsuz_siniri=sonucsuz, supheli_olcumde_dur=supheli)
     o = orch.Orchestrator(s, log=lambda m: None, progress=lambda f, t: None)
     job = o.new_job(design, "Düğün", "durma")
     res = o.generate_photos(job, n)
@@ -121,6 +121,19 @@ eski = {"son_uretim": {"cagri": 14, "uretilen": 2},
 assert [(x["sonuc"], x["hata_imzasi"]) for x in dk.cagri_dizisi(eski)] == [(x["sonuc"], x["hata_imzasi"]) for x in dizi]
 assert dk.cagri_dizisi(dict(eski, son_uretim={"cagri": 15, "uretilen": 2})) == []
 print("A6: 14 çağrılık iş sınır tablosu doğru")
+
+# ---------------------------------------------------------------- A7: şüpheli ölçümde dur (K-36)
+gercek = dk.kontrol_sonucu
+dk.kontrol_sonucu = lambda rec, oran, boy=None: dict(gercek(rec, oran, boy), guven="dusuk", nedenler=["sınama: düşük güven"])
+try:
+    res, rap = run("hk", 2, 0, 0, 6, supheli=True)
+    assert res["cagri"] == 1 and res["durdurma"]["neden"] == "supheli_olcum", res
+    assert "otomatik yeni ücretli çağrı başlatılmadı" in res["durdurma"]["aciklama"]
+    res, _ = run("hk", 2, 0, 0, 6, supheli=False)          # ayar kapalıysa devam eder
+    assert res["cagri"] > 1, res
+finally:
+    dk.kontrol_sonucu = gercek
+print("A7: şüpheli ölçümde otomatik yeni çağrı yok")
 
 # ---------------------------------------------------------------- B: karşılaştırma
 J = os.path.join(tmp, "karsilastirma")

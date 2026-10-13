@@ -266,6 +266,7 @@ class Orchestrator:
         siniri = int(getattr(self.s, "ayni_hata_siniri", 5) or 0)          # K-30: art arda AYNI hata
         sonucsuz_siniri = int(getattr(self.s, "sonucsuz_siniri", 8) or 0)   # K-33: son kabulden beri sonuçsuz çağrı (neden fark etmez)
         seri = {"imza": None, "sayi": 0, "sonucsuz": 0}
+        supheli_dur = bool(getattr(self.s, "supheli_olcumde_dur", True))       # K-36
         durum = {"durdurma": None}
         # karşılaştırma anahtarı (K-32): ürün ölçüsü, sahne görevi, referans kümesi ve üretim ayarları her çağrıda kaydedilir
         ref_kumesi_ids = sorted(set(ref_ids) | {x[2] for x in depot})
@@ -295,7 +296,7 @@ class Orchestrator:
                     rec["algilama_dosya"] = f"sahneler_bos/{base}_algilama.jpg"
                 rec["dosya"] = rec.get("algilama_dosya") or rec["ham_dosya"]     # geriye uyum (eski arayüz/rapor)
             rec["sade_neden"] = deneme_kayit.sade_neden(rec, prof.boy_cm)
-            rec["siniflama"] = deneme_kayit.siniflandir(rec, prof.oran)
+            rec["siniflama"] = deneme_kayit.kontrol_sonucu(rec, prof.oran, prof.boy_cm)      # K-35 otomatik kontrol
             rec["hata_imzasi"] = deneme_kayit.hata_imzasi(tur, reason)
             rap["elenenler"].append(rec)
             cur.update(sonuc="servis_hatasi" if tur == "servis_hatasi" else "elendi", tur=tur, neden=reason,
@@ -321,7 +322,13 @@ class Orchestrator:
             if seri["sayi"] >= 3 and cur.get("sonuc") == "elendi":
                 self.log(f"UYARI: aynı hata art arda {seri['sayi']}. kez: {cur.get('sade_neden')}"
                          + (f" (durma sınırı {siniri})" if siniri else " (durma sınırı kapalı)"))
-            if siniri and seri["sayi"] >= siniri:
+            sk = cur.get("siniflama") or {}
+            if supheli_dur and cur.get("sonuc") == "elendi" and sk.get("guven") == "dusuk":
+                d = {"neden": "supheli_olcum", "sayi": 1, "cagri": calls,
+                     "aciklama": f"Bu sahnede algılama güveni düşük ({' '.join(sk.get('nedenler') or [])}). Ret kesin değil; "
+                                 f"şüpheli ölçüm yüzünden otomatik yeni ücretli çağrı başlatılmadı. Elenen denemeler bölümünden "
+                                 f"gözle bak (Ayarlar: şüpheli ölçümde dur)."}
+            elif siniri and seri["sayi"] >= siniri:
                 d = {"neden": "ayni_hata_tekrari", "imza": seri["imza"], "sayi": seri["sayi"], "cagri": calls,
                      "aciklama": f"Aynı hata art arda {seri['sayi']} kez tekrarlandı: {cur.get('sade_neden')} "
                                  f"Ücretli tekrar sürdürülmedi (Ayarlar: aynı hata sınırı {siniri})."}
@@ -445,7 +452,7 @@ class Orchestrator:
         tekrar = deneme_kayit.tekrar_ozeti([d for d in rap["denemeler"] if d.get("uretim_no") == uretim_no])
         rap["son_uretim"] = {"hedef": n, "uretilen": accepted_now, "eksik": max(0, n - accepted_now), "cagri": calls, "beklemede": False,
                              "uretim_no": uretim_no, "ayni_hata_siniri": siniri,
-                             "sonucsuz_siniri": sonucsuz_siniri, "tavan": self.s.max_scene_calls, "tekrar": tekrar, "durdurma": durdurma}
+                             "sonucsuz_siniri": sonucsuz_siniri, "supheli_olcumde_dur": supheli_dur, "tavan": self.s.max_scene_calls, "tekrar": tekrar, "durdurma": durdurma}
         rap.setdefault("uretimler", []).append(dict(rap["son_uretim"], zaman=datetime.now().isoformat(timespec="seconds")))
         _write_json(os.path.join(job, "rapor.json"), rap)
         self.progress(1.0, f"Bitti: {accepted_now}/{n} geçerli fotoğraf" + (" (aynı hata tekrarı nedeniyle durduruldu)" if durdurma else ""))
@@ -466,12 +473,57 @@ class Orchestrator:
         return None
 
     # -- ortak sahne değerlendirme ve kayıt (sağlayıcıdan bağımsız) -----------------------------------
-    def _evaluate_scene(self, img, design, prof, label: str) -> dict:
+    def _evaluate_scene(self, img, design, prof, label: str, kararlilik: bool | None = None) -> dict:
+        """Sahne değerlendirmesi + ölçüm kararlılığı (K-37). kararlilik None -> Settings.olcum_kararlilik_testi."""
+        ev = self._evaluate_scene_tek(img, design, prof, label)
+        if kararlilik is None:
+            kararlilik = bool(getattr(self.s, "olcum_kararlilik_testi", True))
+        if not kararlilik or ev["tur"] == "servis_hatasi":
+            return ev
+        k = self._kararlilik(img, design, prof, ev)
+        if ev["ok"]:
+            ev["tk_info"]["kararlilik"] = k
+            if k["kararsiz"]:
+                ev["tk_info"].setdefault("uyarilar", [])
+                ev["kararlilik_uyarisi"] = ("Ölçüm kararsız: kabul kararı görüntüdeki çok küçük farklarla (JPEG / ölçek) "
+                                            "değişebiliyor; boy ve birikme gözle kontrol edilmeli.")
+        else:
+            ev.setdefault("extra", {})["kararlilik"] = k
+        return ev
+
+    def _kararlilik(self, img, design, prof, ev) -> dict:
+        """Aynı sahneyi iki küçük bozulmayla (JPEG %92 yeniden kodlama; %80 küçültüp geri büyütme) yeniden ölçer.
+        Karar (kabul/ret) değişiyorsa ya da asılı boy %3'ten fazla oynuyorsa ölçüm KARARSIZDIR: ret kesin sayılmaz, kabul
+        uyarıyla işaretlenir. Sağlayıcıya istek gitmez. Neden (kontrol örnekleri, 2026-10-13): kabul edilen s01 aynı sahnenin
+        JPEG'i ve küçültülmüş hallerinde 199,5 / 208,5 cm arasında; s02 197 / 156 cm arasında ölçülüyordu (birikme temas satırı
+        tek satırlık maske çentiğine bağlıydı)."""
+        H, W = img.shape[:2]
+        ok_, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 92])
+        varyant = [("jpeg92", cv2.imdecode(buf, cv2.IMREAD_COLOR)),
+                   ("olcek80", cv2.resize(cv2.resize(img, (int(W * 0.8), int(H * 0.8)), interpolation=cv2.INTER_AREA), (W, H),
+                                          interpolation=cv2.INTER_CUBIC))]
+        def ozet(e):
+            tk = e.get("tk_info") or (e.get("extra") or {}).get("tam_kumas") or {}
+            return {"kabul": bool(e["ok"]), "tur": e["tur"], "asili_cm": round(float(tk["asili_cm"]), 1) if tk.get("asili_cm") else None,
+                    "oran": (e.get("lay") or {}).get("aspect")}
+        ana = ozet(ev)
+        sonuclar = []
+        for ad, im in varyant:
+            e = self._evaluate_scene_tek(im, design, prof, f"(kararlılık {ad})", sessiz=True)
+            sonuclar.append(dict(ozet(e), varyant=ad))
+        asl = [x["asili_cm"] for x in [ana] + sonuclar if x["asili_cm"]]
+        oynama = (max(asl) - min(asl)) / prof.boy_cm if len(asl) > 1 else 0.0
+        karar_degisti = any(x["kabul"] != ana["kabul"] for x in sonuclar)
+        return {"kararsiz": bool(karar_degisti or oynama > 0.03), "karar_degisti": karar_degisti,
+                "asili_oynama": round(oynama, 3), "varyantlar": sonuclar}
+
+    def _evaluate_scene_tek(self, img, design, prof, label: str, sessiz: bool = False) -> dict:
         """Bir boş sahneyi değerlendirir ve tasarımı tam kumaş moduyla yerleştirir. AĞ/SAĞLAYICI KULLANMAZ.
         Hem yeni üretimde (generate_photos) hem kayıtlı sahnelerden yeniden birleştirmede aynı kurallar uygulanır:
         kumaş zorunlu algılama -> layout kalite kapısı (ürün oranı) -> tam kumaş yerleşimi -> geometri/birikme sorunları.
         Dönüş: {"ok", "tur", "neden", "det", "lay", "info", "out", "kalite", "extra"}."""
         pa = prof.oran
+        _log = (lambda m: None) if sessiz else self.log
         det = bd.detect(img, hint={"kind": "fabric"})      # ürün kumaş: otomatik sert/kumaş sınıflandırması yerleşimi değiştirmez
         reason, lay, tur_ = None, {}, "kalite_kapisi"
         if not det.ok:
@@ -479,7 +531,7 @@ class Orchestrator:
         elif det.mask.any():
             why, lay = layout.check(det, img.shape, pa)       # oran düzeltme (sahneyi germe) KAPALI; oran ürün profilinden
             if lay:
-                self.log(f"{label} ölçüm: oran {lay['aspect']:.2f} (ürün {pa:.2f}), üst/alt genişlik {lay['taper']:.2f}, "
+                _log(f"{label} ölçüm: oran {lay['aspect']:.2f} (ürün {pa:.2f}), üst/alt genişlik {lay['taper']:.2f}, "
                          f"sol/sağ yükseklik {lay['side_ratio']:.2f}, boy %{lay['top_frac'] * 100:.0f}-%{lay['bottom_frac'] * 100:.0f}")
             if why and self.s.strict_layout:
                 reason = why
@@ -487,23 +539,26 @@ class Orchestrator:
                     tur_ = "sahne_geometri"           # afiş oranı/boyu ürüne uymuyor: sahne geometrisi hatası (kalite değil)
         else:
             reason = "afiş bulunamadı"
+        alg = {k: det.metrics.get(k) for k in ("ust_bant_orani", "yan_tasma_orani") if det.metrics.get(k) is not None}
         if reason:
-            self.log(f"{label} elendi: {reason}")
-            return {"ok": False, "tur": tur_, "neden": reason, "det": det, "lay": lay}
+            _log(f"{label} elendi: {reason}")
+            return {"ok": False, "tur": tur_, "neden": reason, "det": det, "lay": lay, "extra": {"algilama": alg}}
         try:
             out, info = cp.composite(img, design, det, mode="tam_kumas", profile=prof)
         except Exception as e:                           # geometri çıkarılamadı: sahne elenir, iş durmaz
-            self.log(f"{label} elendi: kumaş geometrisi çıkarılamadı ({e.__class__.__name__}: {e})")
-            return {"ok": False, "tur": "sahne_geometri", "neden": f"kumaş geometrisi çıkarılamadı: {e}", "det": det, "lay": lay}
+            _log(f"{label} elendi: kumaş geometrisi çıkarılamadı ({e.__class__.__name__}: {e})")
+            return {"ok": False, "tur": "sahne_geometri", "neden": f"kumaş geometrisi çıkarılamadı: {e}", "det": det, "lay": lay,
+                    "extra": {"algilama": alg}}
         tk_info = {k: info[k] for k in ("px_per_cm", "asili_cm", "gizli_cm", "v_gizli", "temas_y", "birikme", "temas_yontemi",
                                         "olcek_farki", "dikey_olcek", "gizli_murekkep", "sorunlar", "uyarilar")}
-        tk_info.update({k: info.get(k) for k in ("kivrim_kaymasi", "kenar_sigma_px", "yerlesim_donusumu", "dortgen", "kenar_sapmasi", "kumas_disi_baski")})
+        tk_info.update({k: info.get(k) for k in ("yayilma_supheli", "yayilma_sol_px", "yayilma_sag_px", "kivrim_kaymasi", "kenar_sigma_px", "yerlesim_donusumu", "dortgen", "kenar_sapmasi", "kumas_disi_baski")})
         if info["sorunlar"]:
             tur = info["sorunlar"][0]["tur"]
             msg = " ".join(x["mesaj"] for x in info["sorunlar"])
-            self.log(f"{label} elendi ({product.HATA_TURLERI.get(tur, tur)}): {msg}")
-            return {"ok": False, "tur": tur, "neden": msg, "det": det, "lay": lay, "extra": {"tam_kumas": tk_info}}
+            _log(f"{label} elendi ({product.HATA_TURLERI.get(tur, tur)}): {msg}")
+            return {"ok": False, "tur": tur, "neden": msg, "det": det, "lay": lay, "extra": {"tam_kumas": tk_info, "algilama": alg}}
         quality = layout.score(lay, pa) if lay else 50.0
+        tk_info["algilama"] = alg
         return {"ok": True, "tur": None, "neden": None, "det": det, "lay": lay, "info": info, "tk_info": tk_info,
                 "out": out, "kalite": quality}
 
@@ -520,6 +575,8 @@ class Orchestrator:
                "olcu": [out.shape[1], out.shape[0]], "yerlesim": ev["lay"], "servis": servis, "kalite": ev["kalite"],
                "oran_duzeltme": None, "kurdele": (ribbon or {}).get("hex"),
                "yerlesim_modu": "tam_kumas", "olcu_id": prof.olcu_id, "tam_kumas": ev["tk_info"]}
+        if ev.get("kararlilik_uyarisi"):
+            rec["uyari"] = list(rec["uyari"]) + [ev["kararlilik_uyarisi"]]
         if info["v_gizli"] < 0.995:
             os.makedirs(os.path.join(job, "onizleme"), exist_ok=True)
             gname = f"onizleme/{num:02d}_gizli.jpg"

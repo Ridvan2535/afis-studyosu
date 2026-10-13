@@ -210,6 +210,10 @@ def _place_fabric(scene, design, det, ink, paper, ssaa, follow, inset_frac, fold
 # Aşağıdaki eşiklerin hepsi VARSAYIMDIR (sentetik sahnelerle seçildi; gerçek sahnelerle ayarlanmadı):
 TAM_BOY_TOL = 0.03         # VARSAYIM: görünen asılı boy ürün boyundan bu oranı aşacak kadar UZUNSA sahne geometrisi uyuşmuyor
                            # (tolerans içindeki uzunluk farkı tasarımı dikeyde en fazla bu kadar sıkıştırır ve UYARI olarak yazılır)
+TEK_YAN_BUYUK_EN_AZ = 0.06  # VARSAYIM: yalnız belirgin yayılmada (büyük yan asılı genişliğin %6'sı ve üstü) tek taraflılık aranır;
+                            # küçük yayılmalar (kabul edilmiş s01'de %1-4) gürültüdür, bu kurala girmez
+TEK_YAN_ORAN = 0.25        # VARSAYIM: yayılmanın küçük yanı büyüğün bu oranından azsa "tek taraflı" (maske taşması şüphesi)
+TEK_YAN_EN_FAZLA = 0.02    # VARSAYIM: ... ve küçük yandaki yayılma asılı genişliğin %2'sinden azsa
 SPREAD_FRAC = 0.04         # VARSAYIM: alt kenarda genişlik asılı kısma göre bu orandan fazla artıyorsa "birikme yayılması" var
 MUREKKEP_ESIK = 0.001      # VARSAYIM: gizli bölgedeki baskılı piksel oranı bunun üstündeyse "gizli bölgede baskı var"
 GIZLI_EN_FAZLA = 0.25      # VARSAYIM: yerde kalan (gizli) boy / ürün boyu bunun üstündeyse sergileme yüksekliği ürüne uymuyor
@@ -329,6 +333,7 @@ def fabric_geometry(mask, en_cm: float, boy_cm: float, tol: float = TAM_BOY_TOL,
 
     # zemine temas: alt kısımda genişliğin asılı kısma göre belirgin ve sürekli artması (birikme yayılması)
     contact_row, method, birikme = None, "maske_alti", False
+    yayilma = {"supheli": False, "sol_px": 0.0, "sag_px": 0.0}
     lo = int(0.55 * hgt)
     hi = max(lo + 1, hgt - max(2, int(0.01 * hgt)))
     big = (w > W0 * (1 + SPREAD_FRAC)) & (w - W0 > 3)
@@ -339,6 +344,18 @@ def fabric_geometry(mask, en_cm: float, boy_cm: float, tol: float = TAM_BOY_TOL,
             onset = W0 + max(2.0, 0.005 * W0)
             while r0 > lo and w[r0 - 1] > onset:
                 r0 -= 1
+            # Birikme kumaşı iki yana da yayar. Yayılma yalnız TEK yanda ise (diğer yan asılı kısımdaki yerinde) bu çoğunlukla
+            # maskenin zemine/arka plana taşmasıdır (2026-10-13 kontrol örnekleri #4, #5): birikme SAYILMAZ, algılama şüpheli
+            # işaretlenir (sonuç "İnceleme gerekli"; kesin üretim hatası yazılmaz). VARSAYIM: küçük yan, büyüğün %25'inden az
+            # ve asılı genişliğin %2'sinden az ise tek taraflı (büyük yan en az %6 iken).
+            sl = float(np.median(cl - L[r0:hi])) if hi > r0 else 0.0
+            sr = float(np.median(R[r0:hi] - cr)) if hi > r0 else 0.0
+            yayilma.update(sol_px=round(sl, 1), sag_px=round(sr, 1))
+            if max(sl, sr) >= TEK_YAN_BUYUK_EN_AZ * W0 and min(sl, sr) < TEK_YAN_ORAN * max(sl, sr) \
+                    and min(sl, sr) < TEK_YAN_EN_FAZLA * W0:
+                yayilma["supheli"] = True
+                method = "tek_tarafli_yayilma"
+                break
             contact_row, method, birikme = r0, "kenar_yayilmasi", True
             break
     xs_all = np.arange(m.shape[1], dtype=np.float64)
@@ -368,6 +385,7 @@ def fabric_geometry(mask, en_cm: float, boy_cm: float, tol: float = TAM_BOY_TOL,
             "kenar_sigma_px": sig, "W0": W0, "px_per_cm": px_per_cm,
             "top_line": (at, bt), "top_x": top_x, "temas_x": temas_x, "temas_y": float(np.median(temas_x[cxs])),
             "birikme": birikme, "temas_yontemi": method, "asili_px": asili_px, "asili_cm": asili_cm,
+            "yayilma_supheli": yayilma["supheli"], "yayilma_sol_px": yayilma["sol_px"], "yayilma_sag_px": yayilma["sag_px"],
             "x_range": (int(np.floor(min(L.min(), cl))), int(np.ceil(max(R.max(), cr))))}
 
 
@@ -517,6 +535,7 @@ def _place_full_fabric(scene, design, det, ink, paper, ssaa, fold_shift, en_cm, 
             "px_per_cm": round(ppc, 3), "asili_cm": round(asili_cm, 1), "gizli_cm": round(gizli_cm, 1),
             "v_gizli": round(v_gizli, 4), "temas_y": round(g["temas_y"], 1), "birikme": bool(g["birikme"]),
             "temas_yontemi": g["temas_yontemi"], "olcek_farki": round(olcek_farki, 4),
+            "yayilma_supheli": g["yayilma_supheli"], "yayilma_sol_px": g["yayilma_sol_px"], "yayilma_sag_px": g["yayilma_sag_px"],
             "dikey_olcek": "temas_cizgisine_kadar" if fit_to_contact else "fiziksel",
             "ust_kenar": [round(at, 5), round(bt, 2)], "genislik_px": round(g["W0"], 1),
             "gizli_murekkep": round(ink_hidden, 5), "sorunlar": sorunlar, "uyarilar": uyarilar}

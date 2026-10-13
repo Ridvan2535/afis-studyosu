@@ -187,6 +187,66 @@ def _score(mask):
 
 
 # ----------------------------------------------------------------------------
+# Kumaş maskesi iyileştirme (2026-10-13, kontrol örnekleri: iş 20261013-005509)
+UST_BANT_EN_FAZLA = 0.08     # VARSAYIM: maskenin üstünde en fazla asılı boyun %8'i kadar bant aranır
+UST_BANT_SATIR_ORANI = 0.80  # bir satır, iç sütunlarının %80'i kumaş rengindeyse kumaş sayılır
+YAN_TASMA_PAY = 0.012        # kenar doğrusundan bu kadar (kadraj eni oranı) dışarı taşan satır "taşma" sayılır
+
+
+def _refine_fabric(work_bgr, wm):
+    """Kumaş maskesinin belirsizliğini ÖLÇER; maskeyi DEĞİŞTİRMEZ (2026-10-13, kontrol örnekleri iş 20261013-005509).
+
+    * ust_bant_orani: maskenin hemen üstünde kumaş renginde ama maskeye girmemiş bant (çubuk kılıfı/üst dikiş bandı)
+      yüksekliği / asılı boy. Kabul edilmiş sahnelerde (ör. 005509 s01) tasarım bu bandın ALTINDAN başlar ve kullanıcı
+      sonucu onayladı; bu yüzden bant maskeye eklenmez. Ama bant bazı sahnelerde ayrı görünür, bazılarında görünmez:
+      boy ölçümünde bu kadar belirsizlik vardır. Ret kararı bu belirsizlik içinde değişebiliyorsa sonuç "İnceleme gerekli".
+    * yan_tasma_orani: kenar doğrusundan dışarı taşan satırların oranı (maske arka plana/zemine taşmış olabilir)."""
+    m = (wm > 0).astype(np.uint8)
+    H, W = m.shape
+    ys, xs = np.where(m)
+    if len(ys) < 200:
+        return wm, {}
+    y0, y1 = int(ys.min()), int(ys.max())
+    h = y1 - y0 + 1
+    lab = cv2.cvtColor(cv2.GaussianBlur(work_bgr, (0, 0), 1.5), cv2.COLOR_BGR2LAB).astype(np.float32)
+    k = max(5, int(0.012 * min(H, W))) | 1
+    er = cv2.erode(m, np.ones((k, k), np.uint8)) > 0
+    if er.sum() < 100:
+        return wm, {}
+    px = lab[er]
+    ref = np.median(px, 0)
+    cs = np.hypot(px[:, 1] - ref[1], px[:, 2] - ref[2])
+    ctol = float(np.clip(np.percentile(cs, 95) * 1.8, 5.0, 10.0))
+    ok = (np.hypot(lab[..., 1] - ref[1], lab[..., 2] - ref[2]) < ctol) & (lab[..., 0] > 0.55 * ref[0]) & (lab[..., 0] < ref[0] + 30)
+    rows = np.arange(int(y0 + 0.10 * h), int(y0 + 0.85 * h))
+    rows = rows[m[rows].any(1)]
+    if len(rows) < 20:
+        return wm, {}
+    xl = np.array([np.argmax(m[r]) for r in rows], np.float64)
+    xr = np.array([W - 1 - np.argmax(m[r][::-1]) for r in rows], np.float64)
+    tasma = 0
+    for xx in (xl, xr):
+        p = np.polyfit(rows.astype(np.float64), xx, 1)
+        for _ in range(3):
+            res = xx - np.polyval(p, rows)
+            keep = np.abs(res) < 3 * (np.median(np.abs(res)) + 1.0)
+            p = np.polyfit(rows[keep].astype(np.float64), xx[keep], 1)
+        res = xx - np.polyval(p, rows)
+        tasma += int((np.abs(res) > YAN_TASMA_PAY * W).sum())
+    xa, xb = int(np.median(xl)), int(np.median(xr))
+    inner = slice(xa + int(0.12 * (xb - xa)), max(xa + int(0.12 * (xb - xa)) + 1, xb - int(0.12 * (xb - xa))))
+    eklenen = 0
+    # maskenin iç sütunlardaki gerçek üst kenarı (köşelerdeki fiyonk/çubuk çıkıntıları değil)
+    tops = np.argmax(m[:, inner], 0)
+    y_in = int(np.median(tops[m[:, inner].any(0)])) if m[:, inner].any() else y0
+    y = y_in - 1
+    while y > y_in - UST_BANT_EN_FAZLA * h and y > 0 and ok[y, inner].mean() > UST_BANT_SATIR_ORANI:
+        y -= 1
+        eklenen += 1
+    return wm, {"ust_bant_orani": round(eklenen / h, 4), "yan_tasma_orani": round(tasma / (2 * len(rows)), 4)}
+
+
+# ----------------------------------------------------------------------------
 # Geometri: sert afiş mi, kumaş mı?
 # ----------------------------------------------------------------------------
 def _order_quad(q):
@@ -365,6 +425,9 @@ def detect(img_bgr, hint=None, backend="auto") -> Detection:
         return d
 
     score, wm, holes_frac = max(cands, key=lambda c: c[0])
+    rinfo = {}
+    if hint.get("kind") == "fabric" and used != "hint-polygon":
+        wm, rinfo = _refine_fabric(work, wm)
     mask = cv2.resize(wm, (W, H), interpolation=cv2.INTER_NEAREST) if scale < 1 else wm
     mask = (mask > 0).astype(np.uint8)
     sc, ar, solidity, border_frac = _score(mask)
@@ -375,7 +438,7 @@ def detect(img_bgr, hint=None, backend="auto") -> Detection:
 
     det = Detection(mask * 255, kind, quad, edges, backend=used or backend)
     det.metrics.update(score=sc, area_ratio=ar, border_touch=border_frac, holes=holes_frac,
-                       lightness=lw, chroma=cw, **ginfo)
+                       lightness=lw, chroma=cw, **ginfo, **rinfo)
 
     # --- kalite kapısı ---
     if cf < 0.3:

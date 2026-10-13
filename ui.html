@@ -104,6 +104,7 @@ table.karne tr.win td{color:var(--ok);font-weight:600}
 .rejc.seri{border-color:var(--warn)}
 .rate{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .rate input{flex:1;min-width:180px}
+.rejc .bt button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .rate button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 table.cmp{border-collapse:collapse;font-size:13px;width:100%}
 table.cmp td,table.cmp th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left}
@@ -306,6 +307,8 @@ table.cmp td,table.cmp th{border-bottom:1px solid var(--line);padding:5px 6px;te
         <div><label class="f" for="longSide">Fotoğraf uzun kenarı (piksel)</label><input type="number" id="longSide" min="0" max="6000" step="100"></div>
         <div><label class="f" for="sameErr">Aynı hata art arda kaç kez olursa üretim dursun (0 = kapalı)</label><input type="number" id="sameErr" min="0" max="50">
           <div class="hint">Önerilen 5. Aynı nedenle üst üste elenen sahneler genelde aynı sorunun sürdüğünü gösterir; program bu sınırda ücretli denemeyi keser, kabul edilen fotoğrafları saklar ve kaç tane eksik kaldığını gösterir. 3. tekrardan itibaren uyarı verir.</div></div>
+        <div><label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="supDur" style="margin-top:4px">
+          <span><b>Şüpheli ölçümde dur</b> (önerilir): algılama güveni düşük bir ret olursa program yeni ücretli çağrı yapmaz; sahneyi "İnceleme gerekli" olarak bırakır, sen bakarsın.</span></label></div>
         <div><label class="f" for="noRes">Son kabulden beri kaç çağrı sonuç vermezse üretim dursun (0 = kapalı)</label><input type="number" id="noRes" min="0" max="60">
           <div class="hint">Önerilen 8. Nedenler farklı olsa da sayar; bir sahne kabul edilince sıfırlanır. Toplam çağrı sınırı ayrıca geçerlidir. Sonuçlar ekranındaki "Durma sınırları bu işte ne yapardı?" tablosu, farklı değerlerin kayıtlı bir işte hangi çağrıda duracağını gösterir.</div></div>
       </div>
@@ -430,7 +433,7 @@ async function loadConfig() {
   $("#openaiModel").value = cfg.openai_model === "auto" ? "" : cfg.openai_model; $("#geminiModel").value = cfg.gemini_model === "auto" ? "" : cfg.gemini_model;
   $("#vidRes").value = cfg.video_resolution; $("#seconds").value = cfg.seconds;
   $("#maxScene").value = cfg.max_scene_calls; $("#maxVideo").value = cfg.max_video_tries;
-  $("#sameErr").value = cfg.ayni_hata_siniri ?? 5; $("#noRes").value = cfg.sonucsuz_siniri ?? 8;
+  $("#sameErr").value = cfg.ayni_hata_siniri ?? 5; $("#noRes").value = cfg.sonucsuz_siniri ?? 8; $("#supDur").checked = cfg.supheli_olcumde_dur !== false;
   loadPromptInfo();
   $("#longSide").value = cfg.photo_long_side;
   $("#strictLayout").checked = cfg.strict_layout !== false;
@@ -508,7 +511,7 @@ async function saveSettings(silent) {
     openai_model: $("#openaiModel").value.trim() || "auto", gemini_model: $("#geminiModel").value.trim() || "auto",
     video_resolution: $("#vidRes").value, seconds: $("#seconds").value,
     max_scene_calls: $("#maxScene").value, max_video_tries: $("#maxVideo").value, photo_long_side: $("#longSide").value,
-    strict_layout: $("#strictLayout").checked, ayni_hata_siniri: $("#sameErr").value, sonucsuz_siniri: $("#noRes").value,
+    strict_layout: $("#strictLayout").checked, ayni_hata_siniri: $("#sameErr").value, sonucsuz_siniri: $("#noRes").value, supheli_olcumde_dur: $("#supDur").checked,
     prompt_surumleri: Object.fromEntries([...document.querySelectorAll("#promptSel select")].map(x => [x.dataset.kat, x.value])),
     auto_video: $("#autoVideo").checked, auto_video_move: $("#autoMove").value, auto_video_kind: $("#autoKind").value,
   };
@@ -757,7 +760,7 @@ function renderResult() {
     return `<div class="ph ${selPhoto === p.ad ? "sel" : ""}" data-ad="${esc(p.ad)}">
       <img loading="lazy" src="${esc(p.url)}" alt="${esc(p.ad)}"><span class="tick">${selPhoto === p.ad ? "✓" : ""}</span>
       <button class="zoom" data-zoom="${esc(p.url)}">büyüt</button>
-      <div class="cap"><span>${kindName(p.tur, p)}</span>${p.en_iyi ? `<span class="chip ok" title="Bu işteki en yüksek kalite puanı">★ en iyi</span>` : ""}
+      <div class="cap"><span class="chip ok" title="Otomatik kontrolden geçti">Uygun</span><span>${kindName(p.tur, p)}</span>${p.en_iyi ? `<span class="chip ok" title="Bu işteki en yüksek kalite puanı">★ en iyi</span>` : ""}
       ${p.servis ? `<span class="chip" title="Bu sahneyi üreten servis${p.kalite != null ? " · kalite puanı " + p.kalite + "/100" : ""}">${esc(niceName(p.servis))}${p.kalite != null ? " · " + Math.round(p.kalite) : ""}</span>` : ""}
       ${warn ? `<span class="chip warn" title="${esc(warn)}">uyarı</span>` : ""}
       ${p.insan ? `<span class="chip ${p.insan.karar === "begendim" ? "ok" : "bad"}" title="${esc(p.insan.not || "")}">${p.insan.karar === "begendim" ? "beğendim" : "uygun değil"}</span>` : ""}
@@ -800,54 +803,66 @@ function renderResult() {
   loadConfigCost();
 }
 const REJ_TUR = {servis_hatasi: "servis hatası", kalite_kapisi: "kalite kapısı", sahne_geometri: "sahne ürün ölçüsüne uymuyor", birikme_cozulemedi: "zemindeki birikme çözülemedi", sahne_kivrim: "kumaş fazla kıvrımlı"};
-const KAYNAK = {uretim: ["Üretim hatası", "bad", "Model afişi ürüne uymayan biçimde çizmiş; ölçümler tutarlı."],
-  olasi_algilama: ["Olası algılama hatası", "warn", "Ölçümler kendi içinde çelişiyor; sorun programın kumaşı bulmasında olabilir. Öğrenme verisine katılmaz."],
-  belirsiz: ["Belirsiz", "", "Üretim mi algılama mı olduğu güvenle ayrılamıyor."], servis: ["Servis hatası", "", "Görsel alınamadı; öğrenme verisine katılmaz."]};
+const DURUM = {inceleme: ["İnceleme gerekli", "warn", "Sahne bu ürün için kullanılmadı ama ret kesin değil: ölçüm sınırda ya da algılama güveni düşük. Gözle bak."],
+  kesin_hata: ["Kesin hata", "bad", "Afiş biçimi ürüne açıkça uymuyor (otomatik, güvenilir ölçüm) ya da sen gerçekten hatalı dedin."],
+  servis: ["Servis hatası", "", "Görsel alınamadı."]};
+const GUVEN = {yuksek: "algılama güveni yüksek", dusuk: "algılama güveni DÜŞÜK", bilinmiyor: "algılama güveni bilinmiyor (eski kayıt)"};
 function renderRejects(i) {
   const rej = i.elenenler || [];
   if (!rej.length) { $("#rejBox").innerHTML = ""; return; }
   const den = i.denemeler || [];
-  const say = {}; rej.forEach(r => { const k = (r.siniflama || {}).kaynak || "belirsiz"; say[k] = (say[k] || 0) + 1; });
+  const say = {}; rej.forEach(r => { const k = (r.durum || {}).durum || "inceleme"; say[k] = (say[k] || 0) + 1; });
+  const ins = {}; rej.forEach(r => { if (r.insan) ins[r.insan.karar] = (ins[r.insan.karar] || 0) + 1; });
   const t = i.tekrar;
-  // art arda aynı hata: kayıtlı imza yoksa (eski iş) gösterilen sade nedenden sayılır
   // art arda: aynı imza VE ardışık çağrı (arada kabul edilen çağrı seriyi bozar)
   let prev = null, prevC = null, prevU = null, run = 0; const runs = rej.map(r => { const k = r.hata_imzasi, uN = r.uretim_no ?? 0; run = (k && k === prev && uN === prevU && r.cagri === prevC + 1) ? run + 1 : 1; prev = k; prevC = r.cagri; prevU = uN; return run; });
   const card = (r, n) => {
-    const k = KAYNAK[(r.siniflama || {}).kaynak] || KAYNAK.belirsiz;
+    const du = DURUM[(r.durum || {}).durum] || DURUM.inceleme;
+    const s = r.siniflama || {};
     const d = den.find(x => x.cagri === r.cagri && (x.uretim_no ?? null) === (r.uretim_no ?? null));
-    const main = r.algilama_url || r.ham_url || r.diger_url;
+    const main = r.ham_url || r.yaklasik_url || r.algilama_url || r.diger_url;
     const btns = [r.ham_url ? `<button data-zoom="${esc(r.ham_url)}">ham görsel</button>` : "",
-                  r.algilama_url ? `<button data-zoom="${esc(r.algilama_url)}">algılama</button>` : "",
+                  r.yaklasik_url ? `<button data-zoom="${esc(r.yaklasik_url)}" title="Algılama katmanından hesaplanan yaklaşık görüntü; ham görsel DEĞİL">yaklaşık sahne (ham değil)</button>` : "",
+                  r.algilama_url ? `<button data-zoom="${esc(r.algilama_url)}">algılama katmanı</button>` : "",
                   r.diger_url ? `<button data-zoom="${esc(r.diger_url)}">kayıtlı görsel</button>` : ""].join("");
-    const note = r.tur === "servis_hatasi" ? "" : (!r.ham_url ? `<span class="hint" style="margin:0">Ham görsel kaydedilmemiş (eski kayıt)${r.algilama_url ? "; yalnız algılama işaretli görsel var" : ""}.</span>` : "");
+    const note = r.tur === "servis_hatasi" ? "" : (!r.ham_url ? `<span class="hint" style="margin:0">Orijinal sahne kaydedilmemiş; kurtarılamaz.${r.yaklasik_url ? " Küçük resim algılama katmanından hesaplanan <b>yaklaşık</b> görüntüdür, ham görsel değildir." : ""}</span>` : "");
+    const hk = (r.insan || {}).karar;
     return `<div class="rejc ${runs[n] >= 3 ? "seri" : ""}">
       <div class="im" ${main ? `data-zoom="${esc(main)}"` : ""}>${main ? `<img loading="lazy" src="${esc(main)}" alt="">` : `<div class="noimg">Görsel yok</div>`}<span class="no">#${r.cagri}</span></div>
       <div class="tx"><b style="color:var(--ink)">${esc(r.sade_neden || r.neden || "")}</b>
-        <span><span class="chip ${k[1]}" title="${esc(k[2])}">${k[0]}</span> <span class="chip">${esc(REJ_TUR[r.tur] || r.tur || "")}</span>${runs[n] >= 2 ? ` <span class="chip warn">art arda ${runs[n]}.</span>` : ""}</span>
-        <span class="hint" style="margin:0">${esc(((r.siniflama || {}).aciklama) || "")}</span>
+        <span><span class="chip ${du[1]}" title="${esc(du[2])}">${du[0]}</span>${s.guven ? ` <span class="chip ${s.guven === "dusuk" ? "warn" : ""}">${esc(GUVEN[s.guven] || s.guven)}</span>` : ""}${runs[n] >= 2 ? ` <span class="chip warn">art arda ${runs[n]}.</span>` : ""}</span>
+        <span class="hint" style="margin:0">Otomatik kontrol: ${esc(s.aciklama || "")}</span>
+        ${(r.durum || {}).not ? `<span class="hint" style="margin:0"><b>${esc(r.durum.not)}</b></span>` : ""}
         <div class="bt">${btns}</div>${note}
+        ${r.tur === "servis_hatasi" ? "" : `<div class="bt"><button class="${hk === "kullanilabilir" ? "on" : ""}" data-el="${esc(r.insan_anahtar)}" data-k="kullanilabilir" style="cursor:pointer">Kullanılabilir</button><button class="${hk === "gercekten_hatali" ? "on" : ""}" data-el="${esc(r.insan_anahtar)}" data-k="gercekten_hatali" style="cursor:pointer">Gerçekten hatalı</button>${hk ? `<button data-el="${esc(r.insan_anahtar)}" data-k="" style="cursor:pointer">etiketi kaldır</button>` : ""}</div>`}
         <details><summary>ayrıntı</summary><div class="hint" style="margin:0">${esc(r.neden || "")}${d ? `<br>Model: ${esc(d.model || "—")} · prompt sürümü ${esc(d.prompt_surumu || "—")} · ${d.sure_sn ?? "—"} sn · referans: ${esc((d.referanslar || []).join(", ") || "yok")}` : "<br>Bu çağrı için prompt/model kaydı yok (eski iş; sonradan doldurulmadı)."}</div>
           ${d && d.prompt ? `<details><summary>prompt (${d.prompt_kelime} kelime)</summary><div class="hint" style="white-space:pre-wrap;margin:0">${esc(d.prompt)}</div></details>` : ""}</details></div></div>`;
   };
   $("#rejBox").innerHTML = `<details open style="margin-top:14px"><summary><b>Elenen denemeler (${rej.length})</b></summary>
     <div class="hint">Santimetreler fotoğraftan hesaplanan <b>tahmini</b> değerlerdir. `
-    + Object.entries(say).map(([k, v]) => `${(KAYNAK[k] || KAYNAK.belirsiz)[0]}: ${v}`).join(" · ")
+    + Object.entries(say).map(([k, v]) => `${(DURUM[k] || DURUM.inceleme)[0]}: ${v}`).join(" · ")
+    + (Object.keys(ins).length ? ` · senin etiketin: ${ins.kullanilabilir || 0} kullanılabilir, ${ins.gercekten_hatali || 0} gerçekten hatalı` : "")
     + (t ? ` · aynı hatanın en uzun art arda serisi: ${t.en_uzun_seri}` : "")
-    + `. Kenarı turuncu kartlar aynı hatanın art arda 3. veya daha sonraki tekrarıdır.</div>
+    + `. Senin etiketin otomatik kontrol kaydını silmez; ayrı dosyada tutulur. Kenarı turuncu kartlar aynı hatanın art arda 3. veya daha sonraki tekrarıdır.</div>
     <div class="rejgrid">${rej.map(card).join("")}</div>${durmaTablosu(i.durma_simulasyonu)}</details>`;
   $("#rejBox").querySelectorAll("[data-zoom]").forEach(b => b.onclick = e => { e.stopPropagation(); $("#lbImg").src = b.dataset.zoom; $("#lb").classList.add("on"); });
+  $("#rejBox").querySelectorAll("[data-el]").forEach(b => b.onclick = async e => {
+    e.stopPropagation();
+    try { await api("/api/degerlendir", {job: curJob, elenen: b.dataset.el, karar: b.dataset.k || null}); await loadJob(curJob, true); toast("Etiket kaydedildi"); }
+    catch (er) { toast("Kaydedilemedi: " + er.message); }
+  });
 }
-const DUR_NEDEN = {ayni_hata: "aynı hata sınırı", sonucsuz: "sonuçsuz çağrı sınırı", tavan: "toplam çağrı sınırı", hedef: "hedefe ulaşıldı", kayit_bitti: "kayıt bitti"};
+const DUR_NEDEN = {supheli_olcum: "şüpheli ölçümde dur", ayni_hata: "aynı hata sınırı", sonucsuz: "sonuçsuz çağrı sınırı", tavan: "toplam çağrı sınırı", hedef: "hedefe ulaşıldı", kayit_bitti: "kayıt bitti"};
 function durmaTablosu(d) {
   if (!d) return "";
   const seq = d.cagri_dizisi.map(x => `<span class="chip ${x.sonuc === "kabul" ? "ok" : ""}" title="${esc(x.hata_imzasi || "")}">${x.cagri}${x.sonuc === "kabul" ? "✓" : "✗"}</span>`).join(" ");
   const sa = d.simdiki_ayar;
-  const rows = d.tablo.filter(r => r.ayni_hata_siniri !== 0 || r.sonucsuz_siniri !== 0);
+  const rows = d.tablo.filter(r => r.ayni_hata_siniri !== 0 || r.sonucsuz_siniri !== 0 || r.supheli_dur);
   return `<details style="margin-top:12px"><summary>Durma sınırları bu işte ne yapardı? (kayıtlı sonuçlarla hesap, servis çağrısı yok)</summary>
     <div class="hint">${d.turetildi ? "Bu eski işte çağrı sırası kayıttan türetildi: elenen listesinde olmayan çağrılar kabul edilenlerdir. " : ""}Toplam çağrı sınırı ${d.tavan}. Çağrı sırası: ${seq}</div>
-    <div class="hint"><b>Şimdiki ayarla</b> (aynı hata ${sa.ayni_hata_siniri || "kapalı"}, sonuçsuz ${sa.sonucsuz_siniri || "kapalı"}): ${sa.dur_cagri}. çağrıda durur (${DUR_NEDEN[sa.neden] || sa.neden}); ${sa.kabul} kabul${sa.kacan_kabul ? `, <b>${sa.kacan_kabul} kabul kaçardı</b>` : ""}.</div>
-    <table class="cmp"><thead><tr><th>Aynı hata sınırı</th><th>Sonuçsuz sınırı</th><th>Durduğu çağrı</th><th>Neden</th><th>Kabul</th><th>Kaçacak kabul</th></tr></thead><tbody>
-    ${rows.map(r => `<tr><td>${r.ayni_hata_siniri || "kapalı"}</td><td>${r.sonucsuz_siniri || "kapalı"}</td><td>${r.dur_cagri}</td><td>${esc(DUR_NEDEN[r.neden] || r.neden)}</td><td>${r.kabul}</td><td>${r.kacan_kabul || ""}</td></tr>`).join("")}</tbody></table>
+    <div class="hint"><b>Şimdiki ayarla</b> (şüphelide dur ${sa.supheli_dur ? "açık" : "kapalı"}, aynı hata ${sa.ayni_hata_siniri || "kapalı"}, sonuçsuz ${sa.sonucsuz_siniri || "kapalı"}): ${sa.dur_cagri}. çağrıda durur (${DUR_NEDEN[sa.neden] || sa.neden}); ${sa.kabul} kabul${sa.kacan_kabul ? `, <b>${sa.kacan_kabul} kabul kaçardı</b>` : ""}.</div>
+    <table class="cmp"><thead><tr><th>Şüphelide dur</th><th>Aynı hata sınırı</th><th>Sonuçsuz sınırı</th><th>Durduğu çağrı</th><th>Neden</th><th>Kabul</th><th>Kaçacak kabul</th></tr></thead><tbody>
+    ${rows.map(r => `<tr><td>${r.supheli_dur ? "açık" : "kapalı"}</td><td>${r.ayni_hata_siniri || "kapalı"}</td><td>${r.sonucsuz_siniri || "kapalı"}</td><td>${r.dur_cagri}</td><td>${esc(DUR_NEDEN[r.neden] || r.neden)}</td><td>${r.kabul}</td><td>${r.kacan_kabul || ""}</td></tr>`).join("")}</tbody></table>
     <div class="hint">Bu bir geriye dönük hesaptır: erken durulsaydı sonraki çağrıların sonucu bilinmezdi; sahne üretimi her seferinde farklı çıkar.</div></details>`;
 }
 function renderRate(i) {

@@ -100,6 +100,9 @@ yüzeye tasarım uygulama motoru ürün türüne özel.
 - Yerleştirme dönüşümü değişirse yalnız işaret merkezleri yetmez: `tests/test_sureklilik.py` (ince çizgi / harf
   sürekliliği, katlanma, satır sıçraması) geçmeli ve gerçek kayıtlı sahnelerde önce/sonra yakın görünüm incelenmeli.
 - Işık gradyanı doğrudan kumaş geometrisi kabul edilmez (K-19).
+- Algılama/yerleşim/kalite kapısı değişikliklerinde `tests/test_kontrol_ornekleri.py` geçmeli (iş 005509'un kalıcı
+  kontrol örnekleri; kabuller kabul, fazla geniş 1/6/13 elenir, kullanılabilir etiketliler otomatik "kesin hata" olmaz).
+  Kontrol sonuçları: Uygun / İnceleme gerekli / Kesin hata (K-35); insan etiketi otomatik kaydı değiştirmez (K-38).
 - Yerleşim değişikliklerinde `tests/test_duzlem_yerlesim.py` geçmeli (dalgalı kenarda tasarım çizgileri düz, önden oran
   korunur, açılıda tek perspektif, güçlü kıvrımda `sahne_kivrim`).
 
