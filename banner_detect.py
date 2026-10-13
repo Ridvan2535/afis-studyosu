@@ -620,10 +620,23 @@ def detect_candidates(img_bgr, hint=None, backend="auto", en_fazla: int = 4) -> 
     return [_tespit_kur(img_bgr, work, lab_work, scale, hint, used, backend, *c) for c in secilen]
 
 
+def tespit_maskeden(img_bgr, mask, kind="fabric") -> "Detection":
+    """Kullanıcının verdiği (manuel) bölgeden Detection: aynı kalite kapısı (açıklık, boşluk/desen, kadraj) uygulanır;
+    maske İYİLEŞTİRİLMEZ (yan kırpma vb. yok). K-55."""
+    H, W = img_bgr.shape[:2]
+    scale = min(1.0, WORK_MAX / max(H, W))
+    work = cv2.resize(img_bgr, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA) if scale < 1 else img_bgr
+    wm = (cv2.resize((mask > 0).astype(np.uint8), (work.shape[1], work.shape[0]), interpolation=cv2.INTER_NEAREST) > 0).astype(np.uint8)
+    lab_work = cv2.cvtColor(work, cv2.COLOR_BGR2LAB)
+    det = _tespit_kur(img_bgr, work, lab_work, scale, {"kind": kind}, "manuel", "manuel", 1.0, wm, 0.0)
+    det.mask = ((mask > 0).astype(np.uint8) * 255)          # tam çözünürlüklü kullanıcı bölgesi (kontroller aynı bölgede yapıldı)
+    return det
+
+
 def _tespit_kur(img_bgr, work, lab_work, scale, hint, used, backend, score, wm, holes_frac) -> "Detection":
     H, W = img_bgr.shape[:2]
     rinfo = {}
-    if hint.get("kind") == "fabric" and used != "hint-polygon":
+    if hint.get("kind") == "fabric" and used not in ("hint-polygon", "manuel"):
         wm, rinfo = _refine_fabric(work, wm)
         if rinfo.get("yan_tasma_orani", 0) > YAN_KIRP_ESIK:
             yk = _yan_kirp(wm)

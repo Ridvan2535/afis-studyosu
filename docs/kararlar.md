@@ -322,3 +322,7 @@ bütünlüğü kuralıyla çelişiyordu.
 Otomatik temas/sınır çözülemezse kullanıcı kayıtlı aynı sahnede üst/alt çizgisi ya da dört köşe verir; ayrı yeni iş,
 ücretsiz, kaynak değişmez, kontroller aynen uygulanır, kayıtta "elle verildi" işareti.
 
+**K-56 · 2026-10-13 · Manuel dört köşe modu otomatik maskeyle örtüşmezse baskı yapılmaz.**
+Dörtgenin tamamına basmak kurdeleleri ve önündeki nesneleri örter. Bölge = dörtgen ∩ otomatik kumaş maskesi; örtüşme
+%85'in altındaysa sonuç `manuel_maske_zayif` (inceleme, baskısız). İşaret çizgileri yalnız arayüz katmanındadır.
+

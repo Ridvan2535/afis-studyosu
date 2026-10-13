@@ -712,7 +712,12 @@ async function poll() {
       const j = (st.result && st.result.job) || st.job || curJob;
       if (j) await loadJob(j, st.kind === "video");
     } finally { jobLoading = false; renderRun(); renderResult(); }
-    if (st.error) toast(st.error); else toast(st.kind === "video" ? "Video hazır" : "Fotoğraflar hazır");
+    const ms = (st.result || {}).sonuc;
+    if (st.error) toast(st.error);
+    else if (ms === "inceleme") toast("Manuel sınır UYGULANMADI (baskı yok): " + ((st.result || {}).neden || "incelemeye bırakıldı"));
+    else if (ms === "kabul_edilmedi") toast("Manuel sınırla sonuç kabul edilmedi; tanı görseline bak (ürün çıktısı değil).");
+    else if (ms === "kabul") toast("Manuel sınırla yeni sonuç hazır (ayrı iş; kaynak iş değişmedi).");
+    else toast(st.kind === "video" ? "Video hazır" : "Fotoğraflar hazır");
   }
 }
 setInterval(poll, 1200);

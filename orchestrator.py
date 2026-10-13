@@ -50,6 +50,7 @@ from selector import Selector, nice
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 JOBS_DIR = os.path.join(HERE, "isler")
+MANUEL_KOSE_ORTUSME = 0.85   # dört köşe modunda dörtgenin en az bu kadarı otomatik kumaş maskesiyle örtüşmeli (K-55)
 REPORT_DIR = os.path.join(HERE, "raporlar")
 LOG_PATH = os.path.join(HERE, "kayit.log")
 STATS_PATH = os.path.join(HERE, "servis_karnesi.json")      # servislerin başarı geçmişi (otomatik seçim bunu kullanır)
@@ -156,6 +157,10 @@ class Orchestrator:
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         base = slug(name or os.path.splitext(os.path.basename(design_path))[0])
         job = os.path.join(JOBS_DIR, f"{stamp}_{base}")
+        k = 2
+        while os.path.exists(job):                      # aynı saniyede aynı adlı iş: üzerine YAZMA, ayrı klasör aç
+            job = os.path.join(JOBS_DIR, f"{stamp}_{base}_{k}")
+            k += 1
         for sub in ("foto", "sahneler_bos", "video"):
             os.makedirs(os.path.join(job, sub), exist_ok=True)
         ext = os.path.splitext(design_path)[1].lower() or ".png"
@@ -882,9 +887,15 @@ class Orchestrator:
             oto = bd.detect(img, {"kind": "fabric"})
             om = cv2.dilate((oto.mask > 0).astype(np.uint8), np.ones((15, 15), np.uint8))
             kes = pm & om
-            mask = kes if kes.sum() >= 0.85 * pm.sum() else pm
-            det = bd.detect(img, {"kind": "fabric", "polygon": [list(q) for q in koseler]})
-            det.mask = (mask * 255).astype(np.uint8)
+            ortusme = float(kes.sum()) / max(float(pm.sum()), 1.0)
+            if ortusme < MANUEL_KOSE_ORTUSME:
+                # Güvenli çözüm yok: dörtgenin tamamına basmak kurdeleleri/önündeki nesneleri örter. Baskı YAPILMAZ.
+                return self._manuel_inceleme(job, rap, prof, src_name, dosya, {"ust": None, "alt": None, "koseler": koseler},
+                                             f"Dört köşe ile otomatik kumaş maskesi yeterince örtüşmüyor (%{ortusme * 100:.0f}; "
+                                             f"en az %{MANUEL_KOSE_ORTUSME * 100:.0f} gerekli). Dörtgenin tamamına basmak kurdeleleri ve "
+                                             f"kumaşın önündeki nesneleri örtebileceği için baskı yapılmadı. Köşeleri kumaşın üzerine "
+                                             f"yeniden koyun ya da üst/alt çizgi modunu kullanın.", ortusme)
+            det = bd.tespit_maskeden(img, kes)         # dörtgen ∩ otomatik kumaş maskesi: kurdele/önündeki nesneler dışarıda
             ust, alt = [koseler[0], koseler[1]], [koseler[3], koseler[2]]
         sinir = {}
         if ust:
@@ -919,6 +930,20 @@ class Orchestrator:
         _write_json(os.path.join(job, "rapor.json"), rap)
         self.progress(1.0, "Manuel sınırla yerleştirme bitti (servis çağrısı yok)")
         return {"job": os.path.basename(job), "sonuc": sonuc, "tur": ev["tur"], "neden": ev["neden"]}
+
+    def _manuel_inceleme(self, job, rap, prof, src_name, dosya, kayit, neden, ortusme) -> dict:
+        """Manuel sınır güvenle uygulanamadı: baskısız inceleme kaydı (foto/ yok, tasarımlı görsel yok)."""
+        rec = {"cagri": 0, "servis": None, "tur": "manuel_maske_zayif", "neden": neden,
+               "kaynak": {"is": src_name, "dosya": dosya, "onceki_karar": "elendi"}, "manuel_sinir": kayit,
+               "manuel_ortusme": round(ortusme, 3)}
+        rec["sade_neden"] = deneme_kayit.sade_neden(rec, prof.boy_cm)
+        rec["siniflama"] = deneme_kayit.kontrol_sonucu(rec, prof.oran, prof.boy_cm)
+        rap["elenenler"].append(rec)
+        rap["son_uretim"] = {"hedef": 1, "uretilen": 0, "eksik": 1, "cagri": 0, "saglayici_cagrisi": 0, "beklemede": False}
+        _write_json(os.path.join(job, "rapor.json"), rap)
+        self.log("Manuel sınır uygulanmadı: " + neden)
+        self.progress(1.0, "Manuel sınır: güvenli uygulanamadı, incelemeye bırakıldı (baskı yok)")
+        return {"job": os.path.basename(job), "sonuc": "inceleme", "tur": "manuel_maske_zayif", "neden": neden}
 
     def _auto_videos(self, job: str, photos: list[str]):
         """Her yeni fotoğraf için onaylanan kamera videosu (ücretsiz, yapay zekâsız). Bir video hata verirse iş durmaz."""

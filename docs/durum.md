@@ -4,14 +4,36 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-13 13:50 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
+**Son güncelleme:** 2026-10-13 14:40 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
 denemeler / insan değerlendirmesi / kontrollü prompt sürümleri** tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı
 görünüm) — BAŞLAMADI (kullanıcı onayı bekleniyor). Video aşamasına başlanmadı.
 
 
 ---
 
-## 0. Son iş: Zemine temas belirsizliği, fiziksel ölçek, manuel sınır (2026-10-13 13:50)
+## 0. Son iş: Manuel sınır — gerçek tarayıcı doğrulaması ve güvenlik (2026-10-13 14:40)
+
+**Çözülenler**
+1. **Gerçek tarayıcı etkileşimi** (`tests/test_manuel_sinir_tarayici.py`, Playwright + Chromium, başsız): uygulama geçici
+   kopyada başlatılır; iş açılır → "manuel sınır" → 4 nokta (biri yanlış, "son noktayı sil" ile düzeltildi) → Uygula →
+   yeni iş otomatik açılır → foto büyütülür. İki pencere genişliğinde (1280 ve 700 px; görsel küçültülmüş) çalıştı.
+2. **Koordinat aktarımı**: sunucuya giden 0–1 oranları hedef noktadan en fazla 1 ekran pikseli sapıyor (iki genişlikte de).
+   Oranlar sunucuda orijinal görsel boyutuyla çarpılır.
+3. **Dört köşe güvenliği**: bölge = dörtgen ∩ otomatik kumaş maskesi. Örtüşme %85'in altındaysa (`MANUEL_KOSE_ORTUSME`)
+   baskı YAPILMAZ: `manuel_maske_zayif`, inceleme, foto/ boş, arayüzde "UYGULANMADI" uyarısı. Köşe modunda bölge kullanıcı
+   maskesinden aynı kalite kapısıyla kurulur (`bd.tespit_maskeden`). Köşeler kumaştayken kurdele piksellerinin %0'ı değişti;
+   tasarım kenarındaki mürekkep kurdele bölgesine düşüyorsa kurdeleye basılmaz, sonuç kabul edilmez (`sahne_kivrim`).
+4. **İşaret çizgileri ve tanı yazıları ürün çıktısına girmez**: çizgiler yalnız tarayıcıdaki üst katmanda (canvas) çizilir;
+   foto/*.jpg'de tasarım alanı dışı sahneyle aynı, kırmızı çizgi pikseli yok, TANI görselleri yalnız onizleme/.
+5. **Kaynak korunur, sonuç ayrı**: kaynak iş klasörü bayt bayt aynı; her manuel çalıştırma ayrı yeni iş. Aynı saniyede aynı
+   adlı iş açılırsa artık üzerine yazılmaz (`_2`, `_3` eki) — test sırasında bulunan hata.
+
+**Testler — yalnız Linux bulut ortamında (başsız Chromium; Windows'ta ve senin tarayıcında çalıştırılmadı), ücretli çağrı yok.**
+Yeni: test_manuel_sinir_tarayici (Playwright yoksa ATLANIR), test_manuel_sinir. `tests/` altındaki 25 dosyanın hepsi TAMAM (3 video testi paralelde bellekten öldürüldü, tek tek TAMAM).
+
+---
+
+## 0a. Önceki iş: Zemine temas belirsizliği, fiziksel ölçek, manuel sınır (2026-10-13 13:50)
 
 **Çözülenler**
 1. **Genişleme tek başına temas kanıtı değil** (`compositor.fabric_geometry`, K-54): kumaşın gerçek alt kenarı (etek ucu)
@@ -48,7 +70,7 @@ maskeyle kesişimden korunur; kesişim zayıfsa dörtgenin tamamına basılır.
 
 ---
 
-## 0a. Önceki iş: Farklı ortam kontrolleri, sınır kanıtı, tanı önizlemesi (2026-10-13 07:05)
+## 0b. Önceki iş: Farklı ortam kontrolleri, sınır kanıtı, tanı önizlemesi (2026-10-13 07:05)
 
 **Çözülenler**
 1. **053942 krem duvara taşma** (`banner_detect._yan_kirp`): kumaş ile krem duvar aynı renkte olduğu için maske alt yarıda
@@ -94,7 +116,7 @@ test_sureklilik: hepsi TAMAM. Diğer test dosyaları bu turda çalıştırılmad
 
 ---
 
-## 0b. Önceki iş: İş 054333 kumaş algılama hatası + algılama kurtarma akışı (2026-10-13 06:20)
+## 0c. Önceki iş: İş 054333 kumaş algılama hatası + algılama kurtarma akışı (2026-10-13 06:20)
 
 **Kök neden (genel, bu fotoğrafa özel değil):** kumaş, aynı renkteki krem halıyla tek bölge olarak birleşti → kenar
 temasından skor 0. Soldaki koyu duvar boşluğu da skor 0'dı; eşitlikte listedeki ilk aday (koyu boşluk, açıklık 32) seçildi.

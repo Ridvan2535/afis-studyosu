@@ -51,6 +51,7 @@ HATA_TURLERI = {
     "birikme_cozulemedi": "Zemindeki birikme doğru çizilemedi",
     "sahne_kivrim": "Kumaş yüzeyi tasarımı bozmadan taşıyacak kadar düz değil",
     "temas_belirsiz": "Kumaşın zemine temas çizgisi belirsiz (incelemeye bırakıldı)",
+    "manuel_maske_zayif": "Manuel köşeler kumaşla güvenle eşleşmedi (baskı yapılmadı)",
 }
 
 

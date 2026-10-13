@@ -67,13 +67,15 @@ def kontrol_sonucu(rec: dict, urun_orani: float, boy_cm: float | None = None) ->
     dusuk = []
     asp = olcum.get("aspect")
     sapma = (asp / urun_orani - 1.0) if asp else None
-    if sapma is None:
+    if sapma is None and tur != "manuel_maske_zayif":
         dusuk.append("Afiş ölçülemedi ya da bulunamadı.")
     if tk.get("yayilma_supheli"):
         dusuk.append(f"Alt kenarda yalnız bir yana yayılma var (sol {tk.get('yayilma_sol_px')} px / sağ {tk.get('yayilma_sag_px')} px): "
                      "maske zemine ya da arka plana taşmış olabilir.")
     if tk.get("birikme") and tk.get("temas_yontemi") == "kenar_yayilmasi":
         dusuk.append("Zemindeki birikme yalnız kenar yayılmasından çıkarıldı; boy tahmini güvenilir değil.")
+    if tur == "manuel_maske_zayif":
+        dusuk.append("Manuel dört köşe otomatik kumaş maskesiyle yeterince örtüşmedi; baskı yapılmadı.")
     if tur == "temas_belirsiz" or tk.get("temas_belirsiz"):
         dusuk.append("Zemine temas çizgisi belirsiz (kumaş yavaşça genişliyor; genişleme birikme kanıtı sayılmadı).")
     if tur == "birikme_cozulemedi" and sapma is not None and abs(sapma) <= ALGILAMA_ORAN_UYUM:
@@ -141,6 +143,8 @@ def siniflandir(rec: dict, urun_orani: float, boy_cm: float | None = None) -> di
 def sade_neden(rec: dict, boy_cm: float | None = None) -> str:
     """Arayüz için sade Türkçe tek cümle. Santimetreler 'tahmini' olarak gösterilir. Ölçüm sınır seçimine bağlıysa
     (sinir_araligi.kaynak == "sınır") tek bir santimetre kesinmiş gibi gösterilmez."""
+    if rec.get("tur") == "manuel_maske_zayif":
+        return "Verdiğin köşeler kumaşla güvenle eşleşmedi; kurdeleleri örtmemek için baskı yapılmadı. Köşeleri yeniden koy ya da üst/alt çizgi modunu kullan."
     if rec.get("tur") == "temas_belirsiz":
         return ("Kumaşın zemine nerede değdiği kesin değil; program yazıları otomatik gizlemedi. Sahne incelemeye bırakıldı "
                 "(manuel sınırla düzeltilebilir).")
