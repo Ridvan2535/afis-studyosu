@@ -23,5 +23,29 @@
    0.8
   ]
  },
- "kutu_bicimi": "[x0, y0, x1, y1] kadraj oranı"
+ "kutu_bicimi": "[x0, y0, x1, y1] kadraj oranı",
+ "elle_sinir": {
+  "ust": [
+   [
+    0.2,
+    0.12
+   ],
+   [
+    0.52,
+    0.12
+   ]
+  ],
+  "alt": [
+   [
+    0.2,
+    0.95
+   ],
+   [
+    0.52,
+    0.95
+   ]
+  ],
+  "not": "Görüntüye bakılarak elle işaretlendi: üst = çubuk hizası, alt = kumaşın görünen alt kenarı (etek ucu). Yalnız manuel kurtarma testinde kullanıcı girdisi yerine geçer; otomatik algılama kullanmaz."
+ },
+ "temas_notu": "Kumaş alt %30'da yavaşça genişliyor (perspektif/döküm); eski kural bunu yerde birikme sayıp temas çizgisini boyun ~%70'ine koyuyor, tasarımın alt yazısı (BABY RODRIGUEZ) gizleniyordu."
 }

@@ -188,26 +188,28 @@ for kind in ("uzun", "havada"):
     print(f"{kind}: asılı ≈{inf['asili_cm']:.0f} cm ->", turler)
     assert turler == ["sahne_geometri"], inf
 
-# ---------------------------------------------------------------- 7: dikey ölçek politikası (bağımsız inceleme B1)
-# Birikmesiz sahnede asılı boy ürün boyundan biraz KISA: tasarım SIKIŞTIRILMAZ (fiziksel ölçek, alt kısım görünmez);
-# biraz UZUN: temas çizgisine sığdırılır ve bu UYARI olarak yazılır (sessiz değil).
-for k, beklenen in ((0.98, "fiziksel"), (1.02, "temas_cizgisine_kadar")):
+# ---------------------------------------------------------------- 7: dikey ölçek politikası (K-54; K-16'nın yerine)
+# Tasarım HER ZAMAN fiziksel ölçekle yerleşir; ölçüm toleransı (±%3) deformasyon izni DEĞİLDİR.
+# Biraz KISA: alt kısım görünmez (gizli bölge). Biraz UZUN: tasarım SIKIŞTIRILMAZ, altta ölçüm farkı kadar baskısız kumaş kalır
+# ve bu UYARI olarak yazılır. Her iki durumda işaretler fiziksel konumdadır (top + v * boy_px).
+for k in (0.98, 1.02):
     sc, tt = mp.square_scene(1536, PROF.oran / k, "dokunan", seed=4)      # en geniş/dar çizilir -> asılı boy = ürün boyu x k
     dd = bd.detect(sc, hint={"kind": "fabric"})
     design_u, _ = make_design({"ust_ceyrek", "merkez", "alt_ceyrek"})
     o, inf = cp.composite(sc, design_u, dd, mode="tam_kumas", profile=PROF)
-    assert inf["sorunlar"] == [] and inf["dikey_olcek"] == beklenen, (k, inf)
+    assert inf["sorunlar"] == [] and inf["dikey_olcek"] == "fiziksel", (k, inf)
     hang = tt["hang_px"]
-    boy_px = hang / k if beklenen == "fiziksel" else hang
+    boy_px = hang / k
     for name in ("ust_ceyrek", "merkez", "alt_ceyrek"):
         u, v, c = MARKERS[name]
         exp = (tt["x0"] + u * (tt["x1"] - tt["x0"]), tt["top"] + v * boy_px)
         got, n = marker_centroid(o, sc, exp, c, (0.06 * (tt["x1"] - tt["x0"]), 0.03 * hang))
         assert got is not None and abs(got[1] - exp[1]) < 0.004 * hang, (k, name, got, exp)
-    if beklenen == "fiziksel":
-        assert inf["v_gizli"] < 0.995 and not any("dikeyde" in w for w in inf["uyarilar"]), inf
+    if k < 1:
+        assert inf["v_gizli"] < 0.995, inf
     else:
-        assert inf["v_gizli"] == 1.0 and any("dikeyde" in w for w in inf["uyarilar"]), inf
+        assert inf["v_gizli"] == 1.0 and any("SIKIŞTIRILMADI" in w for w in inf["uyarilar"]), inf
+        assert not any("dikeyde" in w and "sıkıştı" in w for w in inf["uyarilar"]), inf
     print(f"asılı/ürün {k}: dikey ölçek {inf['dikey_olcek']}, olcek_farki {inf['olcek_farki']}, uyarı: {inf['uyarilar'][:1]}")
 
 # profil zorunlu, bilinmeyen mod reddedilir

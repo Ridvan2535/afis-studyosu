@@ -168,6 +168,13 @@ def kalan_sorunlar(rec: dict, boy_cm: float = 200.0) -> list:
         elif sa.get("kaynak") == "sınır":
             out.append(f"Sınır seçimine göre {sa['asili_min']:.0f}–{sa['asili_max']:.0f} cm: sonuç sınırın nereden alındığına bağlı; "
                        "gözle inceleme gerekli.")
+    if tk.get("temas_belirsiz"):
+        tk_k = rec.get("temas_karsilastirma") or {}
+        out.insert(0, "Zemine temas belirsiz: kumaşın yavaş genişlemesi yerde birikme kanıtı sayılmadı. "
+                   + (f"Genişlemenin başladığı satır temas alınırsa asılı ≈{tk_k['yayilma']['asili_cm']:.0f} cm ve tasarımın "
+                      f"%{(1 - (tk_k['yayilma']['gorunen_murekkep'] or 1)) * 100:.0f}'i gizlenir; etek ucu alınırsa ≈"
+                      f"{tk_k['etek_ucu']['asili_cm']:.0f} cm. " if tk_k else "")
+                   + "Otomatik gizleme yapılmadı; manuel sınırla düzeltilebilir.")
     if tk.get("birikme") and tk.get("temas_yontemi") == "kenar_yayilmasi":
         out.append(f"Zemine temas çizgisi yalnız kenar genişlemesinden kestirildi (temas y≈{tk.get('temas_y', 0):.0f} px); güvenilir değil.")
     for u in tk.get("uyarilar") or []:
@@ -220,3 +227,56 @@ def tani_onizlemesi(out_bgr, sorunlar: list, baslik: str = "") -> np.ndarray:
             y += 25
         y += 10
     return cv2.cvtColor(np.array(tuval), cv2.COLOR_RGB2BGR)
+
+
+def tani_karsilastirma(kars: list, sorunlar: list, boy_cm: float = 200.0) -> np.ndarray:
+    """Temas belirsizken iki temas seçimini yan yana gösterir (TANI; ürün çıktısı değil). Her panelde üst kenar (mavi),
+    temas çizgisi (kırmızı), asılı boy, zeminde kalan kısım ve tasarımın baskılı kısmının görünen oranı yazılır."""
+    from PIL import Image, ImageDraw
+    paneller = []
+    for k in kars:
+        o, inf = k["out"].copy(), k["info"]
+        H, W = o.shape[:2]
+        t = max(3, W // 400)
+        x0, x1 = inf["bbox"][0], inf["bbox"][2]
+        a, b = inf["temas_cizgisi"]
+        cv2.line(o, (x0 - 60, int(a * (x0 - 60) + b)), (x1 + 60, int(a * (x1 + 60) + b)), (0, 0, 255), t)
+        ua, ub = inf["ust_kenar"]
+        cv2.line(o, (x0 - 60, int(ua * (x0 - 60) + ub)), (x1 + 60, int(ua * (x1 + 60) + ub)), (255, 120, 0), t)
+        f = 640 / max(H, W)
+        o = cv2.resize(o, (int(W * f), int(H * f)), interpolation=cv2.INTER_AREA)
+        cv2.rectangle(o, (0, 0), (o.shape[1] - 1, o.shape[0] - 1), (0, 0, 220), 6)
+        paneller.append((k["etiket"], o, inf))
+    pw, ph = paneller[0][1].shape[1], paneller[0][1].shape[0]
+    tuval = Image.new("RGB", (pw * len(paneller) + 20 * (len(paneller) - 1), 60 + 70 + ph + 150 + 60 + 22 * 4 * len(sorunlar)), (255, 255, 255))
+    d = ImageDraw.Draw(tuval)
+    d.rectangle([0, 0, tuval.width, 59], fill=(200, 30, 30))
+    d.text((16, 14), "TANI — TEMAS ÇİZGİSİ KARŞILAŞTIRMASI — KABUL EDİLMEDİ — ÜRÜN ÇIKTISI DEĞİL", fill=(255, 255, 255), font=_font(24))
+    for i, (et, o, inf) in enumerate(paneller):
+        x = i * (pw + 20)
+        d.text((x + 6, 70), et, fill=(0, 0, 0), font=_font(19))
+        tuval.paste(Image.fromarray(cv2.cvtColor(o, cv2.COLOR_BGR2RGB)), (x, 130))
+        gm = inf.get("gorunen_murekkep")
+        satir = [f"Asılı boy ≈{inf['asili_cm']:.0f} cm (ürün {boy_cm:g}; kabul {boy_cm * .97:.0f}–{boy_cm * 1.03:.0f})",
+                 f"Zeminde/görünmeyen kısım ≈{inf['gizli_cm']:.0f} cm",
+                 f"Tasarımın baskılı kısmının görünen oranı: %{(gm if gm is not None else 1) * 100:.1f}",
+                 "Tasarımın TAMAMI görünüyor" if (gm or 0) >= 0.999 else "Tasarımın alt kısmı (yazı dahil) GÖRÜNMÜYOR"]
+        for j, sa in enumerate(satir):
+            d.text((x + 6, 130 + ph + 10 + j * 30), sa, fill=(20, 20, 20) if j < 3 else ((0, 120, 0) if (gm or 0) >= 0.999 else (200, 30, 30)), font=_font(19))
+    y = 130 + ph + 140
+    d.text((10, y), "Mavi: üst kenar   Kırmızı: temas çizgisi (altı zemine düşer, basılmaz). Tasarım kırpılmadı, esnetilmedi, yazı taşınmadı.",
+           fill=(60, 60, 60), font=_font(17))
+    y += 34
+    fn = _font(16)
+    for s in sorunlar:
+        satir = "• "
+        for k in s.split():
+            if d.textlength(satir + " " + k, font=fn) > tuval.width - 30:
+                d.text((10, y), satir, fill=(20, 20, 20), font=fn)
+                y += 22
+                satir = "   " + k
+            else:
+                satir = (satir + " " + k) if satir.strip() else satir + k
+        d.text((10, y), satir, fill=(20, 20, 20), font=fn)
+        y += 26
+    return cv2.cvtColor(np.array(tuval.crop((0, 0, tuval.width, min(tuval.height, y + 20)))), cv2.COLOR_RGB2BGR)

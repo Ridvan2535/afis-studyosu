@@ -4,14 +4,51 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-13 07:05 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
+**Son güncelleme:** 2026-10-13 13:50 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
 denemeler / insan değerlendirmesi / kontrollü prompt sürümleri** tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı
 görünüm) — BAŞLAMADI (kullanıcı onayı bekleniyor). Video aşamasına başlanmadı.
 
 
 ---
 
-## 0. Son iş: Farklı ortam kontrolleri, sınır kanıtı, tanı önizlemesi (2026-10-13 07:05)
+## 0. Son iş: Zemine temas belirsizliği, fiziksel ölçek, manuel sınır (2026-10-13 13:50)
+
+**Çözülenler**
+1. **Genişleme tek başına temas kanıtı değil** (`compositor.fabric_geometry`, K-54): kumaşın gerçek alt kenarı (etek ucu)
+   ile genişlemenin başladığı satır ayrı ölçülür. Aradaki bant asılı boyun %15'inden uzunsa (`BIRIKME_BANT_EN_FAZLA`,
+   VARSAYIM) yerde birikme sayılmaz → yeni tür `temas_belirsiz`: baskılı alan otomatik gizlenmez, sahne incelemeye kalır.
+   Ölçülen bantlar: kabul edilmiş birikmeli sahneler %3–8 (005509 s01/s02, 224824 s01), sentetik %5; yavaş genişleyen
+   sahneler %20–41 (053942 %31, 005509 #2/#5, 165800 s01/s02).
+2. **053942 tanı karşılaştırması** (yeni iş `isler/20261013-134456_yeniden_20261013-053942`, kabul yok):
+   A) genişlemenin başladığı satır = temas (eski davranış): asılı ≈140 cm, ≈60 cm gizlenir, alt yazı görünmez;
+   B) görünen alt kenar = temas: asılı ≈202 cm (±%3 içinde), tasarımın tamamı görünür. Kırpma/esnetme/yazı taşıma yok.
+3. **"Tasarım esnetilmez" ile fit_to_contact çelişkisi giderildi** (K-54, K-16'nın yerine): tasarım her zaman fiziksel
+   ölçekle (yatay = dikey) yerleşir. ±%3 ve ölçüm payı (%0,5) yalnız "sahne ürüne uyuyor mu" kararında kullanılır;
+   deformasyon izni değildir. Kumaş ≤%3 uzunsa altta ölçüm farkı kadar baskısız kumaş kalır ve uyarı yazılır.
+4. **Regresyon**: `tests/test_farkli_ortamlar.py` 053942'de yanlış temas çizgisini (A'da gizli >40 cm, görünen baskı <%99)
+   ve doğru seçimde tasarımın tamamının göründüğünü sınar; gerçek birikmeli 224824 s01'in `kenar_yayilmasi` birikmesi ve
+   sentetik birikmeli sahneler (test_tam_kumas) korunur. `test_tam_kumas` 7. bölüm yeni politikaya göre güncellendi.
+5. **Manuel kurtarma** (K-55): elenen kartında "manuel sınır" düğmesi → kayıtlı aynı sahnede üst kenar + zemine temas
+   çizgisi (4 tık) ya da dört köşe. `Orchestrator.manuel_sinir` / `POST /api/manuel_sinir`: ayrı yeni iş, sağlayıcı çağrısı
+   yok, kaynak iş değişmez, bütün kontroller aynen uygulanır; kabulde "sınırlar kullanıcı tarafından verildi" uyarısı.
+   053942 elle (üst 0,12 / alt 0,95): yeni iş `isler/20261013-134607_manuel_20261013-053942` KABUL, asılı ≈201 cm,
+   tasarımın %100'ü görünür (BABY RODRIGUEZ dahil). Yeniden birleştirme kayıtlarında ham sahne kaynak işten gösterilir.
+
+**Mevcut sahnelerde doğrulama (yeniden birleştirme, ücretsiz):** 224824 s01/s02 kabul (s01 birikme korunur), 005509
+s01/s02 kabul, 054333 sahne_geometri (inceleme), 053942 temas_belirsiz (inceleme) — kontrol örneklerinde 1/6/13 hâlâ elenir,
+#2/#5 artık temas_belirsiz/inceleme.
+
+**Açık kalanlar:** %15 bant sınırı az sayıda gerçek örnekle seçildi (VARSAYIM). Manuel düzenleyici yalnız Linux'ta
+JS sözdizimi + arka uç testiyle doğrulandı; tarayıcıda tıklanarak denenmedi. Manuel köşe modunda kurdele örtüşmesi otomatik
+maskeyle kesişimden korunur; kesişim zayıfsa dörtgenin tamamına basılır.
+
+**Testler — yalnız Linux bulut ortamında (Windows'ta çalıştırılmadı), yerel + sahte servis, ücretli çağrı yok:**
+`tests/` altındaki 23 dosyanın hepsi TAMAM (3 video testi paralel çalıştırmada bellekten öldürüldü, tek tek yeniden
+çalıştırılınca TAMAM).
+
+---
+
+## 0a. Önceki iş: Farklı ortam kontrolleri, sınır kanıtı, tanı önizlemesi (2026-10-13 07:05)
 
 **Çözülenler**
 1. **053942 krem duvara taşma** (`banner_detect._yan_kirp`): kumaş ile krem duvar aynı renkte olduğu için maske alt yarıda
@@ -57,7 +94,7 @@ test_sureklilik: hepsi TAMAM. Diğer test dosyaları bu turda çalıştırılmad
 
 ---
 
-## 0a. Önceki iş: İş 054333 kumaş algılama hatası + algılama kurtarma akışı (2026-10-13 06:20)
+## 0b. Önceki iş: İş 054333 kumaş algılama hatası + algılama kurtarma akışı (2026-10-13 06:20)
 
 **Kök neden (genel, bu fotoğrafa özel değil):** kumaş, aynı renkteki krem halıyla tek bölge olarak birleşti → kenar
 temasından skor 0. Soldaki koyu duvar boşluğu da skor 0'dı; eşitlikte listedeki ilk aday (koyu boşluk, açıklık 32) seçildi.

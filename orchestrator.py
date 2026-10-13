@@ -287,7 +287,7 @@ class Orchestrator:
                  f"en fazla {self.s.max_scene_calls} sahne çağrısı, servis: "
                  + (", ".join(nice(x) for x in names) + " (otomatik seçim)" if auto else nice(names[0])))
 
-        def reject(tur, reason, img=None, det=None, lay=None, extra=None, tani_out=None):
+        def reject(tur, reason, img=None, det=None, lay=None, extra=None, tani_out=None, tani_kars=None):
             reason = deneme_kayit.temizle(reason)                        # bağlantı / base64 kayda girmez
             rec = {"cagri": calls, "servis": name, "neden": reason, "tur": tur, "uretim_no": uretim_no}
             if lay is not None:
@@ -306,7 +306,7 @@ class Orchestrator:
                     rec["algilama_dosya"] = f"sahneler_bos/{base}_algilama.jpg"
                 rec["dosya"] = rec.get("algilama_dosya") or rec["ham_dosya"]     # geriye uyum (eski arayüz/rapor)
                 if tani_out is not None:
-                    rec["tani_dosya"] = self._tani_kaydet(job, base, tani_out, rec, prof)
+                    rec["tani_dosya"] = self._tani_kaydet(job, base, tani_out, rec, prof, kars=tani_kars)
             rec["sade_neden"] = deneme_kayit.sade_neden(rec, prof.boy_cm)
             rec["siniflama"] = deneme_kayit.kontrol_sonucu(rec, prof.oran, prof.boy_cm)      # K-35 otomatik kontrol
             rec["hata_imzasi"] = deneme_kayit.hata_imzasi(tur, reason)
@@ -435,7 +435,8 @@ class Orchestrator:
             img = self._upscale(img)
             ev = self._degerlendir_kurtar(img, design, prof, f"Sahne {calls} ({nice(name)})")
             if not ev["ok"]:
-                reject(ev["tur"], ev["neden"], img, ev["det"], ev["lay"], ev.get("extra"), tani_out=ev.get("tani_out"))
+                reject(ev["tur"], ev["neden"], img, ev["det"], ev["lay"], ev.get("extra"), tani_out=ev.get("tani_out"),
+                       tani_kars=ev.get("tani_karsilastirma"))
                 finish_call()
                 sel.record(name, False)
                 continue
@@ -487,7 +488,7 @@ class Orchestrator:
     # -- ortak sahne değerlendirme ve kayıt (sağlayıcıdan bağımsız) -----------------------------------
     # -- algılama şüpheliyse kurtarma (K-49): yeni sahne ÜRETMEZ; aynı ham görselde alternatif adaylar + isteğe bağlı servis --
     def _supheli_mi(self, ev, prof) -> bool:
-        if ev["ok"] or ev["tur"] == "servis_hatasi":
+        if ev["ok"] or ev["tur"] in ("servis_hatasi", "temas_belirsiz"):   # temas belirsizliği bölge seçimi sorunu değil
             return False
         rec = {"tur": ev["tur"], "neden": ev["neden"], "olcum": ev.get("lay")}
         rec.update(ev.get("extra") or {})
@@ -636,7 +637,7 @@ class Orchestrator:
                 "asili_oynama": round(oynama, 3), "varyantlar": sonuclar}
 
     def _evaluate_scene_tek(self, img, design, prof, label: str, sessiz: bool = False, hint: dict | None = None,
-                            det=None) -> dict:
+                            det=None, sinir: dict | None = None) -> dict:
         """Bir boş sahneyi değerlendirir ve tasarımı tam kumaş moduyla yerleştirir. AĞ/SAĞLAYICI KULLANMAZ.
         Hem yeni üretimde (generate_photos) hem kayıtlı sahnelerden yeniden birleştirmede aynı kurallar uygulanır:
         kumaş zorunlu algılama -> layout kalite kapısı (ürün oranı) -> tam kumaş yerleşimi -> geometri/birikme sorunları.
@@ -665,7 +666,7 @@ class Orchestrator:
             _log(f"{label} elendi: {reason}")
             return {"ok": False, "tur": tur_, "neden": reason, "det": det, "lay": lay, "extra": {"algilama": alg}}
         try:
-            out, info = cp.composite(img, design, det, mode="tam_kumas", profile=prof)
+            out, info = cp.composite(img, design, det, mode="tam_kumas", profile=prof, sinir=sinir)
         except Exception as e:                           # geometri çıkarılamadı: sahne elenir, iş durmaz
             _log(f"{label} elendi: kumaş geometrisi çıkarılamadı ({e.__class__.__name__}: {e})")
             return {"ok": False, "tur": "sahne_geometri", "neden": f"kumaş geometrisi çıkarılamadı: {e}", "det": det, "lay": lay,
@@ -673,6 +674,10 @@ class Orchestrator:
         tk_info = {k: info[k] for k in ("px_per_cm", "asili_cm", "gizli_cm", "v_gizli", "temas_y", "birikme", "temas_yontemi",
                                         "olcek_farki", "dikey_olcek", "gizli_murekkep", "sorunlar", "uyarilar")}
         tk_info.update({k: info.get(k) for k in ("yayilma_supheli", "yayilma_sol_px", "yayilma_sag_px", "kivrim_kaymasi", "kenar_sigma_px", "yerlesim_donusumu", "dortgen", "kenar_sapmasi", "kumas_disi_baski")})
+        tk_info.update({k: info.get(k) for k in ("temas_belirsiz", "birikme_bandi", "yayilma_baslangic_y", "yayilma_temas_asili_cm",
+                                                 "gorunen_murekkep", "temas_cizgisi")})
+        if sinir:
+            tk_info["manuel_sinir"] = sinir
         if info["sorunlar"]:
             tur = info["sorunlar"][0]["tur"]
             msg = " ".join(x["mesaj"] for x in info["sorunlar"])
@@ -686,19 +691,40 @@ class Orchestrator:
                                               "kaynak": sk["kaynak"].split(" ")[0]}
                 except Exception:
                     pass
-            return {"ok": False, "tur": tur, "neden": msg, "det": det, "lay": lay, "extra": extra, "tani_out": out}
+            kars = None
+            if info.get("temas_belirsiz") and info.get("yayilma_baslangic_y"):
+                # TANI karşılaştırması: A) genişlemenin başladığı satır temas (eski davranış), B) kumaşın görünen alt kenarı.
+                # İkisi de fiziksel ölçekte; tasarım kırpılmaz, yazı taşınmaz, oran esnetilmez.
+                try:
+                    yy = float(info["yayilma_baslangic_y"])
+                    out_a, info_a = cp.composite(img, design, det, mode="tam_kumas", profile=prof,
+                                                 sinir={"alt": [(0.0, yy), (float(img.shape[1]), yy)]})
+                    kars = [{"etiket": "A) Genişlemenin başladığı satır = temas (eski davranış)", "out": out_a, "info": info_a},
+                            {"etiket": "B) Kumaşın görünen alt kenarı (etek ucu) = temas", "out": out, "info": info}]
+                    extra["temas_karsilastirma"] = {
+                        "yayilma": {"asili_cm": round(info_a["asili_cm"], 1), "gizli_cm": round(info_a["gizli_cm"], 1),
+                                    "gorunen_murekkep": info_a.get("gorunen_murekkep")},
+                        "etek_ucu": {"asili_cm": round(info["asili_cm"], 1), "gizli_cm": round(info["gizli_cm"], 1),
+                                     "gorunen_murekkep": info.get("gorunen_murekkep")}}
+                except Exception:
+                    kars = None
+            return {"ok": False, "tur": tur, "neden": msg, "det": det, "lay": lay, "extra": extra, "tani_out": out,
+                    "tani_karsilastirma": kars}
         quality = layout.score(lay, pa) if lay else 50.0
         tk_info["algilama"] = alg
         return {"ok": True, "tur": None, "neden": None, "det": det, "lay": lay, "info": info, "tk_info": tk_info,
                 "out": out, "kalite": quality}
 
-    def _tani_kaydet(self, job, base, out, rec, prof) -> str | None:
+    def _tani_kaydet(self, job, base, out, rec, prof, kars=None) -> str | None:
         """Kabul EDİLMEMİŞ sahnenin tasarımlı tanı önizlemesi: yalnız onizleme/ altına, adı "_TANI_" içerir, üzerinde
         "ürün çıktısı değil" şeridi ve kalan yerleşim sorunları yazılır. foto/ klasörüne ve fotoğraf listesine GİRMEZ."""
         try:
             os.makedirs(os.path.join(job, "onizleme"), exist_ok=True)
             ad = f"onizleme/{base}_TANI_urun_ciktisi_degil.jpg"
-            im = sinir_kaniti.tani_onizlemesi(out, sinir_kaniti.kalan_sorunlar(rec, prof.boy_cm))
+            if kars:
+                im = sinir_kaniti.tani_karsilastirma(kars, sinir_kaniti.kalan_sorunlar(rec, prof.boy_cm), prof.boy_cm)
+            else:
+                im = sinir_kaniti.tani_onizlemesi(out, sinir_kaniti.kalan_sorunlar(rec, prof.boy_cm))
             cvio.imwrite(os.path.join(job, ad), im, [cv2.IMWRITE_JPEG_QUALITY, 85])
             return ad
         except Exception as e:                       # tanı görseli yan üründür; iş durmaz
@@ -793,7 +819,7 @@ class Orchestrator:
                 rec["sade_neden"] = deneme_kayit.sade_neden(rec, prof.boy_cm)
                 rec["siniflama"] = deneme_kayit.kontrol_sonucu(rec, prof.oran, prof.boy_cm)
                 if ev.get("tani_out") is not None:
-                    rec["tani_dosya"] = self._tani_kaydet(job, p["stem"], ev["tani_out"], rec, prof)
+                    rec["tani_dosya"] = self._tani_kaydet(job, p["stem"], ev["tani_out"], rec, prof, kars=ev.get("tani_karsilastirma"))
                 rap["elenenler"].append(rec)
                 _write_json(os.path.join(job, "rapor.json"), rap)
                 continue
@@ -812,6 +838,87 @@ class Orchestrator:
         _write_json(os.path.join(job, "rapor.json"), rap)
         self.progress(1.0, f"Bitti: {done}/{len(photos)} kayıtlı sahne yeniden birleştirildi (servis çağrısı yok)")
         return dict(rap["son_uretim"], job=os.path.basename(job))
+
+    def manuel_sinir(self, src_job: str, dosya: str, ust=None, alt=None, koseler=None) -> dict:
+        """MANUEL KURTARMA (K-55): kayıtlı AYNI sahnede kullanıcının verdiği sınırlarla yeni, ayrı sonuç üretir. Yeni üretim yok,
+        sağlayıcı çağrısı yok; kaynak işe dokunulmaz.
+          ust / alt : iki nokta [[x, y], [x, y]] (0-1 kadraj oranı) — kumaşın üst kenarı / zemine temas çizgisi.
+          koseler   : dört nokta [sol-üst, sağ-üst, sağ-alt, sol-alt] (0-1). Verilirse kumaş bölgesi bu dörtgendir (otomatik
+                      maske dörtgenle örtüşüyorsa kesişimi alınır: kurdele gibi önündeki nesneler korunur); üst/alt kenarlar köşelerden.
+        Bütün kontroller aynen uygulanır (±%3, gizli bölgede baskı, kıvrım...). Tolerans tasarımı esnetme izni değildir;
+        sonuç uymazsa kabul edilmez, tanı önizlemesi yazılır."""
+        def pts(v, n):
+            if v is None:
+                return None
+            if not (isinstance(v, (list, tuple)) and len(v) == n and all(isinstance(q, (list, tuple)) and len(q) == 2 for q in v)):
+                raise ProviderError("Geçersiz nokta listesi.")
+            out = [(float(q[0]), float(q[1])) for q in v]
+            if not all(0.0 <= a <= 1.0 and 0.0 <= b <= 1.0 for a, b in out):
+                raise ProviderError("Noktalar 0-1 aralığında olmalı.")
+            return out
+        ust, alt, koseler = pts(ust, 2), pts(alt, 2), pts(koseler, 4)
+        if koseler is None and ust is None and alt is None:
+            raise ProviderError("Üst/alt çizgisi ya da dört köşe gerekli.")
+        src = self.report_of(src_job)
+        spath = os.path.normpath(os.path.join(src_job, dosya))
+        if not spath.startswith(os.path.normpath(src_job) + os.sep) or not os.path.exists(spath):
+            raise ProviderError("Kayıtlı sahne bulunamadı.")
+        files = glob.glob(os.path.join(src_job, "tasarim.*"))
+        if not files:
+            raise ProviderError("Kaynak işte tasarım dosyası yok.")
+        prof = self._profile(src)
+        src_name = os.path.basename(src_job)
+        job = self.new_job(files[0], src.get("kategori", "Düğün"), f"manuel_{src_name.split('_')[0]}", profile=prof)
+        rap = self.report_of(job)
+        rap.update(islem="manuel_sinir", kaynak_is=src_name, saglayici_cagrisi=0)
+        img = self._upscale(cvio.imread(spath, cv2.IMREAD_COLOR))
+        H, W = img.shape[:2]
+        px = lambda q: (q[0] * W, q[1] * H)
+        det = None
+        if koseler:
+            poly = np.array([px(q) for q in koseler], np.float32)
+            pm = np.zeros((H, W), np.uint8)
+            cv2.fillPoly(pm, [poly.astype(np.int32)], 1)
+            oto = bd.detect(img, {"kind": "fabric"})
+            om = cv2.dilate((oto.mask > 0).astype(np.uint8), np.ones((15, 15), np.uint8))
+            kes = pm & om
+            mask = kes if kes.sum() >= 0.85 * pm.sum() else pm
+            det = bd.detect(img, {"kind": "fabric", "polygon": [list(q) for q in koseler]})
+            det.mask = (mask * 255).astype(np.uint8)
+            ust, alt = [koseler[0], koseler[1]], [koseler[3], koseler[2]]
+        sinir = {}
+        if ust:
+            sinir["ust"] = [px(q) for q in ust]
+        if alt:
+            sinir["alt"] = [px(q) for q in alt]
+        design = self._design(job)
+        design_file = glob.glob(os.path.join(job, "tasarim.*"))[0]
+        self.log(f"Manuel sınır: kaynak {src_name}/{dosya}; sağlayıcıya istek GÖNDERİLMEZ (ücretsiz).")
+        ev = self._evaluate_scene_tek(img, design, prof, "Manuel sınır", det=det, sinir=sinir)
+        kayit = {"ust": ust, "alt": alt, "koseler": koseler}
+        kaynak = {"is": src_name, "dosya": dosya, "onceki_karar": "elendi"}
+        if ev["ok"]:
+            rec = self._save_accepted(job, rap, img, ev, prof, None, 1, "kayitli_sahne", design_file)
+            rec["kaynak"], rec["manuel_sinir"] = kaynak, kayit
+            rec["uyari"] = list(rec["uyari"]) + ["Kumaş sınırları KULLANICI tarafından elle verildi (otomatik ölçüm değil)."]
+            sonuc = "kabul"
+        else:
+            rec = {"cagri": 0, "servis": None, "tur": ev["tur"], "neden": ev["neden"], "kaynak": kaynak, "manuel_sinir": kayit}
+            if ev.get("lay"):
+                rec["olcum"] = ev["lay"]
+            rec.update(ev.get("extra") or {})
+            rec["sade_neden"] = deneme_kayit.sade_neden(rec, prof.boy_cm)
+            rec["siniflama"] = deneme_kayit.kontrol_sonucu(rec, prof.oran, prof.boy_cm)
+            if ev.get("tani_out") is not None:
+                rec["tani_dosya"] = self._tani_kaydet(job, "manuel", ev["tani_out"], rec, prof)
+            rap["elenenler"].append(rec)
+            sonuc = "kabul_edilmedi"
+        rap["son_uretim"] = {"hedef": 1, "uretilen": int(ev["ok"]), "eksik": int(not ev["ok"]), "cagri": 0, "saglayici_cagrisi": 0,
+                             "beklemede": False}
+        self._overview(job, rap)
+        _write_json(os.path.join(job, "rapor.json"), rap)
+        self.progress(1.0, "Manuel sınırla yerleştirme bitti (servis çağrısı yok)")
+        return {"job": os.path.basename(job), "sonuc": sonuc, "tur": ev["tur"], "neden": ev["neden"]}
 
     def _auto_videos(self, job: str, photos: list[str]):
         """Her yeni fotoğraf için onaylanan kamera videosu (ücretsiz, yapay zekâsız). Bir video hata verirse iş durmaz."""

@@ -74,6 +74,8 @@ def kontrol_sonucu(rec: dict, urun_orani: float, boy_cm: float | None = None) ->
                      "maske zemine ya da arka plana taşmış olabilir.")
     if tk.get("birikme") and tk.get("temas_yontemi") == "kenar_yayilmasi":
         dusuk.append("Zemindeki birikme yalnız kenar yayılmasından çıkarıldı; boy tahmini güvenilir değil.")
+    if tur == "temas_belirsiz" or tk.get("temas_belirsiz"):
+        dusuk.append("Zemine temas çizgisi belirsiz (kumaş yavaşça genişliyor; genişleme birikme kanıtı sayılmadı).")
     if tur == "birikme_cozulemedi" and sapma is not None and abs(sapma) <= ALGILAMA_ORAN_UYUM:
         dusuk.append(f"Afiş oranı ürünle uyumlu (%{sapma * 100:+.0f}) ama birikme ölçüldü; çelişkili.")
     kr = rec.get("kararlilik") or {}
@@ -139,6 +141,9 @@ def siniflandir(rec: dict, urun_orani: float, boy_cm: float | None = None) -> di
 def sade_neden(rec: dict, boy_cm: float | None = None) -> str:
     """Arayüz için sade Türkçe tek cümle. Santimetreler 'tahmini' olarak gösterilir. Ölçüm sınır seçimine bağlıysa
     (sinir_araligi.kaynak == "sınır") tek bir santimetre kesinmiş gibi gösterilmez."""
+    if rec.get("tur") == "temas_belirsiz":
+        return ("Kumaşın zemine nerede değdiği kesin değil; program yazıları otomatik gizlemedi. Sahne incelemeye bırakıldı "
+                "(manuel sınırla düzeltilebilir).")
     sa = rec.get("sinir_araligi") or {}
     if sa.get("kaynak") == "sınır":
         return (f"Kumaşın boyu kesin ölçülemedi: sınırın nereden alındığına göre {sa['asili_min']:.0f}–{sa['asili_max']:.0f} cm. "

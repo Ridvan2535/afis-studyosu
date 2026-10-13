@@ -117,6 +117,12 @@ table.cmp td,table.cmp th{border-bottom:1px solid var(--line);padding:5px 6px;te
 .help p,.help li{color:var(--ink);font-size:14.5px}
 .help ul{padding-left:20px;margin:4px 0}
 .lb{position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:50;display:none;align-items:center;justify-content:center;padding:20px;cursor:zoom-out}
+.ms{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:60;display:none;align-items:center;justify-content:center;padding:16px}
+.ms.on{display:flex}
+.ms .kutu{background:var(--card,#fff);border-radius:10px;padding:14px;max-width:min(96vw,980px);max-height:96vh;overflow:auto}
+.ms .sahne{position:relative;display:inline-block;max-width:100%}
+.ms .sahne img{display:block;max-width:100%;max-height:70vh;cursor:crosshair;user-select:none}
+.ms .sahne canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .lb.on{display:flex}
 .lb img{max-width:100%;max-height:100%;border-radius:6px}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;font-size:14px;z-index:60;opacity:0;pointer-events:none;transition:.25s}
@@ -370,6 +376,16 @@ table.cmp td,table.cmp th{border-bottom:1px solid var(--line);padding:5px 6px;te
 </div>
 
 <div class="lb" id="lb"><img id="lbImg" alt=""></div>
+<div class="ms" id="ms"><div class="kutu">
+  <b>Manuel sınır (aynı kayıtlı sahne; yeni üretim ve ücret yok)</b>
+  <div class="hint" style="margin:6px 0">Otomatik temas/sınır güvenilir değilse kumaşın sınırını kendin ver. Sonuç <b>ayrı yeni bir işe</b> yazılır; kaynak iş değişmez.
+  Bütün kontroller aynen uygulanır (±%3, gizli bölgede baskı); tasarım kırpılmaz, esnetilmez. Uymazsa kabul edilmez, tanı görseli yazılır.</div>
+  <div style="margin:6px 0"><label><input type="radio" name="msMod" value="cizgi" checked> Üst kenar + zemine temas çizgisi (4 tık: üst sol, üst sağ, alt sol, alt sağ)</label><br>
+  <label><input type="radio" name="msMod" value="kose"> Dört köşe (sol-üst, sağ-üst, sağ-alt, sol-alt)</label></div>
+  <div class="sahne"><img id="msImg" alt=""><canvas id="msCv"></canvas></div>
+  <div class="hint" id="msDurum" style="margin:6px 0"></div>
+  <div class="bt"><button class="btn" id="msGeri">son noktayı sil</button><button class="btn" id="msSifir">sıfırla</button><button class="btn primary" id="msUygula">Uygula (yeni iş)</button><button class="btn" id="msKapat">kapat</button></div>
+</div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -844,6 +860,7 @@ function renderRejects(i) {
                   r.yaklasik_url ? `<button data-zoom="${esc(r.yaklasik_url)}" title="Algılama katmanından hesaplanan yaklaşık görüntü; ham görsel DEĞİL">yaklaşık sahne (ham değil)</button>` : "",
                   r.algilama_url ? `<button data-zoom="${esc(r.algilama_url)}">algılama katmanı</button>` : "",
                   r.diger_url ? `<button data-zoom="${esc(r.diger_url)}">kayıtlı görsel</button>` : "",
+                  r.manuel_dosya && r.ham_url ? `<button data-ms="${esc(r.ham_url)}" data-msd="${esc(r.manuel_dosya)}" data-msk="${esc(r.manuel_kaynak_is || "")}" title="Kumaşın üst/alt sınırını ya da dört köşesini elle ver; aynı sahneden ayrı sonuç">manuel sınır</button>` : "",
                   r.tani_url ? `<button data-zoom="${esc(r.tani_url)}" title="Tasarım yerleştirilmiş TANI görseli; KABUL EDİLMEDİ, ürün çıktısı değildir, ilana konmaz" style="border-color:#c82020;color:#c82020">tanı: tasarımlı (ürün çıktısı DEĞİL)</button>` : ""].join("");
     const note = r.tur === "servis_hatasi" ? "" : (!r.ham_url ? `<span class="hint" style="margin:0">Orijinal sahne kaydedilmemiş; kurtarılamaz.${r.yaklasik_url ? " Küçük resim algılama katmanından hesaplanan <b>yaklaşık</b> görüntüdür, ham görsel değildir." : ""}</span>` : "");
     const hk = (r.insan || {}).karar;
@@ -867,12 +884,51 @@ function renderRejects(i) {
     + `. Senin etiketin otomatik kontrol kaydını silmez; ayrı dosyada tutulur. Kenarı turuncu kartlar aynı hatanın art arda 3. veya daha sonraki tekrarıdır.</div>
     <div class="rejgrid">${rej.map(card).join("")}</div>${durmaTablosu(i.durma_simulasyonu)}</details>`;
   $("#rejBox").querySelectorAll("[data-zoom]").forEach(b => b.onclick = e => { e.stopPropagation(); $("#lbImg").src = b.dataset.zoom; $("#lb").classList.add("on"); });
+  $("#rejBox").querySelectorAll("[data-ms]").forEach(b => b.onclick = e => { e.stopPropagation(); msAc(b.dataset.ms, b.dataset.msd, b.dataset.msk); });
   $("#rejBox").querySelectorAll("[data-el]").forEach(b => b.onclick = async e => {
     e.stopPropagation();
     try { await api("/api/degerlendir", {job: curJob, elenen: b.dataset.el, karar: b.dataset.k || null}); await loadJob(curJob, true); toast("Etiket kaydedildi"); }
     catch (er) { toast("Kaydedilemedi: " + er.message); }
   });
 }
+// ---- manuel sınır (K-55) ----
+const MS = {pts: [], dosya: null, kaynak: null};
+const msMod = () => (document.querySelector("input[name=msMod]:checked") || {}).value || "cizgi";
+const MS_ADLAR = {cizgi: ["üst sol", "üst sağ", "alt (temas) sol", "alt (temas) sağ"], kose: ["sol-üst", "sağ-üst", "sağ-alt", "sol-alt"]};
+function msCiz() {
+  const im = $("#msImg"), cv = $("#msCv");
+  cv.width = im.clientWidth; cv.height = im.clientHeight;
+  const c = cv.getContext("2d"); c.clearRect(0, 0, cv.width, cv.height);
+  const P = MS.pts.map(p => [p[0] * cv.width, p[1] * cv.height]);
+  c.lineWidth = 2;
+  const cizgi = (a, b, col) => { c.strokeStyle = col; c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke(); };
+  if (msMod() === "cizgi") { if (P[1]) cizgi(P[0], P[1], "#2f7cff"); if (P[3]) cizgi(P[2], P[3], "#e02020"); }
+  else { for (let i = 1; i < P.length; i++) cizgi(P[i - 1], P[i], "#e02020"); if (P.length === 4) cizgi(P[3], P[0], "#e02020"); }
+  P.forEach(p => { c.fillStyle = "#ffd400"; c.beginPath(); c.arc(p[0], p[1], 5, 0, 7); c.fill(); });
+  const ad = MS_ADLAR[msMod()];
+  $("#msDurum").textContent = MS.pts.length < 4 ? `Sıradaki nokta: ${ad[MS.pts.length]} (${MS.pts.length}/4)` : "4 nokta hazır. Uygula'ya bas.";
+}
+function msAc(url, dosya, kaynak) {
+  MS.pts = []; MS.dosya = dosya; MS.kaynak = kaynak || null;
+  $("#msImg").onload = msCiz; $("#msImg").src = url; $("#ms").classList.add("on"); msCiz();
+}
+$("#msImg").onclick = e => {
+  if (MS.pts.length >= 4) return;
+  const r = e.target.getBoundingClientRect();
+  MS.pts.push([Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]);
+  msCiz();
+};
+document.querySelectorAll("input[name=msMod]").forEach(x => x.onchange = () => { MS.pts = []; msCiz(); });
+$("#msGeri").onclick = () => { MS.pts.pop(); msCiz(); };
+$("#msSifir").onclick = () => { MS.pts = []; msCiz(); };
+$("#msKapat").onclick = () => $("#ms").classList.remove("on");
+$("#msUygula").onclick = async () => {
+  if (MS.pts.length < 4) { toast("4 nokta gerekli"); return; }
+  const body = {job: curJob, dosya: MS.dosya, kaynak_is: MS.kaynak};
+  if (msMod() === "cizgi") { body.ust = MS.pts.slice(0, 2); body.alt = MS.pts.slice(2, 4); } else body.koseler = MS.pts;
+  try { await api("/api/manuel_sinir", body); $("#ms").classList.remove("on"); toast("Manuel sınırla yerleştirme başladı (ücretsiz, yeni iş)"); await poll(); }
+  catch (er) { toast("Başlatılamadı: " + er.message); }
+};
 const DUR_NEDEN = {supheli_olcum: "şüpheli ölçümde dur", ayni_hata: "aynı hata sınırı", sonucsuz: "sonuçsuz çağrı sınırı", tavan: "toplam çağrı sınırı", hedef: "hedefe ulaşıldı", kayit_bitti: "kayıt bitti"};
 function durmaTablosu(d) {
   if (!d) return "";

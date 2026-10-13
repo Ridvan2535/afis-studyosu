@@ -50,6 +50,7 @@ HATA_TURLERI = {
     "servis_hatasi": "Servis hatası",
     "birikme_cozulemedi": "Zemindeki birikme doğru çizilemedi",
     "sahne_kivrim": "Kumaş yüzeyi tasarımı bozmadan taşıyacak kadar düz değil",
+    "temas_belirsiz": "Kumaşın zemine temas çizgisi belirsiz (incelemeye bırakıldı)",
 }
 
 

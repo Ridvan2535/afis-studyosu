@@ -319,6 +319,14 @@ class Handler(BaseHTTPRequestHandler):
                 e["diger_url"] = base + urllib.parse.quote(e["dosya"])        # eski kayıt: türü belirsiz tek görsel
             if not e["ham_url"] and e["algilama_url"]:
                 e["yaklasik_url"] = "/yaklasik/" + urllib.parse.quote(name) + "/" + urllib.parse.quote(alg)   # ham DEĞİL
+            kn = e.get("kaynak") or {}
+            e["manuel_dosya"], e["manuel_kaynak_is"] = (e.get("ham_dosya"), None) if e.get("ham_dosya") else (kn.get("dosya"), kn.get("is"))
+            if not e["ham_url"] and kn.get("is") and kn.get("dosya"):          # yeniden birleştirme kaydı: ham sahne kaynak işte
+                sp = safe_join(orch.JOBS_DIR, kn["is"])
+                if sp and os.path.exists(os.path.join(sp, kn["dosya"])):
+                    e["ham_url"] = f"/files/{urllib.parse.quote(kn['is'])}/" + urllib.parse.quote(kn["dosya"])
+            if not e.get("manuel_dosya") or (e["manuel_kaynak_is"] and not e["ham_url"]):
+                e["manuel_dosya"] = None
             td = e.get("tani_dosya")                                         # tasarımlı TANI önizlemesi (ürün çıktısı değil)
             e["tani_url"] = base + urllib.parse.quote(td) if td and os.path.exists(os.path.join(jp, td)) else None
             e["eski_kayit"] = "ham_dosya" not in e and e.get("tur") != "servis_hatasi"
@@ -458,6 +466,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._start_video(body)
             if u.path == "/api/yeniden_birlestir":
                 return self._recompose(body)
+            if u.path == "/api/manuel_sinir":
+                return self._manuel_sinir(body)
             if u.path == "/api/degerlendir":
                 return self._rate(body)
             if u.path == "/api/cancel":
@@ -627,11 +637,38 @@ class Handler(BaseHTTPRequestHandler):
         jp = safe_join(orch.JOBS_DIR, job) if job else None
         if not jp or not os.path.isdir(jp):
             return self._send(400, {"hata": "İş bulunamadı."})
-        if not any(p.get("stem") for p in Orchestrator.report_of(jp).get("fotograflar", [])):
+        rp = Orchestrator.report_of(jp)
+        if not any(p.get("stem") for p in rp.get("fotograflar", [])) and not (
+                body.get("elenen_ham") and any(e.get("ham_dosya") for e in rp.get("elenenler", []))):
             return self._send(400, {"hata": "Bu işte kayıtlı sahne yok."})
 
         def work(o, settings):
             res = o.recompose_from_scenes(jp, elenen_ham=bool(body.get("elenen_ham")))
+            RUN._set(job=res["job"])
+            return res
+
+        if not RUN.start("fotograf", work):
+            return self._send(409, {"hata": "Başka bir iş çalışıyor."})
+        return self._send(200, {"basladi": True})
+
+    def _manuel_sinir(self, body):
+        """Manuel kurtarma: kayıtlı aynı sahneden, kullanıcının verdiği üst/alt çizgisi ya da dört köşeyle yeni ayrı sonuç."""
+        job = body.get("job", "")
+        jp = safe_join(orch.JOBS_DIR, job) if job else None
+        if not jp or not os.path.isdir(jp):
+            return self._send(400, {"hata": "İş bulunamadı."})
+        dosya = str(body.get("dosya") or "")
+        src = jp
+        kaynak_is = body.get("kaynak_is")
+        if kaynak_is:                                   # yeniden birleştirme işindeki kayıt: sahne kaynak işte
+            src = safe_join(orch.JOBS_DIR, kaynak_is)
+            if not src or not os.path.isdir(src):
+                return self._send(400, {"hata": "Kaynak iş bulunamadı."})
+        if not dosya or not safe_join(src, dosya) or not os.path.exists(safe_join(src, dosya)):
+            return self._send(400, {"hata": "Kayıtlı sahne bulunamadı."})
+
+        def work(o, settings):
+            res = o.manuel_sinir(src, dosya, ust=body.get("ust"), alt=body.get("alt"), koseler=body.get("koseler"))
             RUN._set(job=res["job"])
             return res
 

@@ -312,3 +312,13 @@ bazıları içindeyse "sınır" → güven düşük, İnceleme gerekli. Eşikler
 Yalnız onizleme/ altında, adında "_TANI_urun_ciktisi_degil", üzerinde şerit/filigran ve kalan sorunlar listesi; foto/ ve
 fotoğraf listesine girmez.
 
+**K-54 · 2026-10-13 · Genişleme tek başına zemine temas kanıtı değildir; tolerans deformasyon izni değildir (K-16'nın yerine).**
+Etek ucu ile genişleme başlangıcı ayrı ölçülür; bant asılı boyun %15'inden uzunsa `temas_belirsiz`: otomatik gizleme yok,
+inceleme. Tasarım her zaman fiziksel ölçekle yerleşir; ±%3 ve ölçüm payı yalnız uygunluk kararıdır. Eski "temas çizgisine
+sığdır (≤%3 sıkıştır)" kaldırıldı. Neden: 053942'de yavaş genişleme birikme sayıldı, alt yazı gizlendi; sıkıştırma tasarım
+bütünlüğü kuralıyla çelişiyordu.
+
+**K-55 · 2026-10-13 · Manuel sınır kurtarması.**
+Otomatik temas/sınır çözülemezse kullanıcı kayıtlı aynı sahnede üst/alt çizgisi ya da dört köşe verir; ayrı yeni iş,
+ücretsiz, kaynak değişmez, kontroller aynen uygulanır, kayıtta "elle verildi" işareti.
+
