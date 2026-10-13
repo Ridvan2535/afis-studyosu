@@ -4,14 +4,62 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-13 05:45 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
+**Son güncelleme:** 2026-10-13 06:20 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
 denemeler / insan değerlendirmesi / kontrollü prompt sürümleri** tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı
 görünüm) — BAŞLAMADI (kullanıcı onayı bekleniyor). Video aşamasına başlanmadı.
 
 
 ---
 
-## 0. Son iş: Görsel Kontrol ilk 8 örneklik değerlendirme (2026-10-13)
+## 0. Son iş: İş 054333 kumaş algılama hatası + algılama kurtarma akışı (2026-10-13 06:20)
+
+**Kök neden (genel, bu fotoğrafa özel değil):** kumaş, aynı renkteki krem halıyla tek bölge olarak birleşti → kenar
+temasından skor 0. Soldaki koyu duvar boşluğu da skor 0'dı; eşitlikte listedeki ilk aday (koyu boşluk, açıklık 32) seçildi.
+**Düzeltme (`banner_detect.py`):** (1) açık renkli aday kenara değiyor / çok büyük / dağınıksa gövde kenar çizgileri
+üst bölümden kestirilip zemine yayılan satırlar kırpılır ve etek satırında kesilir → ayrı aday olarak eklenir;
+(2) adaylar `detect_candidates` ile skor + açıklık sırasına konur (eşitlikte açık renkli kazanır), benzerleri elenir.
+Sabit koordinat veya eşik gevşetme yok. Sonuç: 054333'te merkezdeki kumaş seçiliyor (açıklık 208, alan %25,3).
+**Sade açıklama (`deneme_kayit.sade_neden`):** "açık renkli/nötr değil", "afiş bulunamadı/ölçülemedi" artık
+"Program kumaşı bulamadı … algılama hatası; afişte desen olduğu anlamına gelmez" diye gösterilir; "yazı/desen var"
+yalnız "boş görünmüyor" reddinde.
+
+**Yeniden birleştirme (ortak akış, ücretsiz):** kayıtlı ham sahne + işin PNG'si → yeni iş
+`isler/20261013-060024_yeniden_20261013-054333` (orijinal iş değişmedi). Algılama artık doğru, ama sahne
+`sahne_geometri` ile elendi: asılı ≈185,5 cm, oran 0,405 (ürün 0,37; ±%3 kuralı dışında), kararlılık testinde aynı,
+güven yüksek → dürüst ret; tanı önizlemesi (`onizleme/elenen_c01_algilama_sonra.jpg`) maskenin kumaşta olduğunu gösterir.
+
+**Kurtarma akışı (K-49):** Sahne üretildi → kumaş adayları → algılama doğrulandı → tasarım yerleştirildi. Ölçüm
+şüpheliyse (kalite kapısı reddi ya da kontrol güveni düşük): yeni sahne ÜRETİLMEZ; aynı ham görselde alternatif adaylar
+bütün kontroller + kararlılık testiyle denenir; yetmezse ve bağlıysa otomatik görsel kontrol servisi bölge önerir,
+öneri yalnız yeniden algılama ipucudur (yeni maske kutunun ≥%90 içinde, kutunun ≥%50'sini kaplamalı ve yine bütün
+kontrollerden geçmeli). "Uygun" deyip bölge vermeyen yanıt baskıya yol açmaz. Doğrulanamazsa sahne saklanır ve
+kullanıcı incelemesine kalır (şüpheli ölçümde dur AÇIK kalır).
+
+**Durum tablosu (K-50):**
+| Bileşen | Hazır | Bağlı | Gerçek çağrıyla doğrulandı |
+|---|---|---|---|
+| Yerel kurtarma (alternatif adaylar) | evet | evet (varsayılan açık) | — (ücretsiz, yerel testlerle) |
+| Otomatik görsel kontrol servisi (`gorsel_kontrol_servisi.py`, Anthropic Messages API) | evet (kod + sahte servis testleri) | **hayır** — varsayılan `kapali`, anahtar girilmedi | **hayır** |
+| `visual-inspector` geliştirme ajanı (Claude Code) | kullanıcının bilgisayarında kurulu | **uygulamaya bağlı değil** (geliştirme aracıdır) | — |
+
+Servis koşulları: yalnız şüpheli ölçümde ve yerel adaylar sonuç vermezse; sahne başına 1 çağrı, yeniden deneme yok;
+iş başına en fazla 3, günlük tavan 0,50 $ (Ayarlar'dan). Model `claude-sonnet-5-5` (2 $/10 $ / milyon token); tahmini
+~0,013 $/çağrı. Açmak için: Ayarlar → servis "claude" + Anthropic anahtarı. Anahtar `public()` çıktısında maskelenir.
+
+**Yeni bulgu (açık):** iş 053942 "afiş boş görünmüyor" ile elendi; maske alt yarıda iki yana krem duvara taşıyor —
+bu da algılama hatası olabilir. Henüz düzeltilmedi/test edilmedi; sıradaki iş.
+
+**Testler — yalnız Linux bulut ortamında çalıştırıldı (Windows'ta ÇALIŞTIRILMADI):** yeni
+`tests/test_algilama_kurtarma.py` (054333 kalıcı regresyonu — eski kodda başarısız olduğu doğrulandı; sade açıklama;
+kurtarma + sahte servis + bütçe + yanıt doğrulama + anahtar gizleme) TAMAM; `test_kontrol_ornekleri` (005509 s01/s02
+kabul korunuyor), `test_e2e_mock`, `test_tam_kumas`, `test_deneme_kayit`, `test_durma_ve_karsilastirma`,
+`test_yeniden_birlestir` (kaynak kaydı genişledi, beklenti güncellendi), `test_elenen_arayuz`, `test_gorsel_kontrol`,
+`test_duzlem_yerlesim`, `test_sureklilik` TAMAM. Diğer test dosyaları bu turda yeniden çalıştırılmadı.
+Ücretli görsel/video/model çağrısı YOK.
+
+---
+
+## 0b. Önceki iş: Görsel Kontrol ilk 8 örneklik değerlendirme (2026-10-13)
 
 Kullanıcı onayıyla (3. yol): kurulu `visual-inspector` bu bulut oturumunda tanınmadığı için, **visual-inspector
 talimatlarıyla çalışan genel amaçlı alt ajan** kullanıldı (temiz bağlam; program kararı/insan etiketi verilmedi).

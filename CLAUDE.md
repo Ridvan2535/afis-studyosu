@@ -93,6 +93,9 @@ yüzeye tasarım uygulama motoru ürün türüne özel.
 - Testler: `python tests/test_<ad>.py` (pytest gerekmez; her dosya kendi kendine çalışır, sonunda `TAMAM` yazar).
   Windows'ta: `.venv\Scripts\python tests\test_selector.py`.
 - Hata düzeltmesine **regresyon testi** eşlik eder ve test, düzeltme geri alınınca başarısız olmalıdır.
+- Algılama değişikliklerinde `tests/test_algilama_kurtarma.py` geçmeli (iş 054333 kalıcı örneği: kumaş seçilir, koyu boşluk
+  seçilmez; kurtarma akışı sahte servisle). `visual-inspector` geliştirme ajanıdır; uygulamanın otomatik kontrolü
+  `gorsel_kontrol_servisi.py`'dir (varsayılan kapalı) — ikisi karıştırılmaz (K-50).
 - "Test edildi" ifadesi her zaman üçe ayrılır:
   1. **Yerel test** (saf kod, ağsız),
   2. **Sahte servis testi** (`mock_provider` / taklit `requests`),

@@ -344,7 +344,9 @@ class Handler(BaseHTTPRequestHandler):
                 "bekleme_nedeni": rap.get("bekleme_nedeni"), "oran_onizleme": oran_url,
                 "islem": rap.get("islem"), "kaynak_is": rap.get("kaynak_is"), "saglayici_cagrisi": rap.get("saglayici_cagrisi"),
                 "yeniden_birlestirilebilir": any(p.get("stem") and os.path.exists(os.path.join(jp, "sahneler_bos", p["stem"] + ".png"))
-                                                 for p in rap.get("fotograflar", []))}
+                                                 for p in rap.get("fotograflar", [])),
+                "elenen_ham_var": any(e.get("ham_dosya") and os.path.exists(os.path.join(jp, e["ham_dosya"]))
+                                      for e in rap.get("elenenler", []))}
 
     _APPROX_CACHE: dict = {}
 
@@ -520,9 +522,9 @@ class Handler(BaseHTTPRequestHandler):
     def _settings(self, body):
         s = Settings.load()
         for k in body.get("clear", []):
-            if k in ("magnific_key", "openai_key", "gemini_key", "topview_key", "topview_uid"):
+            if k in ("magnific_key", "openai_key", "gemini_key", "topview_key", "topview_uid", "anthropic_key"):
                 setattr(s, k, "")
-        for k in ("magnific_key", "openai_key", "gemini_key", "topview_key", "topview_uid"):
+        for k in ("magnific_key", "openai_key", "gemini_key", "topview_key", "topview_uid", "anthropic_key"):
             v = (body.get(k) or "").strip()
             if v and "…" not in v and "•" not in v:
                 setattr(s, k, v)
@@ -546,6 +548,17 @@ class Handler(BaseHTTPRequestHandler):
                 s.ayni_hata_siniri = max(0, min(int(body["ayni_hata_siniri"]), 50))
             except (TypeError, ValueError):
                 return self._send(400, {"hata": "aynı hata sınırı bir sayı olmalı (0 = kapalı)"})
+        if body.get("gorsel_kontrol_servisi") in ("kapali", "claude"):
+            s.gorsel_kontrol_servisi = body["gorsel_kontrol_servisi"]
+        if "kurtarma_etkin" in body:
+            s.kurtarma_etkin = bool(body["kurtarma_etkin"])
+        try:
+            if "gorsel_kontrol_is_basina_en_fazla" in body:
+                s.gorsel_kontrol_is_basina_en_fazla = max(0, min(int(body["gorsel_kontrol_is_basina_en_fazla"]), 10))
+            if "gorsel_kontrol_gunluk_tavan_usd" in body:
+                s.gorsel_kontrol_gunluk_tavan_usd = max(0.0, min(float(body["gorsel_kontrol_gunluk_tavan_usd"]), 5.0))
+        except (TypeError, ValueError):
+            return self._send(400, {"hata": "görsel kontrol sınırları sayı olmalı"})
         if "supheli_olcumde_dur" in body:
             s.supheli_olcumde_dur = bool(body["supheli_olcumde_dur"])
         if "sonucsuz_siniri" in body:
@@ -616,7 +629,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, {"hata": "Bu işte kayıtlı sahne yok."})
 
         def work(o, settings):
-            res = o.recompose_from_scenes(jp)
+            res = o.recompose_from_scenes(jp, elenen_ham=bool(body.get("elenen_ham")))
             RUN._set(job=res["job"])
             return res
 

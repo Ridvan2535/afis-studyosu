@@ -143,6 +143,20 @@ def sade_neden(rec: dict, boy_cm: float | None = None) -> str:
         return f"Kumaş ürün boyundan kısa görünüyor (tahmini {a:.0f} cm{urun})."
     if tur == "sahne_geometri" and ("geniş" in n or "yatay" in n):
         return "Afiş ürüne göre fazla geniş çizilmiş."
+    # ALGILAMA başarısızlıkları baskı/desen hatasından AYRI gösterilir (2026-10-13, iş 054333: "açık renkli/nötr değil"
+    # mesajındaki "boş afiş ister" ifadesi yanlışlıkla "yazı/desen var" diye çevriliyordu)
+    if "açık renkli/nötr değil" in n:
+        return "Program kumaşı bulamadı: seçtiği bölge koyu (arka plan olabilir). Algılama hatası; afişte desen olduğu anlamına gelmez."
+    if "güvenilir afiş bölgesi bulunamadı" in n or "afiş bulunamadı" in n or "afiş ölçülemedi" in n:
+        return "Program kumaşı güvenle bulamadı (algılama hatası; afişte desen olduğu anlamına gelmez)."
+    if "çok büyük" in n:
+        return "Program kumaş yerine çok büyük bir bölge seçti (duvar/zemin olabilir); algılama hatası."
+    if "çok küçük" in n:
+        return "Program kumaş olarak çok küçük bir bölge buldu; algılama hatası olabilir."
+    if "taşıyor" in n or "kesilmiş" in n:
+        return "Bulunan bölge kadraj kenarına taşıyor; afiş kesilmiş ya da algılama zemine/duvara yayılmış olabilir."
+    if "boş görünmüyor" in n or "boş değil" in n or "yazı/desen" in n:
+        return "Afişin üzerinde yazı ya da desen var gibi görünüyor (boş değil)."
     if "yere kadar uzanmıyor" in n or "havada" in n:
         return "Afişin alt kenarı zemine ulaşmıyor; kumaş havada bitiyor."
     if "çok dar" in n:
@@ -151,10 +165,6 @@ def sade_neden(rec: dict, boy_cm: float | None = None) -> str:
         return f"Kumaşın alt kısmı yerde birikmiş görünüyor (tahmini {tk.get('gizli_cm', 0):.0f} cm) ve tasarımın o bölgesinde yazı var."
     if tur == "sahne_kivrim":
         return "Kumaş fazla kıvrımlı; tasarım bozulmadan sığmıyor."
-    if "boş" in n:
-        return "Afişin üzerinde yazı ya da desen var (boş değil)."
-    if "bulunamadı" in n or "küçük" in n or "taşıyor" in n:
-        return "Afiş sahnede bulunamadı ya da kadraja taşıyor."
     return re.sub(r"\s+", " ", n)[:160]
 
 

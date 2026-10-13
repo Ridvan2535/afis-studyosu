@@ -187,6 +187,76 @@ def _score(mask):
 
 
 # ----------------------------------------------------------------------------
+# Zemine taşmış açık bölgeyi ayırma (2026-10-13)
+ZEMIN_GENISLEME = 1.5        # bir satırın genişliği, gövdenin ortanca genişliğinin bu katını aşarsa "zemine taşmış" satır
+ZEMIN_PAY = 0.012            # gövde kenar doğrularına izin verilen pay (kadraj eni oranı)
+
+
+def _zemin_ayir(m):
+    """Kumaş + zemin (krem halı vb.) tek bölge olmuşsa kumaşın dikey gövdesini ayırır; ayrılamazsa None.
+    Gövde: bölgenin üst kısmındaki (boyun %10–50'si) satırlardan uydurulan sol/sağ kenar doğruları. Genişliği gövdenin
+    ZEMIN_GENISLEME katını aşan satırlarda yalnız bu doğruların (± pay) arası tutulur; sonra üstteki gövdeyle bağlı en
+    büyük parça alınır. Böylece etek ile halı arasındaki gölge çizgisi bağlantıyı keser."""
+    m = (m > 0).astype(np.uint8)
+    H, W = m.shape
+    ys = np.flatnonzero(m.any(1))
+    if len(ys) < 40:
+        return None
+    y0, y1 = int(ys[0]), int(ys[-1])
+    h = y1 - y0 + 1
+    rows = np.arange(int(y0 + 0.10 * h), int(y0 + 0.50 * h))
+    rows = rows[m[rows].any(1)]
+    if len(rows) < 20:
+        return None
+    xl = np.array([np.argmax(m[r]) for r in rows], np.float64)
+    xr = np.array([W - 1 - np.argmax(m[r][::-1]) for r in rows], np.float64)
+    wref = float(np.median(xr - xl + 1))
+    if wref < 0.04 * W:
+        return None
+    pl = np.polyfit(rows.astype(np.float64), xl, 1)
+    pr = np.polyfit(rows.astype(np.float64), xr, 1)
+    pay = ZEMIN_PAY * W
+    out = m.copy()
+    degisti = False
+    ilk_tasma = None
+    # etek-zemin ayrımı: gövde bandı içinde mask doluluğunun %50'nin altına düştüğü ilk satır (etek altındaki gölge çizgisi);
+    # yalnız taşmanın başladığı satırdan sonra ve bölgenin alt %45'inde aranır
+    kesim = None
+    for r in range(y0, y1 + 1):
+        if int(m[r].sum()) > ZEMIN_GENISLEME * wref:
+            ilk_tasma = r
+            break
+    if ilk_tasma is not None:
+        for r in range(max(ilk_tasma, int(y0 + 0.55 * h)), y1 + 1):
+            a = int(max(0, np.polyval(pl, r)))
+            b = int(min(W, np.polyval(pr, r) + 1))
+            if b - a > 10 and m[r, a:b].mean() < 0.5:
+                kesim = r
+                break
+    for r in range(y0, y1 + 1):
+        cnt = int(m[r].sum())
+        if cnt > ZEMIN_GENISLEME * wref:
+            a = int(max(0, np.polyval(pl, r) - pay))
+            b = int(min(W, np.polyval(pr, r) + pay + 1))
+            out[r, :a] = 0
+            out[r, b:] = 0
+            degisti = True
+    if not degisti:
+        return None
+    if kesim is not None:
+        out[kesim:] = 0
+    n, lab, st, _ = cv2.connectedComponentsWithStats(out, connectivity=4)
+    if n <= 1:
+        return None
+    ref_lab = np.bincount(lab[rows[len(rows) // 2]][lab[rows[len(rows) // 2]] > 0]) if (lab[rows[len(rows) // 2]] > 0).any() else None
+    if ref_lab is None:
+        return None
+    k = int(np.argmax(ref_lab))
+    g = (lab == k).astype(np.uint8)
+    return (g, kesim) if g.sum() < m.sum() else None
+
+
+# ----------------------------------------------------------------------------
 # Kumaş maskesi iyileştirme (2026-10-13, kontrol örnekleri: iş 20261013-005509)
 UST_BANT_EN_FAZLA = 0.08     # VARSAYIM: maskenin üstünde en fazla asılı boyun %8'i kadar bant aranır
 UST_BANT_SATIR_ORANI = 0.80  # bir satır, iç sütunlarının %80'i kumaş rengindeyse kumaş sayılır
@@ -380,6 +450,20 @@ def _sam2_masks(work_bgr, seeds):
 # Ana giriş
 # ----------------------------------------------------------------------------
 def detect(img_bgr, hint=None, backend="auto") -> Detection:
+    """En iyi kumaş/afiş adayı (eski davranış)."""
+    return detect_candidates(img_bgr, hint, backend, en_fazla=1)[0]
+
+
+def _iou(a, b):
+    a, b = a > 0, b > 0
+    u = np.logical_or(a, b).sum()
+    return float(np.logical_and(a, b).sum()) / u if u else 0.0
+
+
+def detect_candidates(img_bgr, hint=None, backend="auto", en_fazla: int = 4) -> list:
+    """Aday listesi (en iyiden kötüye), her biri tam bir Detection (aynı kalite kapısından geçmiş). Birbirinin neredeyse
+    aynısı adaylar (IoU > 0,7) tek sayılır. Kurtarma akışı (K-49) ilk aday şüpheliyse sıradakileri aynı ham görselde dener;
+    sabit koordinat kullanılmaz. Liste en az bir eleman içerir (bulunamadıysa reddedilmiş boş Detection)."""
     hint = hint or {}
     H, W = img_bgr.shape[:2]
     scale = min(1.0, WORK_MAX / max(H, W))
@@ -418,13 +502,37 @@ def detect(img_bgr, hint=None, backend="auto") -> Detection:
             f, hf = _finalize(m)
             covered |= m.astype(bool)      # doldurulmamış maske: duvar aday ise içindeki afişi "kapsamış" sayma
             cands.append((cscore(f), f, hf))
+            # Açık renkli aday zemine/kenara taşıp birleşmişse (kumaş + krem halı tek bölge), zemin kısmını ayırıp ayrı aday
+            # olarak da değerlendir (2026-10-13, iş 20261013-054333: kumaş halıyla birleşince skoru 0 oluyor, koyu duvar
+            # boşluğu seçiliyordu). Sabit koordinat yok: ayırma bölgenin kendi dikey gövdesinden hesaplanır.
+            if _color_factor(*_color_stats(lab_work, f)) >= 0.3:
+                _, ar_, sol_, bf_ = _score(f)
+                if bf_ > 0 or ar_ > MAX_AREA or sol_ < 0.8:
+                    za = _zemin_ayir(m)
+                    if za is not None:
+                        g2, hg = _finalize(za[0])
+                        if za[1] is not None:
+                            g2[za[1]:] = 0               # kapatma işlemi etek altındaki gölge çizgisini yeniden köprülemesin
+                        cands.append((cscore(g2), g2, hg))
 
     if not cands:
         d = Detection(np.zeros((H, W), np.uint8), "fabric", backend=used or backend)
         d.reject.append("afiş bulunamadı")
         return d
 
-    score, wm, holes_frac = max(cands, key=lambda c: c[0])
+    # en yüksek skor; eşitlikte (ör. hepsi 0) AÇIK renkli aday öne geçer: koyu arka plan yalnız sıralama şansıyla seçilmesin
+    sirali = sorted(cands, key=lambda c: (c[0], _color_factor(*_color_stats(lab_work, c[1]))), reverse=True)
+    secilen = []
+    for c in sirali:
+        if all(_iou(c[1], x[1]) <= 0.7 for x in secilen):
+            secilen.append(c)
+        if len(secilen) >= max(1, en_fazla):
+            break
+    return [_tespit_kur(img_bgr, work, lab_work, scale, hint, used, backend, *c) for c in secilen]
+
+
+def _tespit_kur(img_bgr, work, lab_work, scale, hint, used, backend, score, wm, holes_frac) -> "Detection":
+    H, W = img_bgr.shape[:2]
     rinfo = {}
     if hint.get("kind") == "fabric" and used != "hint-polygon":
         wm, rinfo = _refine_fabric(work, wm)

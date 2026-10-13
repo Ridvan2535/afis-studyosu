@@ -214,6 +214,7 @@ table.cmp td,table.cmp th{border-bottom:1px solid var(--line);padding:5px 6px;te
       <div id="rateBox"></div>
       <div id="recompWrap" hidden style="margin:12px 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
         <button class="btn sm" id="btnRecomp">Kayıtlı sahnelerden yeniden birleştir</button>
+        <label id="elenenHamWrap" hidden style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="elenenHam" checked> elenen sahnelerin ham görüntülerini de güncel algılamayla yeniden dene</label>
         <span class="hint" style="margin:0">Ücretsiz: bu işin kayıtlı boş sahnelerine tasarım güncel programla yeniden basılır; yeni sahne üretilmez, servise istek gitmez. Sonuç yeni bir iş olarak kaydedilir, bu iş olduğu gibi kalır.</span>
       </div>
       <div id="rejBox"></div>
@@ -311,6 +312,17 @@ table.cmp td,table.cmp th{border-bottom:1px solid var(--line);padding:5px 6px;te
           <span><b>Şüpheli ölçümde dur</b> (önerilir): algılama güveni düşük bir ret olursa program yeni ücretli çağrı yapmaz; sahneyi "İnceleme gerekli" olarak bırakır, sen bakarsın.</span></label></div>
         <div><label class="f" for="noRes">Son kabulden beri kaç çağrı sonuç vermezse üretim dursun (0 = kapalı)</label><input type="number" id="noRes" min="0" max="60">
           <div class="hint">Önerilen 8. Nedenler farklı olsa da sayar; bir sahne kabul edilince sıfırlanır. Toplam çağrı sınırı ayrıca geçerlidir. Sonuçlar ekranındaki "Durma sınırları bu işte ne yapardı?" tablosu, farklı değerlerin kayıtlı bir işte hangi çağrıda duracağını gösterir.</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Kumaş algılama kurtarma ve otomatik görsel kontrol</h2>
+      <p class="sub">Algılama şüpheliyse program <b>yeni sahne üretmeden</b> aynı ham görselde diğer kumaş adaylarını dener (ücretsiz). Doğrulanamazsa sahne senin incelemene kalır. İsteğe bağlı otomatik görsel kontrol bir Claude modeline ikinci görüş sorar (ücretli); verdiği kumaş bölgesi yalnız yeniden algılamada ipucu olur, "uygun" demesi tek başına baskı yaptırmaz. <b>Bu servis Claude Code'daki geliştirme ajanı (visual-inspector) değildir.</b> Varsayılan kapalı; henüz gerçek çağrıyla doğrulanmadı.</p>
+      <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="kurtarma" style="margin-top:4px"><span>Şüpheli algılamada aynı görselde alternatif kumaş adaylarını dene (önerilir, ücretsiz)</span></label>
+      <div class="grid2">
+        <div><label class="f" for="gkServis">Otomatik görsel kontrol</label><select id="gkServis"><option value="kapali">Kapalı (varsayılan)</option><option value="claude">Claude (Anthropic API; ücretli, doğrulanmadı)</option></select></div>
+        <div><label class="f" for="gkKey">Anthropic API anahtarı</label><input type="password" id="gkKey" placeholder="yalnız Claude seçiliyse"></div>
+        <div><label class="f" for="gkIs">İş başına en fazla görsel kontrol çağrısı</label><input type="number" id="gkIs" min="0" max="10"></div>
+        <div><label class="f" for="gkGun">Günlük tahmini harcama tavanı ($)</label><input type="number" id="gkGun" min="0" max="5" step="0.05"><div class="hint">Çağrı başına tahmini ≈ 0,013 $ (Sonnet 5.5, 1024 px sahne + aday görseli).</div></div>
       </div>
     </div>
     <div class="card">
@@ -434,6 +446,9 @@ async function loadConfig() {
   $("#vidRes").value = cfg.video_resolution; $("#seconds").value = cfg.seconds;
   $("#maxScene").value = cfg.max_scene_calls; $("#maxVideo").value = cfg.max_video_tries;
   $("#sameErr").value = cfg.ayni_hata_siniri ?? 5; $("#noRes").value = cfg.sonucsuz_siniri ?? 8; $("#supDur").checked = cfg.supheli_olcumde_dur !== false;
+  $("#kurtarma").checked = cfg.kurtarma_etkin !== false; $("#gkServis").value = cfg.gorsel_kontrol_servisi || "kapali";
+  $("#gkIs").value = cfg.gorsel_kontrol_is_basina_en_fazla ?? 3; $("#gkGun").value = cfg.gorsel_kontrol_gunluk_tavan_usd ?? 0.5;
+  $("#gkKey").value = cfg.anthropic_key || "";
   loadPromptInfo();
   $("#longSide").value = cfg.photo_long_side;
   $("#strictLayout").checked = cfg.strict_layout !== false;
@@ -512,6 +527,9 @@ async function saveSettings(silent) {
     video_resolution: $("#vidRes").value, seconds: $("#seconds").value,
     max_scene_calls: $("#maxScene").value, max_video_tries: $("#maxVideo").value, photo_long_side: $("#longSide").value,
     strict_layout: $("#strictLayout").checked, ayni_hata_siniri: $("#sameErr").value, sonucsuz_siniri: $("#noRes").value, supheli_olcumde_dur: $("#supDur").checked,
+    kurtarma_etkin: $("#kurtarma").checked, gorsel_kontrol_servisi: $("#gkServis").value,
+    gorsel_kontrol_is_basina_en_fazla: $("#gkIs").value, gorsel_kontrol_gunluk_tavan_usd: $("#gkGun").value,
+    ...(($("#gkKey").value || "").trim() && !$("#gkKey").value.includes("…") ? {anthropic_key: $("#gkKey").value.trim()} : {}),
     prompt_surumleri: Object.fromEntries([...document.querySelectorAll("#promptSel select")].map(x => [x.dataset.kat, x.value])),
     auto_video: $("#autoVideo").checked, auto_video_move: $("#autoMove").value, auto_video_kind: $("#autoKind").value,
   };
@@ -627,7 +645,7 @@ $("#btnPhotos").onclick = () => {
 };
 $("#btnRecomp").onclick = async () => {
   if (!curJob || busy()) return;
-  try { await api("/api/yeniden_birlestir", {job: curJob}); toast("Yeniden birleştirme başladı (ücretsiz)"); await poll(); } catch (e) { toast(e.message); }
+  try { await api("/api/yeniden_birlestir", {job: curJob, elenen_ham: !$("#elenenHamWrap").hidden && $("#elenenHam").checked}); toast("Yeniden birleştirme başladı (ücretsiz)"); await poll(); } catch (e) { toast(e.message); }
 };
 $("#btnVideo").onclick = async () => {
   if (!curJob || !selPhoto) return;
@@ -742,7 +760,8 @@ function renderResult() {
   if (!selPhoto) { const b = i.fotograflar.find(p => p.en_iyi); if (b) selPhoto = b.ad; }       // en iyi fotoğraf kendiliğinden seçili gelir
   $("#jobInfo").textContent = `${i.kategori || ""} · ${i.fotograflar.length} fotoğraf`
     + (i.islem === "kayitli_sahnelerden_yeniden_birlestirme" ? ` · kayıtlı sahnelerden yeniden birleştirildi (kaynak: ${i.kaynak_is}; servis çağrısı: ${i.saglayici_cagrisi ?? 0})` : "");
-  $("#recompWrap").hidden = !i.yeniden_birlestirilebilir;
+  $("#recompWrap").hidden = !(i.yeniden_birlestirilebilir || i.elenen_ham_var);
+  $("#elenenHamWrap").hidden = !i.elenen_ham_var;
   const su = i.son_uretim;
   const sm = $("#sumMsg"); sm.innerHTML = "";
   if (i.durum === "beklemede") sm.innerHTML = `<div class="msg warn"><b>Bu ürün bekletiliyor.</b> ${esc(((i.tasarim_kontrol || {}).uyarilar || [])[0] || "Tasarım kontrolü geçmedi.")}${i.oran_onizleme ? `<br><a href="${esc(i.oran_onizleme)}" target="_blank">Oran önizlemesini aç</a>` : ""}</div>`;
@@ -832,6 +851,7 @@ function renderRejects(i) {
       <div class="tx"><b style="color:var(--ink)">${esc(r.sade_neden || r.neden || "")}</b>
         <span><span class="chip ${du[1]}" title="${esc(du[2])}">${du[0]}</span>${s.guven ? ` <span class="chip ${s.guven === "dusuk" ? "warn" : ""}">${esc(GUVEN[s.guven] || s.guven)}</span>` : ""}${runs[n] >= 2 ? ` <span class="chip warn">art arda ${runs[n]}.</span>` : ""}</span>
         <span class="hint" style="margin:0">Otomatik kontrol: ${esc(s.aciklama || "")}</span>
+        ${r.kurtarma ? `<span class="hint" style="margin:0">Kurtarma (aynı görsel, yeni üretim yok): ${esc(({dogrulanamadi: "doğru kumaş bölgesi doğrulanamadı — senin incelemen gerekli", yerel_aday_dogru_bolge_ret: "doğru kumaş bulundu ama sahne yine uygun değil", servis_onerisi_dogru_bolge_ret: "görsel kontrolün önerdiği bölgede kumaş bulundu ama sahne uygun değil"})[r.kurtarma.sonuc] || r.kurtarma.sonuc)}; ${(r.kurtarma.yerel_adaylar || []).length} alternatif aday denendi${r.kurtarma.servis ? ", görsel kontrol: " + esc(r.kurtarma.servis.durum || "") : ""}.</span>` : ""}
         ${(r.durum || {}).not ? `<span class="hint" style="margin:0"><b>${esc(r.durum.not)}</b></span>` : ""}
         <div class="bt">${btns}</div>${note}
         ${r.tur === "servis_hatasi" ? "" : `<div class="bt"><button class="${hk === "kullanilabilir" ? "on" : ""}" data-el="${esc(r.insan_anahtar)}" data-k="kullanilabilir" style="cursor:pointer">Kullanılabilir</button><button class="${hk === "gercekten_hatali" ? "on" : ""}" data-el="${esc(r.insan_anahtar)}" data-k="gercekten_hatali" style="cursor:pointer">Gerçekten hatalı</button>${hk ? `<button data-el="${esc(r.insan_anahtar)}" data-k="" style="cursor:pointer">etiketi kaldır</button>` : ""}</div>`}

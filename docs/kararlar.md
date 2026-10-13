@@ -287,3 +287,15 @@ Onaylı sahneler kütüphanede tekrar kullanılır, günlük üretimde gereksiz 
 - Fotoğraf kadrajı sabit 1:1 → **K-13 ile uygulandı** (9:16 video kırpması yerine "video oranı sonra belirlenecek").
 - Kumaş ürününde yerleşim her zaman kumaş yolundan → **K-14 ile uygulandı**; "baskı alanı profilden" yerine tam kumaş (K-11).
 - Oran uyuşmazlığında (A)/(B) seçimi → **yanıtlandı: K-10** (ne esnetme ne sığdırma; üretim bekletilir).
+
+**K-49 · 2026-10-13 · Algılama şüpheliyse aynı ham görselde kurtarma; yeni sahne üretilmez.**
+Adaylar skor + açıklık sırasıyla değerlendirilir; açık renkli ama zemine yayılmış aday gövde kenarlarından kırpılır.
+Şüpheli ölçümde önce alternatif adaylar (ücretsiz), sonra (bağlıysa) otomatik görsel kontrol bölge önerisi denenir.
+Öneri yalnız yeniden algılama ipucudur; yeni maske önerilen bölgeyle tutarlı olmalı ve bütün kontrollerden geçmelidir.
+Doğrulanamazsa sahne saklanır, kullanıcı incelemesine kalır; şüpheli ölçümde dur kapatılmaz. Neden: 054333'te ve
+003750 c1/c3/c13'te ret nedeni sahne değil algılamaydı; yeniden üretim parayı boşa harcar.
+
+**K-50 · 2026-10-13 · Geliştirme ajanı ≠ uygulama servisi; durumlar ayrı yazılır.**
+`visual-inspector` Claude Code geliştirme ajanıdır, uygulama onu çağırmaz. Uygulamanın otomatik kontrolü ayrı modüldür
+(`gorsel_kontrol_servisi.py`), varsayılan kapalıdır, anahtar ve bütçe sınırı (iş başına 3, günlük 0,50 $) ister.
+Belgelerde "hazır", "bağlı", "gerçek çağrıyla doğrulandı" ayrı sütunlardır; şu an servis hazır, bağlı değil, doğrulanmadı.

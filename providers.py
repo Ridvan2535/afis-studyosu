@@ -83,6 +83,12 @@ class Settings:
     prompt_surumleri: dict = field(default_factory=dict)   # kategori -> prompt sürümü (prompt_yapisi.SURUMLER); boş = etkin "2A"
     ayni_hata_siniri: int = 5             # aynı hata art arda bu kadar tekrarlanırsa üretim durur (0 = kapalı); K-30
     olcum_kararlilik_testi: bool = True   # her sahne iki küçük bozulmayla yeniden ölçülür (ücretsiz); kararsız ret kesin sayılmaz; K-37
+    kurtarma_etkin: bool = True           # şüpheli algılamada aynı ham görselde alternatif kumaş adayları (ücretsiz, yerel); K-49
+    gorsel_kontrol_servisi: str = "kapali"   # kapali | claude — uygulamanın otomatik görsel kontrolü (ücretli; varsayılan kapalı)
+    anthropic_key: str = ""               # yalnız gorsel_kontrol_servisi=claude iken kullanılır; arayüzde maskelenir
+    gorsel_kontrol_modeli: str = "claude-sonnet-5-5"
+    gorsel_kontrol_is_basina_en_fazla: int = 3
+    gorsel_kontrol_gunluk_tavan_usd: float = 0.5
     supheli_olcumde_dur: bool = True      # algılama güveni düşük bir retten sonra otomatik yeni ücretli çağrı yapılmaz; K-36
     sonucsuz_siniri: int = 8              # son kabulden beri bu kadar çağrı sonuç vermezse (neden fark etmez) üretim durur (0 = kapalı); K-33
 
@@ -141,7 +147,7 @@ class Settings:
         os.replace(tmp, SETTINGS_PATH)
 
     def keys(self):
-        return [k for k in (self.magnific_key, self.openai_key, self.gemini_key, self.topview_key) if k]
+        return [k for k in (self.magnific_key, self.openai_key, self.gemini_key, self.topview_key, self.anthropic_key) if k]
 
     def ribbon(self, name: str | None = None):
         """Seçili kurdele rengi -> {"ad","hex"} ya da None (kurdelesiz)."""
@@ -154,7 +160,7 @@ class Settings:
     def public(self) -> dict:
         """Arayüze/rapora giden hali: anahtarlar maskelenir."""
         d = asdict(self)
-        for k in ("magnific_key", "openai_key", "gemini_key", "topview_key"):
+        for k in ("magnific_key", "openai_key", "gemini_key", "topview_key", "anthropic_key"):
             d[k] = mask(d[k])
         return d
 
