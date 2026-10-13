@@ -1,0 +1,23 @@
+{
+ "aciklama": "Görsel Kontrol ajanı (visual-inspector) örnek planı. 'rehber' örnekleri açıklamalı öğretim içindir ve başarı ölçümünde KULLANILMAZ. 'degerlendirme' örneklerinin program kararı ve insan etiketi ajana gösterilmez (cevaplar_GIZLI/). İnsan etiketleri görsel kabuldür, kesin fiziksel ölçüm doğrulaması değildir; program kararları da doğru cevap sayılmaz: tablo uyuşma/çelişki gösterir, doğruluk iddia etmez.",
+ "urun": {"olcu": "75x200", "en_cm": 75, "boy_cm": 200},
+ "rehber": [
+  {"ad": "sentetik_dokunan", "kaynak": "sentetik", "tur": "dokunan", "oran": 0.375},
+  {"ad": "sentetik_birikmeli", "kaynak": "sentetik", "tur": "birikmeli", "oran": 0.375},
+  {"ad": "sentetik_havada", "kaynak": "sentetik", "tur": "havada", "oran": 0.375},
+  {"ad": "sentetik_genis", "kaynak": "sentetik", "tur": "dokunan", "oran": 0.46},
+  {"ad": "sentetik_uzun", "kaynak": "sentetik", "tur": "uzun", "oran": 0.375},
+  {"ad": "gercek_005509_13", "kaynak": "is", "is": "20261013-005509_20261013-005503_design", "dosya": "sahneler_bos/elenen_01_13.jpg", "cagri": 13},
+  {"ad": "gercek_005509_04", "kaynak": "is", "is": "20261013-005509_20261013-005503_design", "dosya": "sahneler_bos/elenen_01_04.jpg", "cagri": 4},
+  {"ad": "gercek_005509_s02", "kaynak": "is", "is": "20261013-005509_20261013-005503_design", "dosya": "sahneler_bos/s02.png", "foto": "02_kumas.jpg"}
+ ],
+ "degerlendirme": [
+  {"is": "20261013-005509_20261013-005503_design", "grup": "ayni_is_rehberle", "ornekler": ["c1", "c2", "c3", "c5", "c6", "c8", "c9", "c10", "c12", "c14", "s01"]},
+  {"is": "20261012-224824_20261012-224717_design", "grup": "farkli_is", "ornekler": ["c1", "c2", "c3", "c4", "s01", "s02"]},
+  {"is": "20261013-003750_baby-shower", "grup": "farkli_is", "ornekler": ["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c10", "c11", "c12", "c13", "c14"]}
+ ],
+ "haric": [
+  {"is": "20261013-003750_baby-shower", "ornek": "c9", "neden": "Algılama katmanı neredeyse tüm kadrajı kaplıyor (maske duvarı seçmiş); yaklaşık görüntü bozuk, sahne kurtarılamıyor."},
+  {"is": "20261012-165800_20261012-165647_design", "ornek": "s01,s02", "neden": "Aşama 2A öncesi iş: ürün profili (ölçü) kayıtlı değil; oran karşılaştırması yapılamaz."}
+ ]
+}

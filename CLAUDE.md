@@ -80,6 +80,7 @@ yüzeye tasarım uygulama motoru ürün türüne özel.
 | `image-engineer` | Okuma + yazma + Bash | compositor, banner_detect, layout, proportion, ribbon, guide, cvio ve testleri |
 | `provider-engineer` | Okuma + yazma + Bash | providers, selector, mock_provider, refstore, iş takibi/devam etme ve testleri |
 | `quality-reviewer` | Salt okunur (Read, Grep, Glob) | Bağımsız diff ve test yeterliliği incelemesi |
+| `visual-inspector` | Salt okunur (Read, Glob) | Görsel Kontrol: sahne + program maskesini ayrı inceler; estetik ve "oran korunarak yerleştirilebilir" kararını ayrı verir; yalnız öneri (ret/üretim/prompt yetkisi yok). `docs/gorsel_kontrol_plani.md` |
 
 - Model seçimi oturumdan devralınır (`model: inherit`).
 - **Aynı dosyayı iki ajan aynı anda değiştirmez.** `orchestrator.py`, `app.py`, `ui.html` ortak dosyalardır;

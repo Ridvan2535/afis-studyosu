@@ -357,7 +357,7 @@ class Handler(BaseHTTPRequestHandler):
         if key not in self._APPROX_CACHE:
             import geri_cevir
             img = cvio.imread(p, cv2.IMREAD_COLOR)
-            out, _ = geri_cevir.yaklasik_sahne(img)
+            out, _, _ = geri_cevir.yaklasik_sahne(img)
             ok, buf = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 88])
             if len(self._APPROX_CACHE) > 40:
                 self._APPROX_CACHE.clear()

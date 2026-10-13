@@ -7,6 +7,31 @@ Biçim: **K-numara · tarih · karar** — gerekçe · etki/geri alma.
 
 ---
 
+### 2026-10-13 — Oranı üretimde kurma kararı ve Görsel Kontrol ajanı
+
+**K-43 · 2026-10-13 · A-01 (küçültmede karar değişmesi) ayrı algılama sorunu olarak izlenir.**
+`tests/izle_kucultme_kararliligi.py` (izleme, başarısız olmaz). Çözülünce gerçek regresyon testine dönüşür.
+Görsel Kontrol ajanı bu sorunu düzeltmez ve onun yerine geçmez.
+
+**K-42 · 2026-10-13 · Görsel Kontrol ajanı (`visual-inspector`) yalnız öneri üretir.**
+Salt okunur (Read, Glob). Görüntünün tamamını ve program maskesini ayrı inceler; estetik ve "oran korunarak
+yerleştirilebilir" kararlarını ayrı verir; Uygun / İnceleme gerekli / Uygun değil + gerekçe + belirsizlik. Santimetre
+iddia etmez. Program kararı/gerekçesi pakette yoktur; gerekçeyi tekrar eden ya da programa atıf yapan çıktı "bağımsız
+değil" sayılır. Ajan ile program/insan etiketi çelişirse kullanıcı incelemesine ayrılır. Otomatik ret, yeni üretim,
+prompt/kılavuz değişikliği yetkisi YOK. Örnekler rehber (8, öğretim) ve kör değerlendirme (30) olarak ayrıldı; aynı örnek
+ikisinde olamaz. Program kararı ve kullanıcı etiketi doğru cevap sayılmaz (etiketler görsel beğeni). Ayrıntı:
+`docs/gorsel_kontrol_plani.md`. Ajan henüz çalıştırılmadı.
+
+**K-41 · 2026-10-13 · Prompt 3B-aday + kılavuz v2 (aday, etkin değil).**
+Kılavuzda dikmeler afişe yakın, kuyruklar dikmelerin dışında, koyu arka zemin, temas gölgesi; promptta iki cümle
+DEĞİŞTİRİLDİ (eklenmedi): kamera "stand is barely wider than the banner", model "light rectangle is the banner's exact
+outline; never widen it to the posts". Ürün kuralları değişmedi. Kılavuz sürümü karşılaştırma anahtarına (`ayar_ozeti`)
+girer. Ücretli deneme yapılmadı.
+
+**K-40 · 2026-10-13 · Oran sorunu üretimde çözülür (kullanıcı kararı: seçenek c).**
+Kumaş oranı prompt ve kılavuzla doğru kurulmaya çalışılır. Tasarım kırpılarak, esnetilerek ya da baskılı kısmı gizlenerek
+otomatik uyarlanmaz. "Şüpheli ölçümde dur" açık kalır (K-36).
+
 ### 2026-10-13 — Kullanıcının gözle incelemesi: yanlış retleri azaltma (prompttan önce)
 
 **K-39 · 2026-10-13 · İş 20261013-005509'un 12 eleneni + 2 kabulü kalıcı kontrol örneğidir.**

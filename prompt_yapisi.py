@@ -33,7 +33,9 @@ ETKIN_VARSAYILAN = "2A"
 SURUMLER = {
     "2A": {"durum": "etkin", "aciklama": "Aşama 2A promptu (prompts.build_scene_prompt), ~1150 kelime."},
     "3A-aday": {"durum": "aday", "aciklama": "Dört bölümlü kısa yapı (~250 kelime); değerlendirilmedi."},
+    "3B-aday": {"durum": "aday", "aciklama": "3A-aday + standın afişten yalnız biraz geniş olduğu kamera cümlesi + kılavuz v2; değerlendirilmedi."},
 }
+KILAVUZ_SURUMU = {"2A": 1, "3A-aday": 1, "3B-aday": 2}       # her prompt sürümü hangi kılavuzla gider (karşılaştırma anahtarına girer)
 LIMITLER = {"urun": 120, "kamera": 60, "ortam": 115, "model": 45}
 TOPLAM_LIMIT = 330
 
@@ -54,9 +56,13 @@ def kural_metni(profile, ribbon_hex: str | None) -> str:
 
 
 # ---- 2. kamera ve yerleşim ----------------------------------------------------------------------------------
-def kamera_metni(profile) -> str:
+def kamera_metni(profile, surum: str = "3A-aday") -> str:
     h_frac = 0.75                                        # kılavuzla uyumlu: afiş kadraj yüksekliğinin ~%75'i
     w_frac = h_frac * profile.oran                        # kare kadrajda genişlik payı (75x200 için ≈%28)
+    if surum == "3B-aday":                               # cümle EKLENMEDİ: aynı kamera cümleleri sıkıştırıldı, stand ölçüsü bağlandı
+        return (f"CAMERA: square 1:1 photo, straight-on front view from mid-height; the banner faces the camera, edges "
+                f"vertical. It fills about {round(h_frac * 100)}% of the image height but only about {round(w_frac * 100)}% "
+                f"of its width; the stand is barely wider than the banner. The whole stand, both feet and the floor are in frame.")
     return (f"CAMERA: square 1:1 photo, straight-on front view from mid-height; the banner faces the camera squarely, "
             f"its edges vertical. The banner fills about {round(h_frac * 100)}% of the image height but only about "
             f"{round(w_frac * 100)}% of its width. The whole stand, both feet and the floor are inside the frame.")
@@ -78,8 +84,14 @@ def ortam_metni(category: str, index: int, round_no: int, people: bool, scene_de
 
 
 # ---- 4. modele / girdiye özel kısa uyarlama -----------------------------------------------------------------
-def model_metni(guided: bool, has_refs: bool, model_id: str | None = None) -> str:
+def model_metni(guided: bool, has_refs: bool, model_id: str | None = None, surum: str = "3A-aday") -> str:
     parts = []
+    if guided and surum == "3B-aday":      # cümle EKLENMEDİ: kılavuz cümlesi değiştirildi (açık dikdörtgen = kesin dış hat)
+        parts.append("Image 1 is a layout guide: the light rectangle is the banner's exact outline; keep its width and "
+                     "height, never widen it to the posts. Replace only the grey and dark placeholder areas with the scene.")
+        if has_refs:
+            parts.append("Other images: mood and venue only, never banner size.")
+        return " ".join(parts)
     if guided:
         parts.append("Image 1 is a layout guide: keep the banner's position, size and proportion exactly; replace only "
                      "the grey placeholder background with the scene.")
@@ -93,11 +105,11 @@ def _kelime(s: str) -> int:
 
 
 def build_candidate(category, index, profile, ribbon=None, people=False, has_refs=False, guided=False,
-                    scene_desc=None, round_no=0, model_id=None) -> tuple[str, dict]:
+                    scene_desc=None, round_no=0, model_id=None, surum: str = "3A-aday") -> tuple[str, dict]:
     """Aday sürüm "3A-aday": (prompt, bölümler) döner. Bölüm sınırları aşılırsa ValueError (sessiz kesme yok)."""
-    b = {"model": model_metni(guided, has_refs, model_id),
+    b = {"model": model_metni(guided, has_refs, model_id, surum),
          "urun": kural_metni(profile, (ribbon or {}).get("hex")),
-         "kamera": kamera_metni(profile),
+         "kamera": kamera_metni(profile, surum),
          "ortam": ortam_metni(category, index, round_no, people, scene_desc)}
     for k, lim in LIMITLER.items():
         if _kelime(b[k]) > lim:
@@ -118,10 +130,11 @@ def secili_surum(settings, category: str) -> str:
 def build(version: str, category, index, profile, *, ribbon=None, people=False, has_refs=False, guided=False,
           scene_desc=None, round_no=0, model_id=None) -> tuple[str, dict]:
     """Seçili sürümle prompt üretir. (prompt, bilgi) — bilgi rapora kaydedilir (prompt sürümü, bölüm uzunlukları)."""
-    if version == "3A-aday":
-        text, b = build_candidate(category, index, profile, ribbon, people, has_refs, guided, scene_desc, round_no, model_id)
-        return text, {"prompt_surumu": version, "urun_kurallari_ozeti": URUN_KURALLARI_OZET,
+    if version in ("3A-aday", "3B-aday"):
+        text, b = build_candidate(category, index, profile, ribbon, people, has_refs, guided, scene_desc, round_no, model_id,
+                                  surum=version)
+        return text, {"prompt_surumu": version, "urun_kurallari_ozeti": URUN_KURALLARI_OZET, "kilavuz_surumu": KILAVUZ_SURUMU[version],
                       "bolum_kelime": {k: _kelime(v) for k, v in b.items()}}
     text = prompts.build_scene_prompt(category, index, profile.en_cm, profile.boy_cm, has_refs, round_no, guided=guided,
                                       people=people, ribbon=ribbon, scene_desc=scene_desc, profile=profile)
-    return text, {"prompt_surumu": "2A"}
+    return text, {"prompt_surumu": "2A", "kilavuz_surumu": KILAVUZ_SURUMU["2A"]}

@@ -4,14 +4,45 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-13 03:20 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
+**Son güncelleme:** 2026-10-13 04:40 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
 denemeler / insan değerlendirmesi / kontrollü prompt sürümleri** tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı
 görünüm) — BAŞLAMADI (kullanıcı onayı bekleniyor). Video aşamasına başlanmadı.
 
 
 ---
 
-## 0. Son iş: gözle inceleme sonrası yanlış retleri azaltma (2026-10-13)
+## 0. Son iş: Görsel Kontrol ajanı değerlendirme düzeni + oran önerisi (2026-10-13)
+
+Kullanıcı kararı: oran üretimde (prompt + kılavuz) kurulacak; otomatik kırpma/esnetme/gizleme yok; "Şüpheli ölçümde dur"
+açık (K-40). Ücretli üretim yok; **ajan çalıştırılmadı** (çağrı sayısı ve tahmini maliyet `docs/gorsel_kontrol_plani.md` §4).
+
+**Yapılanlar / dosyalar:**
+- Ajan tanımı `visual-inspector` (`.claude/agents/`, kurulum kopyası `ajanlar_kurulum/`), K-42.
+- `gorsel_kontrol/`: `ornek_plani.json` (rehber 8 / kör değerlendirme 30 / hariç 3), `rehber_hazirla.py`, `rehber/`
+  (açıklamalı rehber), `hazirla.py` (kör paket + gizli anahtar; paket ve anahtar git'e girmez), `karsilastir.py`
+  (tablo, çelişki, bağımsızlık denetimi, kullanıcı incelemesi), `kilavuz_v1_v2.jpg`.
+- `geri_cevir.py`: kırmızı (algılama reddi) katmanı ve köşe işaretleri de tanınır; katman yoksa "işaretsiz JPEG".
+- `guide.py` kılavuz v2 (aday), `prompt_yapisi.py` 3B-aday (aday; iki cümle değiştirildi), `orchestrator.py` kılavuz
+  sürümünü prompt sürümüne göre seçer ve kayda yazar (K-41).
+- `tests/test_gorsel_kontrol.py` (yeni), `tests/izle_kucultme_kararliligi.py` (A-01 izleme, K-43).
+
+**Testler (Linux; Windows'ta ÇALIŞTIRILMADI), hepsi TAMAM:** test_gorsel_kontrol (yeni; sızıntı yok, yaklaşık görüntü
+işareti, rehber/değerlendirme çakışmaz, çelişki ve bağımsızlık denetimi, ajan salt okunur), test_kontrol_ornekleri,
+test_deneme_kayit (3A/3B sınırları), test_durma_ve_karsilastirma, test_elenen_arayuz, test_tam_kumas, test_kare_kadraj,
+test_duzlem_yerlesim, test_sureklilik, test_yeniden_birlestir, test_e2e_mock, test_selector, test_product,
+test_unicode_path, test_refstore, test_magnific_fix, test_topview; kontrol.py "HER ŞEY TAMAM". İzleme:
+izle_kucultme_kararliligi → A-01 AÇIK (2/2). Model/ajan çağrısı ve gerçek sağlayıcı testi yok.
+
+**Açık:** A-01 küçültmede karar değişiyor (s01 2000/1600 px, s02 1536/1280 px'te ret). Değerlendirme örneklerinin 26/30'u
+yaklaşık görüntü (ham değil). Doğru cevap yok; tablo uyuşma/çelişki gösterir.
+
+**Kullanıcıdan beklenen:** (1) ajanın 3 çalıştırmada (Claude Code alt ajanı; ayrı ücret yok, plan kullanımından düşer)
+30 kör örneği değerlendirmesine onay; (2) sonra 2A ile 3B-aday + kılavuz v2'yi karşılaştıran ücretli denemeye (en az
+12'şer çağrı) ayrı onay.
+
+---
+
+## 0d. Önceki iş: gözle inceleme sonrası yanlış retleri azaltma (2026-10-13)
 
 Ücretli çağrı yok; prompt değiştirilmedi; eşikler gevşetilmedi; eski iş dosyaları değiştirilmedi (işe yalnız yeni
 `insan_degerlendirme.json` eklendi).

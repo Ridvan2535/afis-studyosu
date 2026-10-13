@@ -250,7 +250,8 @@ class Orchestrator:
                      f"{sum(1 for x in depot if x[1])} tanesinin hazır sahne tarifi var).")
         pa = prof.oran                                         # yerleşim/kalite ölçütleri PNG oranına değil ÜRÜN oranına göre
         frame = 1.0                                            # ilan fotoğrafı her zaman kare; video ayarı (auto_video_kind) kadrajı DEĞİŞTİRMEZ
-        guide_png, _ = guide_mod.make_guide(frame, pa, ribbon_hex=(ribbon or {}).get("hex"))         # kılavuz görseli destekleyen servislere verilir
+        kilavuz_surumu = prompt_yapisi.KILAVUZ_SURUMU.get(prompt_yapisi.secili_surum(self.s, category), 1)
+        guide_png, _ = guide_mod.make_guide(frame, pa, ribbon_hex=(ribbon or {}).get("hex"), surum=kilavuz_surumu)         # kılavuz görseli destekleyen servislere verilir
         # --- servisler: "Otomatik" modda anahtarı girilmiş hepsi yarışır, sonuçlara göre en iyisi daha sık seçilir ---
         names = self._arms("scene")
         if not names:
@@ -356,7 +357,7 @@ class Orchestrator:
                     continue
             provider = provs[name]
             guided = bool(provider.supports_guide)
-            ayar_ozeti = {"kadraj": "1:1", "kilavuz": guided, "insanli": bool(people), "kurdele": bool(ribbon),
+            ayar_ozeti = {"kadraj": "1:1", "kilavuz": guided, "kilavuz_surumu": kilavuz_surumu if guided else None, "insanli": bool(people), "kurdele": bool(ribbon),
                           "kati_yerlesim": bool(self.s.strict_layout), "uzun_kenar": int(self.s.photo_long_side or 0)}
             idx = calls
             calls += 1
