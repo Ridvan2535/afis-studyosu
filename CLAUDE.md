@@ -72,21 +72,31 @@ yüzeye tasarım uygulama motoru ürün türüne özel.
   başlatma biçimi çalışmaya devam etmeli.
 - Rutin, geri alınabilir adımlar için her seferinde onay istenmez.
 
-## 3. Ajan sorumlulukları (`.claude/agents/`)
+## 3. Ajan sorumlulukları (`.claude/agents/`, ekip: `ekip/PROTOKOL.md`, K-57)
 
-| Ajan | Yetki | Sorumluluk |
+Geliştirme işi küçük, tek görevli ajanlara bölünür. Her dosyanın TEK sahibi vardır; başka ajan o dosyayı düzenlemez,
+isteğini sahibinin gelen kutusuna (`ekip/mesajlar/<ajan>.md`) yazar. Görevler `ekip/pano.md`'de; raporlar `ekip/raporlar/`.
+
+| Ajan | Yetki | Sahiplik / sorumluluk |
 |---|---|---|
-| `architecture-reviewer` | Salt okunur (Read, Grep, Glob) | Mimari inceleme, bulgu doğrulama, gereksinim çelişkileri |
-| `image-engineer` | Okuma + yazma + Bash | compositor, banner_detect, layout, proportion, ribbon, guide, cvio ve testleri |
-| `provider-engineer` | Okuma + yazma + Bash | providers, selector, mock_provider, refstore, iş takibi/devam etme ve testleri |
-| `quality-reviewer` | Salt okunur (Read, Grep, Glob) | Bağımsız diff ve test yeterliliği incelemesi |
-| `visual-inspector` | Salt okunur (Read, Glob) | Görsel Kontrol: sahne + program maskesini ayrı inceler; estetik ve "oran korunarak yerleştirilebilir" kararını ayrı verir; yalnız öneri (ret/üretim/prompt yetkisi yok). `docs/gorsel_kontrol_plani.md` |
+| `koordinator` (ana oturum) | yönetir | pano, CLAUDE.md, git commit, kullanıcıya rapor; ajanlar arası iletim |
+| `detection-engineer` | yazar | banner_detect, kontrol + algılama testleri |
+| `placement-engineer` | yazar | compositor, layout, proportion, ribbon, guide, cvio, sinir_kaniti, product + yerleşim testleri |
+| `pipeline-engineer` | yazar | orchestrator, deneme_kayit, gorsel_kontrol_servisi, prompt_yapisi, prompts, pipeline + akış testleri |
+| `provider-engineer` | yazar | providers, selector, mock_provider, refstore + sağlayıcı testleri |
+| `ui-engineer` | yazar | app.py, ui.html, baslat.bat, kur.bat + arayüz/tarayıcı testleri |
+| `video-engineer` | yazar | video_*, camera_move + video testleri |
+| `test-runner` | çalıştırır | bütün testler; yalnız `ekip/raporlar/test_*.md` yazar |
+| `docs-writer` | yazar | docs/durum.md, docs/kararlar.md, docs/*.md |
+| `architecture-reviewer` | salt okunur | mimari inceleme, gereksinim çelişkileri |
+| `quality-reviewer` | salt okunur | bağımsız diff ve test yeterliliği incelemesi |
+| `visual-inspector` | salt okunur | Görsel Kontrol önerisi (`docs/gorsel_kontrol_plani.md`); karar yetkisi yok |
 
 - Model seçimi oturumdan devralınır (`model: inherit`).
-- **Aynı dosyayı iki ajan aynı anda değiştirmez.** `orchestrator.py`, `app.py`, `ui.html` ortak dosyalardır;
-  bir aşamada tek sahibi olur (ana oturum atar).
-- Testleri ana oturum veya ilgili uygulayıcı ajan çalıştırır; salt okunur ajanlar çalıştırmaz.
-- Yeni/değişen ajan tanımları Claude Code oturumu yeniden açılınca tanınır.
+- Testleri sahibi (kendi testleri) ve test-runner (hepsi) çalıştırır; salt okunur ajanlar çalıştırmaz.
+- Git commit'i yalnız koordinatör yapar.
+- Yeni/değişen ajan tanımları Claude Code oturumu yeniden açılınca tanınır. Tanınmayan oturumda koordinatör aynı tanım
+  metniyle genel amaçlı ajan çalıştırır ve bunu raporda açıkça yazar.
 
 ## 4. Doğrulama yaklaşımı
 

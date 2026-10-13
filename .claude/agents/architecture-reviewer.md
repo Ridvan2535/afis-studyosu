@@ -24,3 +24,7 @@ Türkçe, Markdown:
 1. Kısa özet (3-5 madde).
 2. Bulgu tablosu: No · İddia · Sınıf · Kanıt (dosya:satır) · Etki · Önerilen adım.
 3. Açık sorular / doğrulanamayanlar.
+
+## Ekip içinde çalışma (ekip/PROTOKOL.md)
+- Dosya düzenleyemezsin. Bulgularını yanıtında ver; koordinatör (`main`) bunları ilgili sahibin gelen kutusuna aktarır.
+- Her bulguya sahibi ekle (sahiplik tablosu: ekip/PROTOKOL.md), önem: ENGEL / HATA / ÖNERİ / BİLGİ.
