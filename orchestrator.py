@@ -32,6 +32,7 @@ import compositor as cp
 import cvio
 import deneme_kayit
 import gorsel_kontrol_servisi as gks
+import sinir_kaniti
 import guide as guide_mod
 import layout
 import pipeline
@@ -286,7 +287,7 @@ class Orchestrator:
                  f"en fazla {self.s.max_scene_calls} sahne çağrısı, servis: "
                  + (", ".join(nice(x) for x in names) + " (otomatik seçim)" if auto else nice(names[0])))
 
-        def reject(tur, reason, img=None, det=None, lay=None, extra=None):
+        def reject(tur, reason, img=None, det=None, lay=None, extra=None, tani_out=None):
             reason = deneme_kayit.temizle(reason)                        # bağlantı / base64 kayda girmez
             rec = {"cagri": calls, "servis": name, "neden": reason, "tur": tur, "uretim_no": uretim_no}
             if lay is not None:
@@ -304,6 +305,8 @@ class Orchestrator:
                     cvio.imwrite(os.path.join(job, "sahneler_bos", base + "_algilama.jpg"), ov, [cv2.IMWRITE_JPEG_QUALITY, 80])
                     rec["algilama_dosya"] = f"sahneler_bos/{base}_algilama.jpg"
                 rec["dosya"] = rec.get("algilama_dosya") or rec["ham_dosya"]     # geriye uyum (eski arayüz/rapor)
+                if tani_out is not None:
+                    rec["tani_dosya"] = self._tani_kaydet(job, base, tani_out, rec, prof)
             rec["sade_neden"] = deneme_kayit.sade_neden(rec, prof.boy_cm)
             rec["siniflama"] = deneme_kayit.kontrol_sonucu(rec, prof.oran, prof.boy_cm)      # K-35 otomatik kontrol
             rec["hata_imzasi"] = deneme_kayit.hata_imzasi(tur, reason)
@@ -432,7 +435,7 @@ class Orchestrator:
             img = self._upscale(img)
             ev = self._degerlendir_kurtar(img, design, prof, f"Sahne {calls} ({nice(name)})")
             if not ev["ok"]:
-                reject(ev["tur"], ev["neden"], img, ev["det"], ev["lay"], ev.get("extra"))
+                reject(ev["tur"], ev["neden"], img, ev["det"], ev["lay"], ev.get("extra"), tani_out=ev.get("tani_out"))
                 finish_call()
                 sel.record(name, False)
                 continue
@@ -656,7 +659,8 @@ class Orchestrator:
                     tur_ = "sahne_geometri"           # afiş oranı/boyu ürüne uymuyor: sahne geometrisi hatası (kalite değil)
         else:
             reason = "afiş bulunamadı"
-        alg = {k: det.metrics.get(k) for k in ("ust_bant_orani", "yan_tasma_orani") if det.metrics.get(k) is not None}
+        alg = {k: det.metrics.get(k) for k in ("ust_bant_orani", "yan_tasma_orani", "yan_tasma_orani_ilk", "yan_kirpilan_oran")
+               if det.metrics.get(k) is not None}
         if reason:
             _log(f"{label} elendi: {reason}")
             return {"ok": False, "tur": tur_, "neden": reason, "det": det, "lay": lay, "extra": {"algilama": alg}}
@@ -673,11 +677,33 @@ class Orchestrator:
             tur = info["sorunlar"][0]["tur"]
             msg = " ".join(x["mesaj"] for x in info["sorunlar"])
             _log(f"{label} elendi ({product.HATA_TURLERI.get(tur, tur)}): {msg}")
-            return {"ok": False, "tur": tur, "neden": msg, "det": det, "lay": lay, "extra": {"tam_kumas": tk_info, "algilama": alg}}
+            extra = {"tam_kumas": tk_info, "algilama": alg}
+            if tur == "sahne_geometri":
+                # Kararlı ölçüm doğru ölçüm demek değildir: farkın sınır seçiminden mi, sahnedeki kumaştan mı geldiğini ayır.
+                try:
+                    sk = sinir_kaniti.olc(img, prof.en_cm, prof.boy_cm, det=det)
+                    extra["sinir_araligi"] = {"asili_min": sk["asili_aralik"][0], "asili_max": sk["asili_aralik"][1],
+                                              "kaynak": sk["kaynak"].split(" ")[0]}
+                except Exception:
+                    pass
+            return {"ok": False, "tur": tur, "neden": msg, "det": det, "lay": lay, "extra": extra, "tani_out": out}
         quality = layout.score(lay, pa) if lay else 50.0
         tk_info["algilama"] = alg
         return {"ok": True, "tur": None, "neden": None, "det": det, "lay": lay, "info": info, "tk_info": tk_info,
                 "out": out, "kalite": quality}
+
+    def _tani_kaydet(self, job, base, out, rec, prof) -> str | None:
+        """Kabul EDİLMEMİŞ sahnenin tasarımlı tanı önizlemesi: yalnız onizleme/ altına, adı "_TANI_" içerir, üzerinde
+        "ürün çıktısı değil" şeridi ve kalan yerleşim sorunları yazılır. foto/ klasörüne ve fotoğraf listesine GİRMEZ."""
+        try:
+            os.makedirs(os.path.join(job, "onizleme"), exist_ok=True)
+            ad = f"onizleme/{base}_TANI_urun_ciktisi_degil.jpg"
+            im = sinir_kaniti.tani_onizlemesi(out, sinir_kaniti.kalan_sorunlar(rec, prof.boy_cm))
+            cvio.imwrite(os.path.join(job, ad), im, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            return ad
+        except Exception as e:                       # tanı görseli yan üründür; iş durmaz
+            self.log(f"Tanı önizlemesi yazılamadı: {e.__class__.__name__}")
+            return None
 
     def _save_accepted(self, job, rap, img, ev, prof, ribbon, num, servis, design_file) -> dict:
         """Kabul edilen sahneyi ve yerleştirilmiş fotoğrafı kaydeder, rapor kaydını ekler (yazma çağıranda)."""
@@ -694,6 +720,10 @@ class Orchestrator:
                "yerlesim_modu": "tam_kumas", "olcu_id": prof.olcu_id, "tam_kumas": ev["tk_info"]}
         if ev.get("kararlilik_uyarisi"):
             rec["uyari"] = list(rec["uyari"]) + [ev["kararlilik_uyarisi"]]
+        if (det.metrics.get("yan_kirpilan_oran") or 0) > 0:
+            rec["uyari"] = list(rec["uyari"]) + [
+                f"Algılama maskesi duvara taşmıştı (satırların %{det.metrics.get('yan_tasma_orani_ilk', 0) * 100:.0f}'i); kumaş "
+                "kenarları gövdenin düz kenarlarından kestirildi. Kenarları gözle kontrol edin."]
         if ev.get("kurtarma"):
             rec["kurtarma"] = ev["kurtarma"]
             sec = ev["kurtarma"].get("secilen") or {}
@@ -760,6 +790,10 @@ class Orchestrator:
                 if ev.get("lay"):
                     rec["olcum"] = ev["lay"]
                 rec.update(ev.get("extra") or {})
+                rec["sade_neden"] = deneme_kayit.sade_neden(rec, prof.boy_cm)
+                rec["siniflama"] = deneme_kayit.kontrol_sonucu(rec, prof.oran, prof.boy_cm)
+                if ev.get("tani_out") is not None:
+                    rec["tani_dosya"] = self._tani_kaydet(job, p["stem"], ev["tani_out"], rec, prof)
                 rap["elenenler"].append(rec)
                 _write_json(os.path.join(job, "rapor.json"), rap)
                 continue

@@ -1,0 +1,17 @@
+{
+ "is": "20261012-224824_20261012-224717_design",
+ "urun": "75x200",
+ "ortam": "farklı ortam (önceki kabul edilen iş)",
+ "aciklama": "İki kabul edilmiş sahnenin HAM görüntüsü (sahneler_bos/s01.png, s02.png; değiştirilmedi, küçültülmedi). Algılama değişikliklerinden sonra ikisi de kabul edilmeye devam etmeli. s01 ölçümü önceden de kararsızdı (JPEG/ölçek varyantında ret) — bu bilinen durumdur, uyarıyla kabul.",
+ "ornekler": [
+  {
+   "dosya": "kabul_s01_ham.png",
+   "beklenen": "kabul",
+   "not": "kararsız işaretli (bilinen)"
+  },
+  {
+   "dosya": "kabul_s02_ham.png",
+   "beklenen": "kabul"
+  }
+ ]
+}

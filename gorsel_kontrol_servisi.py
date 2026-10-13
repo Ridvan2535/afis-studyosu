@@ -19,12 +19,25 @@ Servisin yanıtı yalnız BÖLGE ÖNERİSİ olarak kullanılır: kumaşın kutus
 maske programın bütün kontrollerinden ve kararlılık testinden geçmeli ve önerilen kutunun içinde kalmalıdır. Servis
 "uygun" dedi diye maskeye baskı yapılmaz.
 
-Model bağlantısı (resmî belge: platform.claude.com/docs/en/build-with-claude/vision, 2026-10-13):
-  POST https://api.anthropic.com/v1/messages ; başlıklar x-api-key, anthropic-version: 2023-06-01, content-type: application/json
-  görsel bloğu {"type":"image","source":{"type":"base64","media_type":"image/jpeg","data":...}}; görsel jetonu
-  ceil(w/28)*ceil(h/28). Varsayılan model: claude-sonnet-5-5 (girdi 2 $/M, çıktı 10 $/M jeton; 2026-10-13 fiyat sayfası).
-  Tahmini çağrı: 1024 px sahne (~1.369 jeton) + 512 px aday görseli (~361) + ~1.500 metin ≈ 3.300 girdi, ≤ 600 çıktı
-  ≈ 0,013 $. Anahtar ve base64 görsel hiçbir kayda/rapora yazılmaz.
+Resmî belgelerden DOĞRULANAN (2026-10-13, ağdan okundu; gerçek çağrı DEĞİL):
+  * Model kimliği `claude-sonnet-5-5` güncel modeller tablosunda var; görsel (image) girdisi destekli.
+    Kaynak: https://platform.claude.com/docs/en/models/overview
+  * Fiyat: Sonnet 5.5 girdi 2 $ / milyon jeton, çıktı 10 $ / milyon jeton (Opus 5.5: 4/20, Haiku 5.5: 0,10/0,50 —
+    100.000 jeton altı istemler). Kaynak: https://platform.claude.com/docs/en/about-claude/pricing
+    Not: yalnız ABD'de çıkarım (inference_geo "us") seçilirse 1,1 kat; bu modül o parametreyi göndermez.
+  * Uç nokta POST https://api.anthropic.com/v1/messages; örnekte başlıklar X-Api-Key, anthropic-version: 2023-06-01,
+    Content-Type: application/json (belge anthropic-version'ı "isteğe bağlı" diye listeler). Yanıtta usage.input_tokens /
+    usage.output_tokens var. Kaynak: https://platform.claude.com/docs/en/api/messages/create
+  * Görsel bloğu {"type":"image","source":{"type":"base64","media_type":...,"data":...}}; JPEG/PNG/GIF/WebP; görsel
+    jetonu ceil(w/28)*ceil(h/28); görsel başına en fazla 10 MB (base64). Kaynak:
+    https://platform.claude.com/docs/en/build-with-claude/vision
+
+DOĞRULANMAMIŞ (gerçek çağrı yapılmadı; kesin bilgi değildir):
+  * Çağrı başına maliyet: TAHMİN. 1024 px sahne (ceil(1024/28)^2 = 1.369 jeton) + 512 px aday görseli (361) + istem metni
+    (ölçülmedi, ~1.500 varsayıldı) ≈ 3.300 girdi, ≤ 600 çıktı -> ≈ 0,013 $. Bütçe sayacı gerçek çağrıda usage alanından
+    hesaplar; tahmin yalnız "izin var mı" ön kontrolünde kullanılır.
+  * Modelin bu istemle geçerli JSON döndürdüğü, kutu önerisinin doğruluğu, yanıt süresi: hiç denenmedi.
+Anahtar ve base64 görsel hiçbir kayda/rapora yazılmaz.
 """
 from __future__ import annotations
 

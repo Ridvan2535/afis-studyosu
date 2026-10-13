@@ -317,6 +317,95 @@ def _refine_fabric(work_bgr, wm):
 
 
 # ----------------------------------------------------------------------------
+# Yana (duvara) taşmış kumaş maskesini gövde kenarlarına kırpma (2026-10-13, iş 20261013-053942)
+YAN_KIRP_ESIK = 0.15         # satırların bu oranından fazlası kenar doğrusundan taşıyorsa maske yanlara taşmış sayılır
+YAN_KIRP_SURE = 0.25         # VARSAYIM: taşma, boyun en az %25'i boyunca kesintisiz sürmeli. Dalgalı kenar kısa ve tekrarlayan
+                             # salınımdır (test_duzlem_yerlesim güçlü dalga: yarım dalga boyun ~%17'si) ve kırpılmamalıdır:
+                             # güçlü dalga sahne_kivrim olarak raporlanmalı, kırpmayla gizlenmemeli.
+YAN_GOVDE_GENISLIK = 1.10    # VARSAYIM: gövde satırı = genişliği alt çeyrek genişliğinin en fazla %10 üstünde olan satır
+
+
+def _kenar_dogrusu(rows, xx):
+    p = np.polyfit(rows.astype(np.float64), xx, 1)
+    for _ in range(3):
+        res = xx - np.polyval(p, rows)
+        keep = np.abs(res) < 3 * (np.median(np.abs(res)) + 1.0)
+        p = np.polyfit(rows[keep].astype(np.float64), xx[keep], 1)
+    return p
+
+
+def _yan_kirp(wm):
+    """Krem duvar, kumaşla aynı renkte olduğu için maske bazı satırlarda iki yana (direklere kadar) taşar; bu durumda
+    yazı/desen denetimi duvar-kurdele-direk kenarlarını "desen" sanar. Gövdenin sol/sağ kenar doğruları, taşmayan
+    gövde satırlarından sağlam uydurma ile kestirilir; yalnız uzun ve kesintisiz taşan satır dizileri doğrudan kırpılır.
+    Dalgalı kenar ve etekte başlayan birikme korunur. Sabit koordinat yok. Dönüş: (yeni maske, bilgi) ya da None."""
+    m = (wm > 0).astype(np.uint8)
+    H, W = m.shape
+    ys = np.flatnonzero(m.any(1))
+    if len(ys) < 40:
+        return None
+    y0, y1 = int(ys[0]), int(ys[-1])
+    h = y1 - y0 + 1
+    rows = np.arange(int(y0 + 0.05 * h), int(y0 + 0.95 * h))
+    rows = rows[m[rows].any(1)]
+    if len(rows) < 20:
+        return None
+    xl = np.array([np.argmax(m[r]) for r in rows], np.float64)
+    xr = np.array([W - 1 - np.argmax(m[r][::-1]) for r in rows], np.float64)
+    # Taşma satırların yarısından fazlasını kaplayabilir; kenar doğruları yalnız GÖVDE satırlarından (genişliği alt çeyrek
+    # genişliğine yakın satırlar) uydurulur. Kumaş gövdesi en dar tutarlı banttır; duvar/zemin taşması onu genişletir.
+    gen = xr - xl + 1
+    govde = gen <= YAN_GOVDE_GENISLIK * np.percentile(gen, 25)
+    if govde.sum() < 20:
+        return None
+    pl, pr = _kenar_dogrusu(rows[govde], xl[govde]), _kenar_dogrusu(rows[govde], xr[govde])
+    rows, xl, xr = rows[rows < y0 + 0.85 * h], xl[rows < y0 + 0.85 * h], xr[rows < y0 + 0.85 * h]
+    pay = YAN_TASMA_PAY * W
+    alt = int(y0 + 0.85 * h)
+    # Dalgalı kenar (kısa, iki yönlü salınım) taşma DEĞİLDİR. Taşma: kenarın doğrunun pay'dan fazla dışında kaldığı, boyun en az
+    # YAN_KIRP_SURE kadarı süren KESİNTİSİZ satır dizisi. Dizi etek bölgesinde (boyun %85'inden sonra) başlıyorsa etek
+    # birikmesidir, kırpılmaz; yukarıdan başlayıp aşağı sürüyorsa sonuna kadar kırpılır.
+    satirlar = np.arange(y0, y1 + 1)
+    dolu = m[satirlar].any(1)
+    xa_ = np.where(dolu, np.argmax(m[satirlar], 1), W)
+    xb_ = np.where(dolu, W - 1 - np.argmax(m[satirlar][:, ::-1], 1), -1)
+    disari = {"sol": dolu & (xa_ < np.polyval(pl, satirlar) - pay), "sag": dolu & (xb_ > np.polyval(pr, satirlar) + pay)}
+    kes = {}
+    en_az = max(3, int(YAN_KIRP_SURE * h))
+    for yan, d in disari.items():
+        k_ = np.zeros(len(d), bool)
+        r = 0
+        while r < len(d):
+            if d[r]:
+                e = r
+                while e < len(d) and d[e]:
+                    e += 1
+                if e - r >= en_az and satirlar[r] < alt:
+                    k_[r:e] = True
+                r = e
+            else:
+                r += 1
+        kes[yan] = k_
+    out = m.copy()
+    # Taşan satırlar doğrunun kendisinden kesilir: o satırlarda kumaş/duvar sınırı belirsizdir, en iyi kestirim gövde doğrusudur.
+    for i, r in enumerate(satirlar):
+        if kes["sol"][i]:
+            out[r, :int(max(0, round(np.polyval(pl, r))))] = 0
+        if kes["sag"][i]:
+            out[r, int(min(W, round(np.polyval(pr, r)) + 1)):] = 0
+    sol_sur, sag_sur = float(kes["sol"].mean()), float(kes["sag"].mean())
+    n, lab, st, _ = cv2.connectedComponentsWithStats(out, connectivity=4)
+    if n <= 1:
+        return None
+    k = 1 + int(np.argmax(st[1:, cv2.CC_STAT_AREA]))
+    g = (lab == k).astype(np.uint8)
+    kirpilan = 1.0 - g.sum() / max(m.sum(), 1)
+    if kirpilan < 0.01:
+        return None
+    return g, {"yan_kirpilan_oran": round(float(kirpilan), 4), "yan_kirpilan_satir": [round(sol_sur, 3), round(sag_sur, 3)]}
+
+
+# ----------------------------------------------------------------------------
 # Geometri: sert afiş mi, kumaş mı?
 # ----------------------------------------------------------------------------
 def _order_quad(q):
@@ -536,6 +625,12 @@ def _tespit_kur(img_bgr, work, lab_work, scale, hint, used, backend, score, wm, 
     rinfo = {}
     if hint.get("kind") == "fabric" and used != "hint-polygon":
         wm, rinfo = _refine_fabric(work, wm)
+        if rinfo.get("yan_tasma_orani", 0) > YAN_KIRP_ESIK:
+            yk = _yan_kirp(wm)
+            if yk is not None:
+                ilk = rinfo["yan_tasma_orani"]
+                wm, rinfo = _refine_fabric(work, (yk[0] > 0).astype(wm.dtype) * (wm.max() or 1))
+                rinfo.update(yan_tasma_orani_ilk=ilk, **yk[1])
     mask = cv2.resize(wm, (W, H), interpolation=cv2.INTER_NEAREST) if scale < 1 else wm
     mask = (mask > 0).astype(np.uint8)
     sc, ar, solidity, border_frac = _score(mask)

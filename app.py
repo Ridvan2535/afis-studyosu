@@ -319,6 +319,8 @@ class Handler(BaseHTTPRequestHandler):
                 e["diger_url"] = base + urllib.parse.quote(e["dosya"])        # eski kayıt: türü belirsiz tek görsel
             if not e["ham_url"] and e["algilama_url"]:
                 e["yaklasik_url"] = "/yaklasik/" + urllib.parse.quote(name) + "/" + urllib.parse.quote(alg)   # ham DEĞİL
+            td = e.get("tani_dosya")                                         # tasarımlı TANI önizlemesi (ürün çıktısı değil)
+            e["tani_url"] = base + urllib.parse.quote(td) if td and os.path.exists(os.path.join(jp, td)) else None
             e["eski_kayit"] = "ham_dosya" not in e and e.get("tur") != "servis_hatasi"
             elen.append(e)
         denemeler = rap.get("denemeler", [])

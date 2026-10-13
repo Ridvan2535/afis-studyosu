@@ -322,7 +322,7 @@ table.cmp td,table.cmp th{border-bottom:1px solid var(--line);padding:5px 6px;te
         <div><label class="f" for="gkServis">Otomatik görsel kontrol</label><select id="gkServis"><option value="kapali">Kapalı (varsayılan)</option><option value="claude">Claude (Anthropic API; ücretli, doğrulanmadı)</option></select></div>
         <div><label class="f" for="gkKey">Anthropic API anahtarı</label><input type="password" id="gkKey" placeholder="yalnız Claude seçiliyse"></div>
         <div><label class="f" for="gkIs">İş başına en fazla görsel kontrol çağrısı</label><input type="number" id="gkIs" min="0" max="10"></div>
-        <div><label class="f" for="gkGun">Günlük tahmini harcama tavanı ($)</label><input type="number" id="gkGun" min="0" max="5" step="0.05"><div class="hint">Çağrı başına tahmini ≈ 0,013 $ (Sonnet 5.5, 1024 px sahne + aday görseli).</div></div>
+        <div><label class="f" for="gkGun">Günlük tahmini harcama tavanı ($)</label><input type="number" id="gkGun" min="0" max="5" step="0.05"><div class="hint">Çağrı başına ≈ 0,013 $ <b>tahmindir, gerçek çağrıyla ölçülmedi</b> (fiyat: Sonnet 5.5 girdi 2 $ / çıktı 10 $ milyon jeton, resmî fiyat sayfası 2026-10-13). Servis kapalıyken hiç çağrı yapılmaz.</div></div>
       </div>
     </div>
     <div class="card">
@@ -843,7 +843,8 @@ function renderRejects(i) {
     const btns = [r.ham_url ? `<button data-zoom="${esc(r.ham_url)}">ham görsel</button>` : "",
                   r.yaklasik_url ? `<button data-zoom="${esc(r.yaklasik_url)}" title="Algılama katmanından hesaplanan yaklaşık görüntü; ham görsel DEĞİL">yaklaşık sahne (ham değil)</button>` : "",
                   r.algilama_url ? `<button data-zoom="${esc(r.algilama_url)}">algılama katmanı</button>` : "",
-                  r.diger_url ? `<button data-zoom="${esc(r.diger_url)}">kayıtlı görsel</button>` : ""].join("");
+                  r.diger_url ? `<button data-zoom="${esc(r.diger_url)}">kayıtlı görsel</button>` : "",
+                  r.tani_url ? `<button data-zoom="${esc(r.tani_url)}" title="Tasarım yerleştirilmiş TANI görseli; KABUL EDİLMEDİ, ürün çıktısı değildir, ilana konmaz" style="border-color:#c82020;color:#c82020">tanı: tasarımlı (ürün çıktısı DEĞİL)</button>` : ""].join("");
     const note = r.tur === "servis_hatasi" ? "" : (!r.ham_url ? `<span class="hint" style="margin:0">Orijinal sahne kaydedilmemiş; kurtarılamaz.${r.yaklasik_url ? " Küçük resim algılama katmanından hesaplanan <b>yaklaşık</b> görüntüdür, ham görsel değildir." : ""}</span>` : "");
     const hk = (r.insan || {}).karar;
     return `<div class="rejc ${runs[n] >= 3 ? "seri" : ""}">

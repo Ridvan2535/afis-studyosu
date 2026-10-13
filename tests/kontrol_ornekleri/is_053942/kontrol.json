@@ -1,0 +1,27 @@
+{
+ "is": "20261013-053942_Baby-shower",
+ "urun": "75x200",
+ "ortam": "krem duvar, ahşap stand, mavi kurdele",
+ "aciklama": "Elenen sahnenin HAM görüntüsü. Eski algılama maskesi alt yarıda iki yana krem duvara (stand direklerine kadar) taşıyordu; taşan bölgedeki kurdele/direk kenarları 'afiş boş görünmüyor' (desen) reddine yol açtı. Kutular elle, görüntüye bakılarak işaretlendi; ALGORİTMADA KULLANILMAZ, yalnız test ölçütüdür. Kullanıcı etiketi: kullanılabilir (görsel kabul, ölçü doğrulaması değil).",
+ "kutular": {
+  "kumas": [
+   0.2,
+   0.15,
+   0.51,
+   0.9
+  ],
+  "sol_duvar_boslugu": [
+   0.15,
+   0.45,
+   0.178,
+   0.8
+  ],
+  "sag_duvar_boslugu": [
+   0.537,
+   0.45,
+   0.555,
+   0.8
+  ]
+ },
+ "kutu_bicimi": "[x0, y0, x1, y1] kadraj oranı"
+}

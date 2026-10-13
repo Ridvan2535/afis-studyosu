@@ -299,3 +299,16 @@ Doğrulanamazsa sahne saklanır, kullanıcı incelemesine kalır; şüpheli öl�
 `visual-inspector` Claude Code geliştirme ajanıdır, uygulama onu çağırmaz. Uygulamanın otomatik kontrolü ayrı modüldür
 (`gorsel_kontrol_servisi.py`), varsayılan kapalıdır, anahtar ve bütçe sınırı (iş başına 3, günlük 0,50 $) ister.
 Belgelerde "hazır", "bağlı", "gerçek çağrıyla doğrulandı" ayrı sütunlardır; şu an servis hazır, bağlı değil, doğrulanmadı.
+
+**K-51 · 2026-10-13 · Yana taşan kumaş maskesi gövde kenarlarına kırpılır; dalga ve birikme korunur.**
+Yalnız boyun ≥%25'i boyunca kesintisiz taşma kırpılır (VARSAYIM). Neden: 053942'de duvar taşması "desen" reddi üretti;
+kısa dalgaları kırpmak güçlü kıvrımı gizlerdi (test_duzlem_yerlesim). Kırpma kayda ve uyarıya yazılır.
+
+**K-52 · 2026-10-13 · Kararlı ölçüm doğru ölçüm sayılmaz; sınır aralığı kaydedilir.**
+Sahne geometrisi retlerinde makul sınır seçimleriyle asılı boy aralığı hesaplanır. Bütün seçimler ±%3 dışındaysa "geometri";
+bazıları içindeyse "sınır" → güven düşük, İnceleme gerekli. Eşikler değişmedi.
+
+**K-53 · 2026-10-13 · Tasarımlı tanı görseli ürün çıktısından ayrıdır.**
+Yalnız onizleme/ altında, adında "_TANI_urun_ciktisi_degil", üzerinde şerit/filigran ve kalan sorunlar listesi; foto/ ve
+fotoğraf listesine girmez.
+

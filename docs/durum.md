@@ -4,14 +4,60 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-13 06:20 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
+**Son güncelleme:** 2026-10-13 07:05 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
 denemeler / insan değerlendirmesi / kontrollü prompt sürümleri** tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı
 görünüm) — BAŞLAMADI (kullanıcı onayı bekleniyor). Video aşamasına başlanmadı.
 
 
 ---
 
-## 0. Son iş: İş 054333 kumaş algılama hatası + algılama kurtarma akışı (2026-10-13 06:20)
+## 0. Son iş: Farklı ortam kontrolleri, sınır kanıtı, tanı önizlemesi (2026-10-13 07:05)
+
+**Çözülenler**
+1. **053942 krem duvara taşma** (`banner_detect._yan_kirp`): kumaş ile krem duvar aynı renkte olduğu için maske alt yarıda
+   stand direklerine kadar taşıyordu; taşan bölgedeki kurdele/direk kenarları "afiş boş görünmüyor" (desen) reddi
+   üretiyordu. Kenar doğruları yalnız gövde satırlarından uydurulur; yalnız boyun ≥%25'i boyunca kesintisiz taşan
+   satırlar doğrudan kırpılır. Dalgalı kenar (kısa salınım) ve etekte başlayan birikme korunur (güçlü dalga hâlâ
+   `sahne_kivrim`). Desen reddi kalktı (güçlü detay %0,71 → %0,18). Kırpma kayda (`yan_kirpilan_oran`) ve kabulde uyarıya yazılır.
+2. **Regresyon örnekleri** (ham): `tests/kontrol_ornekleri/is_054333`, `is_053942`, `is_224824` (s01, s02 kabul).
+   Yeni `tests/test_farkli_ortamlar.py`; yan kırpma geri alınınca 053942 testi başarısız oluyor (doğrulandı).
+   Kabuller korunuyor: 224824 s01/s02, 005509 s01/s02 (s01'ler önceden de kararsızdı; değişmedi).
+3. **Sınır kanıtı** (`sinir_kaniti.py`, yalnız tanı): dört sınır + zemin teması çizilir; makul sınır seçimlerinde (genişlik
+   bandı ×3, üst ×2, alt ×2) asılı boy aralığı hesaplanır. Sonuç kayda `sinir_araligi` olarak yazılır:
+   * 054333: 183,6–185,5 cm → **geometri** (fark sınırdan değil, sahnedeki kumaştan). Otomatik: İnceleme gerekli
+     (kaba sınır içinde), kesin hata değil. Görsel kanıtta üst çubuk, iki kenar ve halıya değen etek maskeyle örtüşüyor.
+   * 053942: 138,6–201,9 cm → **sınır seçimi** (program temas çizgisini kenar genişlemesinden boyun ~%70'inde aldı;
+     etek ucundan ölçülünce ≈202 cm). Kesinleşmedi → güven düşük, İnceleme gerekli; sahne kullanılmadı. Kullanıcı etiketi
+     "kullanılabilir" (görsel kabul) bununla çelişmiyor.
+4. **Tanı önizlemesi ayrıldı**: kabul edilmeyen sahnenin tasarımlı görseli yalnız `onizleme/*_TANI_urun_ciktisi_degil.jpg`;
+   kırmızı çerçeve, üst/alt "ÜRÜN ÇIKTISI DEĞİL" şeridi, çapraz filigran ve sağda kalan yerleşim sorunları. `foto/`
+   klasörüne ve fotoğraf listesine girmez; arayüzde kırmızı "tanı: tasarımlı (ürün çıktısı DEĞİL)" düğmesi.
+   Sade neden, ölçüm sınıra bağlıysa tek santimetreyi kesinmiş gibi göstermez.
+5. **Resmî kaynak doğrulaması** (2026-10-13, belgeden; gerçek çağrı değil): `claude-sonnet-5-5` güncel, görsel destekli;
+   2 $/10 $ milyon jeton; uç nokta/başlıklar/görsel bloğu/jeton formülü belgeyle uyumlu. Çağrı başı ≈0,013 $ **tahmin**
+   (istem metni ölçülmedi). Servis **kapalı** kaldı.
+
+**Yeni işler (ayrı klasör; kaynak işler değişmedi):** `isler/20261013-070113_yeniden_20261013-053942`,
+`isler/20261013-070124_yeniden_20261013-054333` — ikisi de kabul edilmedi; yalnız tanı önizlemesi var.
+
+**±%3 kuralı:** `compositor.TAM_BOY_TOL` (K-16, K-17; 2026-10-12, sentetik sahnelerle seçilmiş VARSAYIM). Asılı boy,
+kumaşın görünen eninden ölçeklenip (en 75 cm) ürün boyuyla karşılaştırılır. Uzunsa ≤%3 fark tasarımın dikeyde sıkıştırılmasıyla
+sığdırılır (uyarı), fazlası ret; kısaysa ve birikme yoksa %3'ten fazlası "havada bitiyor" reddi. Gerekçe tasarım
+bütünlüğü: tam kumaş modunda tasarım esnetilmez/kırpılmaz; ±%3 tasarımın en/boy oranının bozulabileceği en büyük paydır.
+Gevşetilmedi.
+
+**Açık kalanlar:** 053942'de temas çizgisinin kenar genişlemesinden ~%70'te seçilmesi (birikme kuralının yavaş genişlemeyi
+birikme sanması) düzeltilmedi — kural değişikliği diğer örnekleri etkiler, ayrı iş; şimdilik "inceleme". 224824 elenen_01_04
+çok küçük bölge seçiyor (ayrı inceleme). Görsel kontrol servisi gerçek çağrıyla hiç denenmedi.
+
+**Testler — yalnız Linux bulut ortamında (Windows'ta çalıştırılmadı), yerel + sahte servis, ücretli çağrı yok:**
+test_farkli_ortamlar, test_algilama_kurtarma, test_kontrol_ornekleri, test_duzlem_yerlesim, test_tam_kumas, test_e2e_mock,
+test_deneme_kayit, test_durma_ve_karsilastirma, test_yeniden_birlestir, test_elenen_arayuz, test_gorsel_kontrol,
+test_sureklilik: hepsi TAMAM. Diğer test dosyaları bu turda çalıştırılmadı.
+
+---
+
+## 0a. Önceki iş: İş 054333 kumaş algılama hatası + algılama kurtarma akışı (2026-10-13 06:20)
 
 **Kök neden (genel, bu fotoğrafa özel değil):** kumaş, aynı renkteki krem halıyla tek bölge olarak birleşti → kenar
 temasından skor 0. Soldaki koyu duvar boşluğu da skor 0'dı; eşitlikte listedeki ilk aday (koyu boşluk, açıklık 32) seçildi.
@@ -39,7 +85,7 @@ kullanıcı incelemesine kalır (şüpheli ölçümde dur AÇIK kalır).
 | Bileşen | Hazır | Bağlı | Gerçek çağrıyla doğrulandı |
 |---|---|---|---|
 | Yerel kurtarma (alternatif adaylar) | evet | evet (varsayılan açık) | — (ücretsiz, yerel testlerle) |
-| Otomatik görsel kontrol servisi (`gorsel_kontrol_servisi.py`, Anthropic Messages API) | evet (kod + sahte servis testleri) | **hayır** — varsayılan `kapali`, anahtar girilmedi | **hayır** |
+| Otomatik görsel kontrol servisi (`gorsel_kontrol_servisi.py`, Anthropic Messages API) | evet (kod + sahte servis testleri) | **hayır** — varsayılan `kapali`, anahtar girilmedi | **hayır** (model kimliği/fiyat yalnız resmî belgeden doğrulandı) |
 | `visual-inspector` geliştirme ajanı (Claude Code) | kullanıcının bilgisayarında kurulu | **uygulamaya bağlı değil** (geliştirme aracıdır) | — |
 
 Servis koşulları: yalnız şüpheli ölçümde ve yerel adaylar sonuç vermezse; sahne başına 1 çağrı, yeniden deneme yok;

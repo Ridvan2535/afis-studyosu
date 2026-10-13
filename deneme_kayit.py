@@ -91,6 +91,10 @@ def kontrol_sonucu(rec: dict, urun_orani: float, boy_cm: float | None = None) ->
         boy = boy_cm or 200.0
         if ub >= 0.01 and a and abs(a / boy - 1) - ub < BOY_TOL:
             dusuk.append(f"Üstte maskeye girmemiş kumaş bandı var (boyun %{ub * 100:.0f}'i); dahil edilirse karar değişebilir.")
+    sa = rec.get("sinir_araligi") or {}
+    if sa.get("kaynak") == "sınır":
+        dusuk.append(f"Makul sınır seçimlerine göre asılı boy {sa['asili_min']:.0f}–{sa['asili_max']:.0f} cm; bazı seçimler "
+                     f"±%{BOY_TOL * 100:.0f} kabul aralığına giriyor. Sonuç sınırın nereden alındığına bağlı.")
     guven = "dusuk" if dusuk else ("bilinmiyor" if alg is None and not kr else "yuksek")
     if guven != "dusuk" and sapma is not None and abs(sapma) >= KESIN_ORAN_SAPMA:
         yon = "geniş/kısa" if sapma > 0 else "dar/uzun"
@@ -101,6 +105,9 @@ def kontrol_sonucu(rec: dict, urun_orani: float, boy_cm: float | None = None) ->
     elif sapma is not None:
         acik = (f"Ölçülen en/boy ürünle %{sapma * 100:+.0f} farklı; ±%3 boy kuralına takıldı ama kaba sınırın (±%30) içinde. "
                 "Sahne bu ürün için kullanılmadı; gözle bakılmalı.")
+        if sa.get("kaynak") == "geometri":
+            acik += (f" Bütün makul sınır seçimlerinde asılı boy {sa['asili_min']:.0f}–{sa['asili_max']:.0f} cm: fark sınır "
+                     "seçiminden değil, sahnede çizilen kumaştan geliyor.")
     else:
         acik = "Ret nedeni gözle doğrulanmalı."
     if guven == "bilinmiyor":
@@ -130,7 +137,16 @@ def siniflandir(rec: dict, urun_orani: float, boy_cm: float | None = None) -> di
 
 
 def sade_neden(rec: dict, boy_cm: float | None = None) -> str:
-    """Arayüz için sade Türkçe tek cümle. Santimetreler 'tahmini' olarak gösterilir."""
+    """Arayüz için sade Türkçe tek cümle. Santimetreler 'tahmini' olarak gösterilir. Ölçüm sınır seçimine bağlıysa
+    (sinir_araligi.kaynak == "sınır") tek bir santimetre kesinmiş gibi gösterilmez."""
+    sa = rec.get("sinir_araligi") or {}
+    if sa.get("kaynak") == "sınır":
+        return (f"Kumaşın boyu kesin ölçülemedi: sınırın nereden alındığına göre {sa['asili_min']:.0f}–{sa['asili_max']:.0f} cm. "
+                "Sahne kullanılmadı; gözle inceleme gerekli.")
+    return _sade_neden(rec, boy_cm)
+
+
+def _sade_neden(rec: dict, boy_cm: float | None = None) -> str:
     tur, n = rec.get("tur"), (rec.get("neden") or "")
     tk = rec.get("tam_kumas") or {}
     urun = f", ürün {boy_cm:.0f} cm" if boy_cm else ""
