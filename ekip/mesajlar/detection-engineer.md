@@ -28,3 +28,13 @@
 >   * Servis hatası/çözülemeyen yanıt: `bilgi["servis"]["durum"]` "hata" / "gecersiz_yanit" (yeni sabit `gks.GECERSIZ == "gecersiz_yanit"`); ikisi de bütçeye sayılır.
 >   Bu alt durum (servis önerisi doğru bölgede, kararlı ret -> ilk tanı korunur) `tests/test_kurtarma_akisi.py::test_servis_onerisi_kararli_ret_ilk_taniyi_degistirmez` içinde sınanıyor; `test_tutarli_oneri_kontrollerden_gecer`'in ikinci kısmını silebilir ya da `assert ev2 is None and bilgi2["sonuc"] == "dogrulanamadi" and bilgi2["servis"]["yeniden_algilama"].startswith("ret")` yapabilirsin (senin tercihin).
 > yanıt (detection-engineer) → M-detection-engineer-1 yanıtı: uygulandı — test_algilama_kurtarma.py `test_tutarli_oneri_kontrollerden_gecer` ikinci kısmı yeni sözleşmeye göre: `ev2 is None and sonuc == "dogrulanamadi" and yeniden_algilama.startswith("ret")`. `python tests/test_algilama_kurtarma.py` → rc=0, `TAMAM` (Linux).
+
+## [HATA] M-koordinator-5 Stand ayaklarından zemin çizgisi   (görev: G10a, kullanıcı onaylı)
+- Ne: Üretici kumaşı %5–8 kısa çiziyor; ucu yere değen sahneler "havada bitiyor" diye eleniyor (iş 20261014-091258 elenen 1 ve 3). Kumaşın ucunun gerçekten zemine değip değmediğini anlamak için zemin çizgisi gerekiyor. Bütün sahnelerde ahşap stand var; ayaklarının altı zemini gösterir.
+- Beklenen arayüz (placement-engineer buna göre kodluyor, imzayı DEĞİŞTİRME):
+  `banner_detect.zemin_cizgisi(img_bgr, kumas_maskesi) -> dict`:
+  `{"y": float|None (zemin satırı, piksel; kumaş genişliği boyunca ortalama), "guven": "yuksek"|"dusuk"|"yok", "yontem": "stand_ayagi"|..., "noktalar": [[x,y],...]}`.
+  Bulunamıyorsa `{"y": None, "guven": "yok", ...}` — asla tahmin uydurma. Tek görsele özel koordinat yok; eşikler VARSAYIM.
+- Kanıt örnekleri (ham): /mnt/user-data/uploads/afis_mockup/isler/20261014-091258_20261014-091053_design/sahneler_bos/elenen_01_0{1,2,3}_ham.jpg, tests/kontrol_ornekleri/is_054333/ham.jpg, is_053942/ham.jpg, is_224824/kabul_s0{1,2}_ham.png, is_005509/kabul_s0{1,2}_ham.png. Sentetik: mock_provider.square_scene (stand var; zemin FLOOR_FRAC).
+- Test: yeni `tests/test_zemin_cizgisi.py` (sahibi sen): her ham örnekte bulunan y, elle işaretlenmiş zemin satırına ±%1,5 kadraj içinde; sentetik sahnelerde FLOOR_FRAC'a. Bugünkü 3 sahneyi `tests/kontrol_ornekleri/is_091258/` altına ham olarak ekle (manifest + elle işaretli zemin y ve etek ucu y).
+- Bitince placement-engineer'ın gelen kutusuna BİLGİ yaz (hazır + güven davranışı).
