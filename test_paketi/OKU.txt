@@ -1,0 +1,13 @@
+TEST PAKETİ (Düğün, 75x200 cm)
+
+1) Magnific sitesinde görsel üretme (image) bölümünü aç. Modeli seç: GPT 2, Nano Banana 2, Seedream 5 Pro (sırayla).
+2) "Referans / görsel ekle" ile kilavuz.png dosyasını yükle. En-boy oranı: 9:16 (dikey).
+3) prompt_1.txt içindeki yazıyı komple kopyalayıp prompt kutusuna yapıştır, üret.
+4) Aynısını her model için prompt_1, prompt_2, prompt_3 ile tekrarla (prompt_1.txt, prompt_2.txt, prompt_3.txt).
+5) Sonuçları şöyle adlandır: gpt_1.png, nano_1.png, seedream5_1.png ... ve bana gönder.
+RAKİP / ÖRNEK FOTOĞRAFLA DENEME (kilavuz.png yerine):
+ - prompt_rakip_A_ayni_sahne.txt : örnek fotoğrafı yükle, aynı sahneyi BOŞ afişle yeniden yapar (kadrajı birebir korur).
+ - prompt_rakip_B_yeni_sahne.txt : örnek fotoğrafı yükle, benzer yapıda ama YENİ bir sahne üretir (afiş boş).
+ Önemli: rakip görselindeki tasarım/logo kopyalanmamalı; sonuçta afiş boş olmalı. Satışta kullanmadan önce rakip fotoğrafının kendisini değil sonucu kullan.
+
+Not: Bu sahnelerde afiş BOŞ çıkmalı. Tasarımı program sonra yerleştirir.

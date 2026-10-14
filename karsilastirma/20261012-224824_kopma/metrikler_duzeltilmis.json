@@ -1,0 +1,32 @@
+{
+ "s01": {
+  "ikinci_turev_maks_px": 0.467,
+  "katlanma_piksel": 0,
+  "asili_cm": 177.7,
+  "gizli_cm": 22.3,
+  "px_per_cm": 11.702,
+  "rapordaki": {
+   "asili_cm": 177.7,
+   "gizli_cm": 22.3,
+   "px_per_cm": 11.702
+  },
+  "kivrim_kaymasi": 0.0,
+  "kenar_sigma_px": 43.1,
+  "sorunlar": []
+ },
+ "s02": {
+  "ikinci_turev_maks_px": 0.308,
+  "katlanma_piksel": 0,
+  "asili_cm": 201.4,
+  "gizli_cm": 0.0,
+  "px_per_cm": 9.567,
+  "rapordaki": {
+   "asili_cm": 201.4,
+   "gizli_cm": 0.0,
+   "px_per_cm": 9.567
+  },
+  "kivrim_kaymasi": 0.0,
+  "kenar_sigma_px": 38.8,
+  "sorunlar": []
+ }
+}
