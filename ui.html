@@ -215,6 +215,8 @@ table.cmp td,table.cmp th{border-bottom:1px solid var(--line);padding:5px 6px;te
         <div><h2><span class="step">3</span>Sonuçlar</h2><div class="sub" id="jobInfo" style="margin:0"></div></div>
         <div class="nogrow"><label class="f" for="jobSel">Önceki işler</label><select id="jobSel" style="min-width:240px"></select></div>
       </div>
+      <div id="kaynakBag"></div>
+      <div id="msBildirim"></div>
       <div id="sumMsg"></div>
       <div class="gallery" id="gallery"></div>
       <div id="rateBox"></div>
@@ -707,12 +709,14 @@ async function poll() {
     if (j) await loadJob(j);
   } else if (prev !== undefined && st.finished !== prev) {
     jobLoading = true; renderRun();
+    const ms = (st.result || {}).sonuc;
+    const donus = (st.result || {}).donus_is;              // G9: manuel sınırdan sonra KAYNAK işte kal
     try {
       await refreshJobs();
-      const j = (st.result && st.result.job) || st.job || curJob;
-      if (j) await loadJob(j, st.kind === "video");
+      const j = donus || (st.result && st.result.job) || st.job || curJob;
+      if (j) await loadJob(j, st.kind === "video" || !!donus);
     } finally { jobLoading = false; renderRun(); renderResult(); }
-    const ms = (st.result || {}).sonuc;
+    if (donus && !st.error) msBildir(st.result);
     if (st.error) toast(st.error);
     else if (ms === "inceleme") toast("Manuel sınır UYGULANMADI (baskı yok): " + ((st.result || {}).neden || "incelemeye bırakıldı"));
     else if (ms === "kabul_edilmedi") toast("Manuel sınırla sonuç kabul edilmedi; tanı görseline bak (ürün çıktısı değil).");
@@ -781,6 +785,9 @@ function renderResult() {
   if (!selPhoto) { const b = i.fotograflar.find(p => p.en_iyi); if (b) selPhoto = b.ad; }       // en iyi fotoğraf kendiliğinden seçili gelir
   $("#jobInfo").textContent = `${i.kategori || ""} · ${i.fotograflar.length} fotoğraf`
     + (i.islem === "kayitli_sahnelerden_yeniden_birlestirme" ? ` · kayıtlı sahnelerden yeniden birleştirildi (kaynak: ${i.kaynak_is}; servis çağrısı: ${i.saglayici_cagrisi ?? 0})` : "");
+  $("#kaynakBag").innerHTML = i.islem === "manuel_sinir" && i.kaynak_is
+    ? `<div class="hint" style="margin:4px 0">Manuel sınır sonucu. Kaynak iş: <b>${esc(i.kaynak_is)}</b> — <a href="#" id="kaynagaDon">kaynağa dön</a></div>` : "";
+  if ($("#kaynagaDon")) $("#kaynagaDon").onclick = e => { e.preventDefault(); loadJob(i.kaynak_is); };
   $("#recompWrap").hidden = !(i.yeniden_birlestirilebilir || i.elenen_ham_var);
   $("#elenenHamWrap").hidden = !i.elenen_ham_var;
   const su = i.son_uretim;
@@ -876,7 +883,7 @@ function renderRejects(i) {
         <span class="hint" style="margin:0">Otomatik kontrol: ${esc(s.aciklama || "")}</span>
         ${r.kurtarma ? `<span class="hint" style="margin:0">Kurtarma (aynı görsel, yeni üretim yok): ${esc(({dogrulanamadi: "doğru kumaş bölgesi doğrulanamadı — senin incelemen gerekli", yerel_aday_dogru_bolge_ret: "doğru kumaş bulundu ama sahne yine uygun değil", servis_onerisi_dogru_bolge_ret: "görsel kontrolün önerdiği bölgede kumaş bulundu ama sahne uygun değil"})[r.kurtarma.sonuc] || r.kurtarma.sonuc)}; ${(r.kurtarma.yerel_adaylar || []).length} alternatif aday denendi${r.kurtarma.servis ? ", görsel kontrol: " + esc(r.kurtarma.servis.durum || "") : ""}.</span>` : ""}
         ${(r.durum || {}).not ? `<span class="hint" style="margin:0"><b>${esc(r.durum.not)}</b></span>` : ""}
-        <div class="bt">${btns}</div>${note}
+        <div class="bt">${btns}</div>${note}${msSonuclar(r)}
         ${r.tur === "servis_hatasi" ? "" : `<div class="bt"><button class="${hk === "kullanilabilir" ? "on" : ""}" data-el="${esc(r.insan_anahtar)}" data-k="kullanilabilir" style="cursor:pointer">Kullanılabilir</button><button class="${hk === "gercekten_hatali" ? "on" : ""}" data-el="${esc(r.insan_anahtar)}" data-k="gercekten_hatali" style="cursor:pointer">Gerçekten hatalı</button>${hk ? `<button data-el="${esc(r.insan_anahtar)}" data-k="" style="cursor:pointer">etiketi kaldır</button>` : ""}</div>`}
         <details><summary>ayrıntı</summary><div class="hint" style="margin:0">${esc(r.neden || "")}${d ? `<br>Model: ${esc(d.model || "—")} · prompt sürümü ${esc(d.prompt_surumu || "—")} · ${d.sure_sn ?? "—"} sn · referans: ${esc((d.referanslar || []).join(", ") || "yok")}` : "<br>Bu çağrı için prompt/model kaydı yok (eski iş; sonradan doldurulmadı)."}</div>
           ${d && d.prompt ? `<details><summary>prompt (${d.prompt_kelime} kelime)</summary><div class="hint" style="white-space:pre-wrap;margin:0">${esc(d.prompt)}</div></details>` : ""}</details></div></div>`;
@@ -889,6 +896,7 @@ function renderRejects(i) {
     + `. Senin etiketin otomatik kontrol kaydını silmez; ayrı dosyada tutulur. Kenarı turuncu kartlar aynı hatanın art arda 3. veya daha sonraki tekrarıdır.</div>
     <div class="rejgrid">${rej.map(card).join("")}</div>${durmaTablosu(i.durma_simulasyonu)}</details>`;
   $("#rejBox").querySelectorAll("[data-zoom]").forEach(b => b.onclick = e => { e.stopPropagation(); $("#lbImg").src = b.dataset.zoom; $("#lb").classList.add("on"); });
+  $("#rejBox").querySelectorAll("[data-acis]").forEach(b => b.onclick = e => { e.stopPropagation(); loadJob(b.dataset.acis); });
   $("#rejBox").querySelectorAll("[data-ms]").forEach(b => b.onclick = e => { e.stopPropagation(); msAc(b.dataset.ms, b.dataset.msd, b.dataset.msk); });
   $("#rejBox").querySelectorAll("[data-el]").forEach(b => b.onclick = async e => {
     e.stopPropagation();
@@ -897,6 +905,23 @@ function renderRejects(i) {
   });
 }
 // ---- manuel sınır (K-55) ----
+const MS_SONUC = {kabul: ["kabul", "ok"], kabul_edilmedi: ["kabul edilmedi", "bad"], uygulanmadi: ["uygulanmadı (baskı yok)", "warn"],
+  inceleme: ["uygulanmadı (baskı yok)", "warn"]};
+function msSonuclar(r) {          // G9: bu sahneden yapılmış manuel sınır sonuçları (ayrı işler)
+  const m = r.manuel_sonuclar || [];
+  if (!m.length) return "";
+  return `<div class="msson"><span class="hint" style="margin:0">Manuel sınır sonuçları (ayrı iş; bu iş değişmedi):</span>` + m.map(x => {
+    const d = MS_SONUC[x.sonuc] || [x.sonuc, ""];
+    return `<div class="bt"><span class="chip ${d[1]}">${esc(d[0])}</span> <span class="hint" style="margin:0">${esc(x.job)}</span> <button data-acis="${esc(x.job)}">aç</button></div>`;
+  }).join("") + `</div>`;
+}
+function msBildir(res) {
+  const d = MS_SONUC[res.sonuc] || [res.sonuc || "", ""];
+  $("#msBildirim").innerHTML = `<div class="msg ${d[1] === "ok" ? "" : "warn"}"><b>Manuel sınır sonucu: ${esc(d[0])}.</b> Sonuç ayrı bir işe yazıldı (${esc(res.job)}); bu iş ve görselleri olduğu gibi duruyor.
+    <button id="msYeniAc" data-acis="${esc(res.job)}">yeni sonucu aç</button> <button id="msBildirimKapat">kapat</button></div>`;
+  $("#msYeniAc").onclick = () => { $("#msBildirim").innerHTML = ""; loadJob(res.job); };
+  $("#msBildirimKapat").onclick = () => { $("#msBildirim").innerHTML = ""; };
+}
 const MS = {pts: [], dosya: null, kaynak: null};
 const msMod = () => (document.querySelector("input[name=msMod]:checked") || {}).value || "cizgi";
 const MS_ADLAR = {cizgi: ["üst sol", "üst sağ", "alt (temas) sol", "alt (temas) sağ"], kose: ["sol-üst", "sağ-üst", "sağ-alt", "sol-alt"]};

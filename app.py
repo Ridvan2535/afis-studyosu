@@ -298,6 +298,7 @@ class Handler(BaseHTTPRequestHandler):
         prof = rap.get("urun_profili") or {}
         oran, boy = prof.get("oran") or 0.375, prof.get("boy_cm")
         elen = []
+        manuel = self._manuel_sonuclari() if rap.get("elenenler") else {}
         for i, e in enumerate(rap.get("elenenler", [])):
             e = dict(e, sira=i + 1)
             if not e.get("sade_neden"):
@@ -327,6 +328,8 @@ class Handler(BaseHTTPRequestHandler):
                     e["ham_url"] = f"/files/{urllib.parse.quote(kn['is'])}/" + urllib.parse.quote(kn["dosya"])
             if not e.get("manuel_dosya") or (e["manuel_kaynak_is"] and not e["ham_url"]):
                 e["manuel_dosya"] = None
+            e["manuel_sonuclar"] = [m for m in manuel.get((e["manuel_kaynak_is"] or name, str(e.get("manuel_dosya") or "").replace("\\", "/")), [])
+                                   if m["job"] != name] if e.get("manuel_dosya") else []
             td = e.get("tani_dosya")                                         # tasarımlı TANI önizlemesi (ürün çıktısı değil)
             e["tani_url"] = base + urllib.parse.quote(td) if td and os.path.exists(os.path.join(jp, td)) else None
             e["eski_kayit"] = "ham_dosya" not in e and e.get("tur") != "servis_hatasi"
@@ -357,6 +360,41 @@ class Handler(BaseHTTPRequestHandler):
                                                  for p in rap.get("fotograflar", [])),
                 "elenen_ham_var": any(e.get("ham_dosya") and os.path.exists(os.path.join(jp, e["ham_dosya"]))
                                       for e in rap.get("elenenler", []))}
+
+    _MANUEL_CACHE: dict = {}
+
+    @classmethod
+    def _manuel_sonuclari(cls):
+        """isler/ altındaki manuel sınır işleri -> {(kaynak_is, kaynak.dosya): [{job, sonuc, ...}]} (G9).
+        Ucuz: yalnız adında "manuel_" geçen klasörlerin rapor.json'u okunur; değişiklik zamanına göre önbellekli."""
+        out = {}
+        try:
+            adlar = sorted(n for n in os.listdir(orch.JOBS_DIR) if "manuel_" in n)
+        except OSError:
+            return out
+        for n in adlar:
+            rp = os.path.join(orch.JOBS_DIR, n, "rapor.json")
+            try:
+                mt = os.path.getmtime(rp)
+            except OSError:
+                continue
+            c = cls._MANUEL_CACHE.get(n)
+            if not c or c[0] != mt:
+                rap = Orchestrator.report_of(os.path.join(orch.JOBS_DIR, n))
+                kayitlar = []
+                if rap.get("islem") == "manuel_sinir":
+                    for p in rap.get("fotograflar", []):
+                        kn = p.get("kaynak") or {}
+                        kayitlar.append((kn.get("is") or rap.get("kaynak_is"), kn.get("dosya"), "kabul"))
+                    for e in rap.get("elenenler", []):
+                        kn = e.get("kaynak") or {}
+                        kayitlar.append((kn.get("is") or rap.get("kaynak_is"), kn.get("dosya"),
+                                         "uygulanmadi" if e.get("tur") == "manuel_maske_zayif" else "kabul_edilmedi"))
+                c = cls._MANUEL_CACHE[n] = (mt, kayitlar)
+            for ki, kd, sonuc in c[1]:
+                if ki and kd:
+                    out.setdefault((ki, str(kd).replace("\\", "/")), []).append({"job": n, "sonuc": sonuc})
+        return out
 
     _APPROX_CACHE: dict = {}
 
@@ -670,6 +708,8 @@ class Handler(BaseHTTPRequestHandler):
         def work(o, settings):
             res = o.manuel_sinir(src, dosya, ust=body.get("ust"), alt=body.get("alt"), koseler=body.get("koseler"))
             RUN._set(job=res["job"])
+            res["donus_is"] = job                    # G9: arayüz manuel düzenleyicinin açıldığı işte (kaynak) kalır
+            RUN._set(job=job)                        # sayfa yenilense de kaynak iş açılır; yeni iş res["job"]
             return res
 
         if not RUN.start("fotograf", work):

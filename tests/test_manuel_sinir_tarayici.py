@@ -12,6 +12,8 @@ düzelt) -> Uygula -> yeni sonuç otomatik açılır -> foto kartını büyüt. 
   5. "Elenen ham görüntüleri de dene" kutusu (ham görüntüsü olan işte görünür) varsayılan İŞARETSİZ; işaretsizken
      /api/yeniden_birlestir gövdesinde elenen_ham false, işaretlenince true gider (istek tarayıcıda yakalanır,
      sunucuya ulaşmaz: kaynak iş değişmez, yeni üretim yok).
+  6. (G9) Uygula'dan sonra arayüz KAYNAK işte kalır (#jobSel değişmez), kaynak işin 3 elenen kartı görünür; ilgili kartta
+     manuel sonuç (durum + "aç") görünür; "aç" -> yeni iş; yeni işte "kaynağa dön" -> kaynak iş ve 3 kart yine görünür.
 Playwright yoksa test ATLANIR (Windows kurulumunda gerekmez). Çalıştır: python tests/test_manuel_sinir_tarayici.py
 """
 import hashlib
@@ -66,14 +68,15 @@ def kur(tdir):
             shutil.copy(os.path.join(KOK, f), app_dir)
     src = os.path.join(app_dir, "isler", KAYNAK_IS)
     os.makedirs(os.path.join(src, "sahneler_bos"))
-    shutil.copy(HAM, os.path.join(src, "sahneler_bos", "elenen_01_01_ham.jpg"))
+    for k in (1, 2, 3):                                        # G9: kaynak işte 3 elenen sahne (kullanıcı vakası)
+        shutil.copy(HAM, os.path.join(src, "sahneler_bos", f"elenen_01_0{k}_ham.jpg"))
     rgba = np.zeros((2000, 750, 4), np.uint8)                 # test tasarımı: üst yazı + ALT yazı (v≈0,88-0,92)
     rgba[350:450, 150:600] = (30, 30, 30, 255)
     rgba[1760:1840, 200:550] = (30, 30, 30, 255)
     cv2.imwrite(os.path.join(src, "tasarim.png"), rgba)
     rap = {"kategori": "Baby shower", "urun_profili": {"olcu_id": "75x200"}, "fotograflar": [],
-           "elenenler": [{"cagri": 1, "servis": "test", "tur": "kalite_kapisi", "neden": "test kaydı",
-                          "ham_dosya": "sahneler_bos/elenen_01_01_ham.jpg"}]}
+           "elenenler": [{"cagri": k, "servis": "test", "tur": "kalite_kapisi", "neden": f"test kaydı {k}",
+                          "ham_dosya": f"sahneler_bos/elenen_01_0{k}_ham.jpg"} for k in (1, 2, 3)]}
     json.dump(rap, open(os.path.join(src, "rapor.json"), "w", encoding="utf-8"), ensure_ascii=False)
     return app_dir, src
 
@@ -187,13 +190,33 @@ def calistir():
                     assert abs(gx - ex) <= tol and abs(gy - ey) <= 1.0 / b["height"] + 1e-6, (genislik, g, hedef)
                 assert st["result"]["sonuc"] == "kabul", st["result"]
                 yeni = st["result"]["job"]
+                # 6) G9: arayüz kaynak işte kalır; kartta manuel sonuç + "aç"; bildirimde "yeni sonucu aç"
+                ac = f"#rejBox [data-acis={json.dumps(yeni)}]"
+                page.wait_for_selector(ac, timeout=20000)
+                assert page.input_value("#jobSel") == KAYNAK_IS, page.input_value("#jobSel")
+                assert page.locator("#rejBox .rejc").count() == 3, "kaynak işin 3 elenen kartı görünmüyor"
+                kart = page.locator("#rejBox .rejc").first
+                assert "kabul" in kart.locator(".msson").inner_text(), kart.inner_text()
+                assert page.locator("#rejBox .rejc").nth(1).locator(".msson").count() == 0, "başka sahnenin kartında manuel sonuç"
+                assert page.is_visible("#msYeniAc"), "bildirimde 'yeni sonucu aç' yok"
+                ekran(page, f"2a_kaynakta_kaldi_{genislik}.png")
+                page.click(ac)
                 page.wait_for_function(f"document.querySelector('#jobSel').value === {json.dumps(yeni)}", timeout=20000)
+                page.wait_for_selector("#kaynagaDon", timeout=20000)
+                assert KAYNAK_IS in page.inner_text("#kaynakBag")
                 page.wait_for_selector("#photoGrid img, .pgrid img, [data-zoom]", timeout=20000)
                 ekran(page, f"2_yeni_sonuc_{genislik}.png")
                 zb = page.locator("button.zoom[data-zoom]").first
                 zb.click()
                 page.wait_for_selector("#lb.on")
                 ekran(page, f"3_buyutulmus_{genislik}.png")
+                page.keyboard.press("Escape")
+                page.evaluate("document.querySelector('#lb').classList.remove('on')")
+                page.click("#kaynagaDon")
+                page.wait_for_function(f"document.querySelector('#jobSel').value === {json.dumps(KAYNAK_IS)}", timeout=20000)
+                page.wait_for_function("document.querySelectorAll('#rejBox .rejc').length === 3", timeout=20000)
+                assert page.locator("#kaynagaDon").count() == 0
+                ekran(page, f"3b_kaynaga_donuldu_{genislik}.png")
                 sonuc[genislik] = (yeni, g)
                 page.close()
 
@@ -214,6 +237,11 @@ def calistir():
             assert st["result"]["sonuc"] == "inceleme" and st["result"]["tur"] == "manuel_maske_zayif", st["result"]
             page.wait_for_function("document.querySelector('#toast') && document.querySelector('#toast').textContent.includes('UYGULANMADI')",
                                    timeout=20000)
+            kose_ac = f"#rejBox [data-acis={json.dumps(st['result']['job'])}]"
+            page.wait_for_selector(kose_ac, timeout=20000)
+            assert page.input_value("#jobSel") == KAYNAK_IS
+            assert "uygulanmadı" in page.locator("#rejBox .rejc").first.locator(".msson").inner_text()
+            assert page.locator("#rejBox .rejc").first.locator("[data-acis]").count() == 3, "3 manuel sonuç (2 kabul + 1 uygulanmadı) bekleniyordu"
             ekran(page, "4_kose_zayif_uyari.png")
             kose_is = st["result"]["job"]
             br.close()

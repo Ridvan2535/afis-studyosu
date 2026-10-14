@@ -24,3 +24,11 @@ Panoyu yalnız koordinatör günceller; ajanlar durumu son yanıtlarında bildir
 - G4 notu: %15 eşiği %10–%18 aralığında karar değiştirmiyor; gerçek birikmeli ham örnek az (3).
 - G7 kalanı: docs/architecture.md (§6, 93/97/179-181), docs/roadmap.md (12, 54-61) eski image-engineer/"sığdır" anlatımı; README pipeline.py uyarısı.
 - K-59 kullanıcı kararı: ölçüm payı bandında gizli baskı uyarı mı ret mi.
+
+## Tur 1 ek
+| No | Görev | Sahibi | Bağımlılık | Durum |
+|---|---|---|---|---|
+| G9 | Manuel sınırdan sonra arayüz kaynak işte kalsın; kartta manuel sonuç + aç; manuel işte kaynağa dön | ui-engineer | — | bitti |
+
+## Önerilen (kullanıcı onayı bekliyor)
+- Stand ayaklarına göre zemin teması denetimi: uç yere değiyorsa kısa görünen kısım yerde birikmiş sayılsın; manuel modda da aynı denetim (placement + detection).

@@ -41,3 +41,30 @@ Ortam: Linux bulut, Python + Playwright başsız Chromium. **Windows'ta çalış
 ## Doğrulanamayanlar
 - Windows (`kur.bat` → `.venv\Scripts\python.exe kontrol.py`) üzerinde çalıştırılmadı.
 - Kutunun işaretli gönderimiyle sunucu tarafının gerçek ham yeniden denemesi bu testte sınanmadı (istek bilerek yakalandı; sunucu yolu pipeline testlerinde).
+
+---
+# G9 — Manuel sınırdan sonra kaynak işte kal (M-koordinator-4)
+
+## Değişen dosyalar
+- `app.py`
+  - `_manuel_sinir.work()`: sonuca `donus_is` (düzenleyicinin açıldığı iş) eklendi; bitince `RUN.job` bu işe geri alınır (sayfa yenilense de kaynak iş açılır). orchestrator.py'ye dokunulmadı.
+  - Yeni `_manuel_sonuclari()`: `isler/` altında yalnız adında `manuel_` geçen klasörlerin `rapor.json`'u okunur (değişiklik zamanına göre önbellek); `islem=="manuel_sinir"` kayıtlarından `(kaynak.is, kaynak.dosya) -> [{job, sonuc}]` üretir. sonuc: `fotograflar` → kabul, `elenenler` tur `manuel_maske_zayif` → uygulanmadi, diğer → kabul_edilmedi.
+  - `_job_info`: her elenen kartına `manuel_sonuclar` (kartın `manuel_kaynak_is or bu iş`, `manuel_dosya` ile eşleşir; yeniden birleştirme işlerinde de çalışır; işin kendisi listeden çıkarılır).
+- `ui.html`
+  - `poll()`: sonuçta `donus_is` varsa yeni işe GEÇMEZ, kaynak işi yeniden yükler; `#msBildirim` bildiriminde durum + "yeni sonucu aç" / "kapat".
+  - Elenen kartı: "Manuel sınır sonuçları (ayrı iş; bu iş değişmedi)" — her sonuç için durum çipi (kabul / kabul edilmedi / uygulanmadı (baskı yok)) + iş adı + "aç".
+  - Manuel iş açılınca `#kaynakBag`: "Manuel sınır sonucu. Kaynak iş: <ad> — kaynağa dön".
+- `tests/test_manuel_sinir_tarayici.py`: kaynak iş artık 3 elenen sahneli (kullanıcı vakası). Yeni kontrol 6: Uygula sonrası `#jobSel` kaynak işte, 3 kart görünür, yalnız ilgili kartta manuel sonuç + "aç", bildirimde "yeni sonucu aç"; "aç" → yeni iş + "kaynağa dön" görünür; "kaynağa dön" → kaynak iş, 3 kart. Köşe (zayıf) senaryosunda kartta "uygulanmadı" ve toplam 3 manuel sonuç.
+- `tests/test_elenen_arayuz.py`: değişmedi.
+
+## Testler (Linux bulut, başsız Chromium/Playwright; Windows'ta çalıştırılmadı)
+- `python tests/test_manuel_sinir_tarayici.py` → son satırlar:
+  `pencere 1280px: yeni iş 20261014-093122_manuel_20261013-053942; ...` / `pencere 700px: yeni iş 20261014-093128_manuel_20261013-053942; ...` /
+  `dört köşe (zayıf örtüşme): baskı yok, uyarı: Verdiğin köşeler kumaşla güvenle eşleşmedi; ...` / `test_manuel_sinir_tarayici: TAMAM`
+- Regresyon: `poll()` içinde `donus` null yapılınca (eski davranış: yeni işe geçiş) test `waiting for locator("#rejBox [data-acis=...]")` zaman aşımıyla BAŞARISIZ (denendi, sonra geri alındı).
+- `python tests/test_elenen_arayuz.py` → `test_elenen_arayuz: TAMAM`
+- `python tests/test_manuel_sinir.py` (pipeline'ın; yalnız çalıştırıldı) → `5) 7 olumsuz durum: hepsi reddedildi, iş klasörü açılmadı` / `test_manuel_sinir: TAMAM`
+
+## Doğrulanamayanlar
+- Windows'ta çalıştırılmadı. Gerçek kullanıcı işi (20261014-091258) üzerinde denenmedi (test geçici kopya klasörde).
+- Manuel iş, yeniden birleştirme işinden başlatıldıysa "kaynağa dön" rapordaki `kaynak_is`'e (sahnenin asıl işi) döner, yeniden birleştirme işine değil.
