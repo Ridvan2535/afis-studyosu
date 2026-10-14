@@ -51,16 +51,15 @@ def video():
     return f"ffmpeg: {ff}"
 
 
-def yerlestirme():
-    import cv2
+def yerlestirme(sahne_yolu=None):
     import banner_detect as bd
     import compositor as cp
     import cvio
-    scene = cvio.imread(os.path.join(HERE, "scene.jpg"))
+    scene = cvio.imread(sahne_yolu or os.path.join(HERE, "scene.jpg"))
     design = cp.load_design(os.path.join(HERE, "design_candy.jpg"))
     det = bd.detect(scene)
     if det.reject:
-        raise RuntimeError("örnek sahnede afiş bulunamadı: " + det.reject)
+        raise RuntimeError("örnek sahnede afiş bulunamadı: " + "; ".join(map(str, det.reject)))   # reject bir listedir
     why = cp.check_fit(det, design)
     if why:
         raise RuntimeError("tasarım örnek sahneye uymadı: " + str(why))
@@ -99,15 +98,20 @@ def secici():
     return "otomatik servis seçimi hazır"
 
 
-print("Afiş Stüdyosu kendini sınıyor…")
-adim("Paketler", paketler)
-adim("Video yazma/okuma", video)
-adim("Afiş bulma + tasarım yerleştirme", yerlestirme)
-adim("El kamerası (sanal kamera)", kamera)
-adim("Otomatik servis seçimi", secici)
-print()
-if fails:
-    print("SORUN VAR:", ", ".join(fails))
-    print("Bu ekranın fotoğrafını ya da yazısını bana gönder.")
-    sys.exit(1)
-print("HER ŞEY TAMAM. baslat.bat ile programı açabilirsin.")
+def main():
+    print("Afiş Stüdyosu kendini sınıyor…")
+    adim("Paketler", paketler)
+    adim("Video yazma/okuma", video)
+    adim("Afiş bulma + tasarım yerleştirme", yerlestirme)
+    adim("El kamerası (sanal kamera)", kamera)
+    adim("Otomatik servis seçimi", secici)
+    print()
+    if fails:
+        print("SORUN VAR:", ", ".join(fails))
+        print("Bu ekranın fotoğrafını ya da yazısını bana gönder.")
+        sys.exit(1)
+    print("HER ŞEY TAMAM. baslat.bat ile programı açabilirsin.")
+
+
+if __name__ == "__main__":
+    main()

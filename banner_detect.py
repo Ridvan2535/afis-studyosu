@@ -188,8 +188,13 @@ def _score(mask):
 
 # ----------------------------------------------------------------------------
 # Zemine taşmış açık bölgeyi ayırma (2026-10-13)
-ZEMIN_GENISLEME = 1.5        # bir satırın genişliği, gövdenin ortanca genişliğinin bu katını aşarsa "zemine taşmış" satır
-ZEMIN_PAY = 0.012            # gövde kenar doğrularına izin verilen pay (kadraj eni oranı)
+ZEMIN_GENISLEME = 1.5        # VARSAYIM: bir satırın genişliği, gövdenin ortanca genişliğinin bu katını aşarsa "zemine taşmış" satır.
+                             # Kanıt (G5c, kontrol örneklerinde en geniş satır / gövde): 054333 3,14 (halıya taşma, ayrılmalı);
+                             # 005509 #10 1,64–1,91 ve #13 1,58 (etek birikmesi; ayırma denenir, seçim değişmedi); 053942 1,42
+                             # (yan taşma; _yan_kirp çözer, burada tetiklenmez). Pay DAR: 1,42 ile 1,58 arası; değiştirmeden önce ölç.
+ZEMIN_PAY = 0.012            # VARSAYIM: gövde kenar doğrularına izin verilen pay (kadraj eni oranı). YAN_TASMA_PAY ile aynı değer
+                             # (dalgalı kenar toleransı); ayrı ölçülmüş bir kanıtı yok — yalnız 054333'te ayrılan gövdenin kumaşta
+                             # kaldığı (test_054333_kumas_secilir) doğrulandı.
 
 
 def _zemin_ayir(m):
@@ -220,7 +225,10 @@ def _zemin_ayir(m):
     degisti = False
     ilk_tasma = None
     # etek-zemin ayrımı: gövde bandı içinde mask doluluğunun %50'nin altına düştüğü ilk satır (etek altındaki gölge çizgisi);
-    # yalnız taşmanın başladığı satırdan sonra ve bölgenin alt %45'inde aranır
+    # yalnız taşmanın başladığı satırdan sonra ve bölgenin alt %45'inde aranır.
+    # VARSAYIM 0.55 (arama başlangıcı, boyun %55'i): gözlenen kesimler boyun %92 (054333) ve %94'ünde (005509 #10); üst gövde
+    #   hiç kesilmesin diye geniş alt pay. VARSAYIM 0.5 (doluluk): 054333 kesim satırı 0,36, üstündeki gövde en az 0,58;
+    #   005509 #10 kesim 0,49, üstündeki gövde en az 0,51 — bu örnekte pay ÇOK DAR (±0,01); eşik değişirse #10 sonucu değişebilir.
     kesim = None
     for r in range(y0, y1 + 1):
         if int(m[r].sum()) > ZEMIN_GENISLEME * wref:
@@ -318,7 +326,9 @@ def _refine_fabric(work_bgr, wm):
 
 # ----------------------------------------------------------------------------
 # Yana (duvara) taşmış kumaş maskesini gövde kenarlarına kırpma (2026-10-13, iş 20261013-053942)
-YAN_KIRP_ESIK = 0.15         # satırların bu oranından fazlası kenar doğrusundan taşıyorsa maske yanlara taşmış sayılır
+YAN_KIRP_ESIK = 0.15         # VARSAYIM: satırların bu oranından fazlası kenar doğrusundan taşıyorsa maske yanlara taşmış sayılır.
+                             # Kanıt (G5c, ilk yan_tasma_orani): 053942 0,29 (krem duvara taşma, kırpılmalı); diğer 17 kontrol örneği
+                             # (005509 ×14, 054333, 224824 s01/s02) 0,00–0,048. Eşik iki küme arasında; alt kümeye uzaklık ~0,10.
 YAN_KIRP_SURE = 0.25         # VARSAYIM: taşma, boyun en az %25'i boyunca kesintisiz sürmeli. Dalgalı kenar kısa ve tekrarlayan
                              # salınımdır (test_duzlem_yerlesim güçlü dalga: yarım dalga boyun ~%17'si) ve kırpılmamalıdır:
                              # güçlü dalga sahne_kivrim olarak raporlanmalı, kırpmayla gizlenmemeli.
@@ -611,6 +621,9 @@ def detect_candidates(img_bgr, hint=None, backend="auto", en_fazla: int = 4) -> 
 
     # en yüksek skor; eşitlikte (ör. hepsi 0) AÇIK renkli aday öne geçer: koyu arka plan yalnız sıralama şansıyla seçilmesin
     sirali = sorted(cands, key=lambda c: (c[0], _color_factor(*_color_stats(lab_work, c[1]))), reverse=True)
+    # VARSAYIM IoU 0.7: aynı bölgenin kopyası sayılır. Kanıt (G5c, kontrol örneklerinde aday çiftleri): kopyalar 0,76 (054333:
+    # birleşik bölge ↔ zeminden ayrılmış gövde), 0,91 (005509 #5), 0,97–0,99 (005509 #10, 224824 s01); ayrı bölgeler 0,00.
+    # 0,76'ya pay dar ama yanılma yönü zararsız: kopya ayrı aday olarak listede kalır, seçim skorla yapılır.
     secilen = []
     for c in sirali:
         if all(_iou(c[1], x[1]) <= 0.7 for x in secilen):
@@ -621,14 +634,17 @@ def detect_candidates(img_bgr, hint=None, backend="auto", en_fazla: int = 4) -> 
 
 
 def tespit_maskeden(img_bgr, mask, kind="fabric") -> "Detection":
-    """Kullanıcının verdiği (manuel) bölgeden Detection: aynı kalite kapısı (açıklık, boşluk/desen, kadraj) uygulanır;
-    maske İYİLEŞTİRİLMEZ (yan kırpma vb. yok). K-55."""
+    """Kullanıcının verdiği (manuel) bölgeden Detection: aynı kalite kapısı (açıklık, delik, boşluk/desen, kadraj) uygulanır;
+    maske İYİLEŞTİRİLMEZ (yan kırpma vb. yok). K-55.
+    Delik oranı otomatik yoldakiyle AYNI biçimde (_finalize: kapatma + iç delik/alan, çalışma çözünürlüğünde) VERİLEN maskeden
+    hesaplanır; yalnız ölçülür, maske doldurulmaz (G5c: önceden sabit 0.0 geçiyordu, "afişin içi boş değil" denetimi atlanıyordu)."""
     H, W = img_bgr.shape[:2]
     scale = min(1.0, WORK_MAX / max(H, W))
     work = cv2.resize(img_bgr, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA) if scale < 1 else img_bgr
     wm = (cv2.resize((mask > 0).astype(np.uint8), (work.shape[1], work.shape[0]), interpolation=cv2.INTER_NEAREST) > 0).astype(np.uint8)
     lab_work = cv2.cvtColor(work, cv2.COLOR_BGR2LAB)
-    det = _tespit_kur(img_bgr, work, lab_work, scale, {"kind": kind}, "manuel", "manuel", 1.0, wm, 0.0)
+    _, delik = _finalize(wm)                                 # yalnız oran; wm değiştirilmez
+    det = _tespit_kur(img_bgr, work, lab_work, scale, {"kind": kind}, "manuel", "manuel", 1.0, wm, delik)
     det.mask = ((mask > 0).astype(np.uint8) * 255)          # tam çözünürlüklü kullanıcı bölgesi (kontroller aynı bölgede yapıldı)
     return det
 

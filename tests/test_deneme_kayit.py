@@ -169,6 +169,10 @@ assert dk.hata_imzasi("birikme_cozulemedi", algi["neden"]) == "birikme_cozulemed
 assert "tahmini 157 cm, ürün 200 cm" in dk.sade_neden(uretim, 200)
 assert "[gizlendi]" in dk.temizle("hata https://x.example/a?sig=abc ve data:image/png;base64,QUJD")
 assert "https" not in dk.temizle("hata https://x.example/a?sig=abc")
+# G5a: sınır kanıtı türü eski kayıtta metinden "sınır", yeni kayıtta kod "sinir" — ikisi de aynı sınıflanır
+for kod in ("sınır", "sinir"):
+    r_ = dict(uretim, sinir_araligi={"asili_min": 185, "asili_max": 199, "kaynak": kod})
+    assert dk.kontrol_sonucu(r_, U)["guven"] == "dusuk" and "kesin ölçülemedi" in dk.sade_neden(r_, 200), kod
 
 # ---------------------------------------------------------------- karşılaştırma yalnız öneri üretir
 oz = dk.ozet(orch.JOBS_DIR)

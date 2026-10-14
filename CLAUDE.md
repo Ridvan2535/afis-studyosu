@@ -76,18 +76,19 @@ yüzeye tasarım uygulama motoru ürün türüne özel.
 
 Geliştirme işi küçük, tek görevli ajanlara bölünür. Her dosyanın TEK sahibi vardır; başka ajan o dosyayı düzenlemez,
 isteğini sahibinin gelen kutusuna (`ekip/mesajlar/<ajan>.md`) yazar. Görevler `ekip/pano.md`'de; raporlar `ekip/raporlar/`.
+Ayrıntılı ve bağlayıcı dosya listesi `ekip/PROTOKOL.md`'dedir (bu tablo özet).
 
 | Ajan | Yetki | Sahiplik / sorumluluk |
 |---|---|---|
 | `koordinator` (ana oturum) | yönetir | pano, CLAUDE.md, git commit, kullanıcıya rapor; ajanlar arası iletim |
-| `detection-engineer` | yazar | banner_detect, kontrol + algılama testleri |
+| `detection-engineer` | yazar | banner_detect, geri_cevir + algılama testleri |
 | `placement-engineer` | yazar | compositor, layout, proportion, ribbon, guide, cvio, sinir_kaniti, product + yerleşim testleri |
-| `pipeline-engineer` | yazar | orchestrator, deneme_kayit, gorsel_kontrol_servisi, prompt_yapisi, prompts, pipeline + akış testleri |
-| `provider-engineer` | yazar | providers, selector, mock_provider, refstore + sağlayıcı testleri |
-| `ui-engineer` | yazar | app.py, ui.html, baslat.bat, kur.bat + arayüz/tarayıcı testleri |
+| `pipeline-engineer` | yazar | orchestrator, deneme_kayit, gorsel_kontrol_servisi, prompt_yapisi, prompts, pipeline, gorsel_kontrol/*.py, tests/kontrol_ornekleri + akış testleri |
+| `provider-engineer` | yazar | providers, selector, mock_provider, refstore, make_test_scenes + sağlayıcı testleri |
+| `ui-engineer` | yazar | app.py, ui.html, baslat.bat, kur.bat, kontrol.py, requirements.txt + arayüz/tarayıcı testleri |
 | `video-engineer` | yazar | video_*, camera_move + video testleri |
 | `test-runner` | çalıştırır | bütün testler; yalnız `ekip/raporlar/test_*.md` yazar |
-| `docs-writer` | yazar | docs/durum.md, docs/kararlar.md, docs/*.md |
+| `docs-writer` | yazar | docs/*.md, README, KURULUM_REHBERI, scene_prompts |
 | `architecture-reviewer` | salt okunur | mimari inceleme, gereksinim çelişkileri |
 | `quality-reviewer` | salt okunur | bağımsız diff ve test yeterliliği incelemesi |
 | `visual-inspector` | salt okunur | Görsel Kontrol önerisi (`docs/gorsel_kontrol_plani.md`); karar yetkisi yok |

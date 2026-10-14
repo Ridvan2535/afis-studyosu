@@ -54,15 +54,17 @@ def olc(img, en_cm=75.0, boy_cm=200.0, tol=None, det=None):
         secimler.append({"genislik": gk, "ust": uk, "alt": ak, "asili_cm": round(asili, 1),
                          "oran": round(gv / max(av - uv, 1), 4), "icinde": abs(asili / boy_cm - 1) <= tol})
     icinde = [s["icinde"] for s in secimler]
+    # kaynak: insan için metin (değişmedi); kaynak_kodu: makine için sabit kod (G5b) -> "uygun" | "geometri" | "sinir"
     if all(icinde):
-        kaynak = "uygun (bütün makul sınırlarda ±%{:.0f} içinde)".format(tol * 100)
+        kaynak, kaynak_kodu = "uygun (bütün makul sınırlarda ±%{:.0f} içinde)".format(tol * 100), "uygun"
     elif not any(icinde):
-        kaynak = "geometri (bütün makul sınırlarda ±%{:.0f} dışında)".format(tol * 100)
+        kaynak, kaynak_kodu = "geometri (bütün makul sınırlarda ±%{:.0f} dışında)".format(tol * 100), "geometri"
     else:
-        kaynak = "sınır seçimi (bazı makul sınırlarda içinde, bazılarında dışında) -> İnceleme gerekli"
+        kaynak, kaynak_kodu = "sınır seçimi (bazı makul sınırlarda içinde, bazılarında dışında) -> İnceleme gerekli", "sinir"
     a = [s["asili_cm"] for s in secimler]
     return {"det": det, "g": g, "genislik": genislik, "ustler": ustler, "altlar": altlar, "secimler": secimler,
-            "asili_aralik": [min(a), max(a)], "kaynak": kaynak, "program_asili_cm": round(g["asili_cm"], 1),
+            "asili_aralik": [min(a), max(a)], "kaynak": kaynak, "kaynak_kodu": kaynak_kodu,
+            "program_asili_cm": round(g["asili_cm"], 1),
             "birikme": g["birikme"], "temas_yontemi": g["temas_yontemi"], "hgt": hgt}
 
 
@@ -153,7 +155,7 @@ def kalan_sorunlar(rec: dict, boy_cm: float = 200.0) -> list:
     a = tk.get("asili_cm")
     if a:
         fark = a / boy_cm - 1
-        out.append(("Programın ölçümüne göre (kesin değil, aşağıya bakın) " if (rec.get("sinir_araligi") or {}).get("kaynak") == "sınır" else "")
+        out.append(("Programın ölçümüne göre (kesin değil, aşağıya bakın) " if (rec.get("sinir_araligi") or {}).get("kaynak") in ("sınır", "sinir") else "")
                    + f"Kumaşın görünen asılı boyu ≈{a:.0f} cm; ürün {boy_cm:g} cm (kabul ±%3: {boy_cm * .97:.0f}–{boy_cm * 1.03:.0f} cm). "
                    f"Fark %{fark * 100:+.0f}.")
         if fark < -0.03:
@@ -165,14 +167,14 @@ def kalan_sorunlar(rec: dict, boy_cm: float = 200.0) -> list:
     if sa:
         if sa.get("kaynak") == "geometri":
             out.append(f"Bütün makul sınır seçimlerinde {sa['asili_min']:.0f}–{sa['asili_max']:.0f} cm: fark sahnedeki kumaştan geliyor.")
-        elif sa.get("kaynak") == "sınır":
+        elif sa.get("kaynak") in ("sınır", "sinir"):        # eski kayıt: metnin ilk kelimesi; yeni: kaynak_kodu
             out.append(f"Sınır seçimine göre {sa['asili_min']:.0f}–{sa['asili_max']:.0f} cm: sonuç sınırın nereden alındığına bağlı; "
                        "gözle inceleme gerekli.")
     if tk.get("temas_belirsiz"):
         tk_k = rec.get("temas_karsilastirma") or {}
         out.insert(0, "Zemine temas belirsiz: kumaşın yavaş genişlemesi yerde birikme kanıtı sayılmadı. "
                    + (f"Genişlemenin başladığı satır temas alınırsa asılı ≈{tk_k['yayilma']['asili_cm']:.0f} cm ve tasarımın "
-                      f"%{(1 - (tk_k['yayilma']['gorunen_murekkep'] or 1)) * 100:.0f}'i gizlenir; etek ucu alınırsa ≈"
+                      f"%{(1 - (1.0 if tk_k['yayilma']['gorunen_murekkep'] is None else tk_k['yayilma']['gorunen_murekkep'])) * 100:.0f}'i gizlenir; etek ucu alınırsa ≈"
                       f"{tk_k['etek_ucu']['asili_cm']:.0f} cm. " if tk_k else "")
                    + "Otomatik gizleme yapılmadı; manuel sınırla düzeltilebilir.")
     if tk.get("birikme") and tk.get("temas_yontemi") == "kenar_yayilmasi":

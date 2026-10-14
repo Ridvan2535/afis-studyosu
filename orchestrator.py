@@ -50,7 +50,13 @@ from selector import Selector, nice
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 JOBS_DIR = os.path.join(HERE, "isler")
-MANUEL_KOSE_ORTUSME = 0.85   # dört köşe modunda dörtgenin en az bu kadarı otomatik kumaş maskesiyle örtüşmeli (K-55)
+# VARSAYIM (K-55): dört köşe modunda dörtgenin en az %85'i otomatik kumaş maskesiyle örtüşmeli. Gerekçe: kurdele/önündeki
+# nesneler dörtgenin küçük bir kısmını kaplar (053942 örneğinde köşeler kumaştayken örtüşme yüksek, duvardayken çok düşük);
+# %85 altı = köşeler büyük ölçüde kumaş dışında, dörtgene baskı güvensiz. Örnek kümesiyle ince ayar yapılmadı.
+MANUEL_KOSE_ORTUSME = 0.85
+# VARSAYIM: dört köşe modunda otomatik maske, kumaş kenarındaki ince kopuklukları kapatmak için kadrajın uzun kenarının
+# %0,6'sı kadar genişletilir (eski sabit 15 px, 2400 px kadrajda ≈ %0,6 idi; artık çözünürlükten bağımsız). En az 3 px.
+MANUEL_GENISLETME_ORANI = 0.006
 REPORT_DIR = os.path.join(HERE, "raporlar")
 LOG_PATH = os.path.join(HERE, "kayit.log")
 STATS_PATH = os.path.join(HERE, "servis_karnesi.json")      # servislerin başarı geçmişi (otomatik seçim bunu kullanır)
@@ -500,7 +506,9 @@ class Orchestrator:
         return ev["tur"] == "kalite_kapisi" or deneme_kayit.kontrol_sonucu(rec, prof.oran, prof.boy_cm).get("guven") == "dusuk"
 
     def _aday_degerlendir(self, img, design, prof, label, det, hint):
-        """Bir kumaş adayını programın bütün kontrollerinden + kararlılık testinden geçirir. Doğrulandı mı?"""
+        """Bir kumaş adayını programın bütün kontrollerinden + kararlılık testinden geçirir.
+        Dönüş (ev, kararli): kararli = ölçüm kararı küçük bozulmalarla değişmiyor. KARARLI ≠ DOĞRU (K-52): kararlı bir ret,
+        adayın doğru bölge olduğunu göstermez; çağıran yalnız ok + kararlı adayı seçer (G5a)."""
         ev = self._evaluate_scene(img, design, prof, label, kararlilik=True, hint=hint, det=det)
         kr = (ev.get("tk_info") or {}).get("kararlilik") or (ev.get("extra") or {}).get("kararlilik") or {}
         return ev, (not kr.get("karar_degisti")) and (not ev["ok"] or not kr.get("kararsiz"))
@@ -509,11 +517,15 @@ class Orchestrator:
         """(yeni_ev ya da None, bilgi). Sıra: 1) aynı görseldeki alternatif kumaş adayları (ücretsiz, yerel);
         2) yalnız 1 sonuç vermezse ve servis bağlı + bütçe uygunsa bağımsız görsel kontrol (bölge önerisi);
         öneri yeniden algılamada İPUCU olur, yeni maske bütün kontrollerden geçmeli ve önerilen kutuda kalmalıdır.
-        Doğru bölge doğrulanamazsa None: sahne kullanıcı incelemesine kalır (şüpheli ölçümde dur korunur)."""
+        Yalnız KABUL edilen ve kararlı aday seçilir (G5a). Kararlı retler yalnız kayda (bilgi) yazılır, arama sürer: yanlış
+        bir adayın ret nedeni ilk değerlendirmenin tanısının yerine GEÇMEZ. Hiçbir aday kabul edilmezse None: çağıran ilk
+        tanıyı korur, sahne kullanıcı incelemesine kalır (şüpheli ölçümde dur korunur)."""
         bilgi = {"denendi": True, "yerel_adaylar": [], "servis": None, "sonuc": "dogrulanamadi"}
         ilk = ev.get("det")
         adaylar = bd.detect_candidates(img, {"kind": "fabric"}, en_fazla=4)
         for i, d in enumerate(adaylar):
+            # VARSAYIM: IoU > 0,7 -> aday ilk algılamayla aynı bölge sayılır, yeniden denenmez (aynı sonucu verir; süre).
+            # Gerekçe: büyük örtüşme aynı kumaş bölgesinin küçük varyantıdır; değer örnek kümesiyle ayarlanmadı (ölçülmedi).
             if ilk is not None and getattr(ilk, "mask", None) is not None and ilk.mask.any() and bd._iou(d.mask, ilk.mask) > 0.7:
                 continue
             kayit = {"aday": i + 1, "aciklik": round(float(d.metrics.get("lightness", 0)), 1),
@@ -526,11 +538,14 @@ class Orchestrator:
             hint = {"point": [float(xs.mean() / img.shape[1]), float(ys.mean() / img.shape[0])]}
             ev2, dogru = self._aday_degerlendir(img, design, prof, f"{label} (aday {i + 1})", d, hint)
             kayit["sonuc"] = ("kabul" if ev2["ok"] else "ret: " + str(ev2["neden"])[:120]) + ("" if dogru else " (kararsız)")
+            kayit["kararli"] = bool(dogru)
+            if not ev2["ok"]:
+                kayit["tur"] = ev2.get("tur")
             bilgi["yerel_adaylar"].append(kayit)
-            if dogru:
-                bilgi["sonuc"] = "yerel_aday_kabul" if ev2["ok"] else "yerel_aday_dogru_bolge_ret"
+            if ev2["ok"] and dogru:                     # yalnız KABUL + kararlı aday seçilir; kararlı ret aramayı bitirmez
+                bilgi["sonuc"] = "yerel_aday_kabul"
                 bilgi["secilen"] = {"kaynak": "yerel_aday", "aday": i + 1, "ipucu": hint}
-                self.log(f"{label}: kurtarma — {i + 1}. kumaş adayı doğrulandı ({bilgi['sonuc']}).")
+                self.log(f"{label}: kurtarma — {i + 1}. kumaş adayı kabul edildi ve ölçüm kararlı.")
                 return ev2, bilgi
         # 2) bağımsız görsel kontrol (bağlıysa)
         servis = getattr(self, "gk_servis", None) or gks.KapaliServis()
@@ -543,15 +558,21 @@ class Orchestrator:
             if not ok:
                 bilgi["servis"] = {"durum": "butce", "neden": neden}
                 return None, bilgi
+        res = None
         try:
             res = servis.incele(img, adaylar, prof.oran)
         except Exception as e:                      # tek çağrı; kör yeniden deneme yok
             bilgi["servis"] = {"durum": "hata", "neden": deneme_kayit.temizle(str(e), 200)}
             return None, bilgi
-        if butce is not None:
-            butce.kaydet(getattr(res, "tahmini_usd", 0.0) if res else 0.0)
-        if res is None:
+        finally:
+            # G5a: hata / çözülemeyen yanıt da ÇAĞRIDIR (istek gitmiş, ücret kesilmiş olabilir) -> iş/gün sınırına sayılır.
+            # Gerçek kullanım (usage) yoksa en az tahmini tutar yazılır; 0 $ yazılmaz.
+            if butce is not None:
+                butce.kaydet(gks.harcanan_usd(res, butce.tahmini_usd()))
+        if res is None or res.durum == gks.GECERSIZ:
             bilgi["servis"] = {"durum": "gecersiz_yanit"}
+            if res is not None:
+                bilgi["servis"].update(model=res.model, kullanim=res.kullanim, tahmini_usd=res.tahmini_usd)
             return None, bilgi
         bilgi["servis"] = {"durum": res.durum, "model": res.model, "kumas_kutusu": res.kumas_kutusu, "aday_no": res.aday_no,
                            "gerekce": res.gerekce, "belirsizlik": res.belirsizlik, "kullanim": res.kullanim,
@@ -571,14 +592,18 @@ class Orchestrator:
         kaplama = float((m3 & kutu).sum()) / max(kutu.sum(), 1)
         bilgi["servis"]["maske_kutuda"] = round(icerde, 3)
         bilgi["servis"]["kutu_kaplama"] = round(kaplama, 3)
+        # VARSAYIM: yeni maskenin en az %90'ı önerilen kutuda ve kutunun en az %50'sini kaplamalı. Gerekçe: kutu kumaşın asılı
+        # kısmıdır; maske kutudan belirgin taşarsa (zemin/duvar) ya da kutunun yarısından azını kaplarsa algılama öneriyi
+        # izlememiştir ve baskı yapılmaz. Gerçek servis yanıtıyla ayarlanmadı (gerçek çağrı yok).
         if icerde < 0.9 or kaplama < 0.5:            # yeni maske öneriyle tutarlı değil -> baskı yapılmaz
             bilgi["servis"]["yeniden_algilama"] = "maske önerilen bölgeyle tutarsız"
             return None, bilgi
         ev3, dogru = self._aday_degerlendir(img, design, prof, f"{label} (görsel kontrol önerisi)", d3,
                                             {"box": [x0, y0, x1, y1]})
         bilgi["servis"]["yeniden_algilama"] = ("kabul" if ev3["ok"] else "ret: " + str(ev3["neden"])[:120]) + ("" if dogru else " (kararsız)")
-        if dogru:
-            bilgi["sonuc"] = "servis_onerisi_kabul" if ev3["ok"] else "servis_onerisi_dogru_bolge_ret"
+        bilgi["servis"]["kararli"] = bool(dogru)
+        if ev3["ok"] and dogru:                      # yalnız KABUL + kararlı; ret, ilk tanının yerine geçmez
+            bilgi["sonuc"] = "servis_onerisi_kabul"
             bilgi["secilen"] = {"kaynak": "gorsel_kontrol_onerisi", "kutu": [x0, y0, x1, y1]}
             return ev3, bilgi
         return None, bilgi
@@ -638,6 +663,8 @@ class Orchestrator:
         asl = [x["asili_cm"] for x in [ana] + sonuclar if x["asili_cm"]]
         oynama = (max(asl) - min(asl)) / prof.boy_cm if len(asl) > 1 else 0.0
         karar_degisti = any(x["kabul"] != ana["kabul"] for x in sonuclar)
+        # VARSAYIM: asılı boy ürün boyunun %3'ünden fazla oynarsa ölçüm kararsız. Gerekçe: ±%3 ürün ölçü toleransıyla aynı
+        # pay (CLAUDE.md); kontrol örneklerinde kabul edilen s02'nin varyantları 197/156 cm (≈%20) oynuyordu.
         return {"kararsiz": bool(karar_degisti or oynama > 0.03), "karar_degisti": karar_degisti,
                 "asili_oynama": round(oynama, 3), "varyantlar": sonuclar}
 
@@ -680,7 +707,8 @@ class Orchestrator:
                                         "olcek_farki", "dikey_olcek", "gizli_murekkep", "sorunlar", "uyarilar")}
         tk_info.update({k: info.get(k) for k in ("yayilma_supheli", "yayilma_sol_px", "yayilma_sag_px", "kivrim_kaymasi", "kenar_sigma_px", "yerlesim_donusumu", "dortgen", "kenar_sapmasi", "kumas_disi_baski")})
         tk_info.update({k: info.get(k) for k in ("temas_belirsiz", "birikme_bandi", "yayilma_baslangic_y", "yayilma_temas_asili_cm",
-                                                 "gorunen_murekkep", "temas_cizgisi")})
+                                                 "gorunen_murekkep", "temas_cizgisi",
+                                                 "olcum_payi_gizli_cm", "olcum_payi_murekkep")})     # G5b: ±%0,5 ölçüm payı bandı
         if sinir:
             tk_info["manuel_sinir"] = sinir
         if info["sorunlar"]:
@@ -688,16 +716,18 @@ class Orchestrator:
             msg = " ".join(x["mesaj"] for x in info["sorunlar"])
             _log(f"{label} elendi ({product.HATA_TURLERI.get(tur, tur)}): {msg}")
             extra = {"tam_kumas": tk_info, "algilama": alg}
-            if tur == "sahne_geometri":
+            # Sessiz kararlılık varyantlarında (yalnız kabul/ret + asılı boy özetlenir) tanı ekleri hesaplanmaz: sonuçları
+            # kullanılmıyordu, her varyantta ek algılama/yerleşim maliyeti getiriyordu (G5a, performans).
+            if tur == "sahne_geometri" and not sessiz:
                 # Kararlı ölçüm doğru ölçüm demek değildir: farkın sınır seçiminden mi, sahnedeki kumaştan mı geldiğini ayır.
                 try:
                     sk = sinir_kaniti.olc(img, prof.en_cm, prof.boy_cm, det=det)
                     extra["sinir_araligi"] = {"asili_min": sk["asili_aralik"][0], "asili_max": sk["asili_aralik"][1],
-                                              "kaynak": sk["kaynak"].split(" ")[0]}
+                                              "kaynak": self._sinir_kaynak_kodu(sk)}
                 except Exception:
                     pass
             kars = None
-            if info.get("temas_belirsiz") and info.get("yayilma_baslangic_y"):
+            if info.get("temas_belirsiz") and info.get("yayilma_baslangic_y") and not sessiz:
                 # TANI karşılaştırması: A) genişlemenin başladığı satır temas (eski davranış), B) kumaşın görünen alt kenarı.
                 # İkisi de fiziksel ölçekte; tasarım kırpılmaz, yazı taşınmaz, oran esnetilmez.
                 try:
@@ -719,6 +749,15 @@ class Orchestrator:
         tk_info["algilama"] = alg
         return {"ok": True, "tur": None, "neden": None, "det": det, "lay": lay, "info": info, "tk_info": tk_info,
                 "out": out, "kalite": quality}
+
+    @staticmethod
+    def _sinir_kaynak_kodu(sk) -> str:
+        """Sınır kanıtının türü: placement-engineer'ın ayrı kod alanı (`kaynak_kodu`) varsa o; yoksa eski davranış
+        (serbest metnin ilk sözcüğü). Sıra bağımlılığı olmasın diye ikisi de desteklenir (G5a)."""
+        kod = sk.get("kaynak_kodu")
+        if kod:
+            return str(kod)
+        return str(sk.get("kaynak") or "").split(" ")[0]
 
     def _tani_kaydet(self, job, base, out, rec, prof, kars=None) -> str | None:
         """Kabul EDİLMEMİŞ sahnenin tasarımlı tanı önizlemesi: yalnız onizleme/ altına, adı "_TANI_" içerir, üzerinde
@@ -777,7 +816,7 @@ class Orchestrator:
         Yeni bir iş klasörü açar; kaynak işe ve görsellerine DOKUNMAZ. Sağlayıcı/selector hiç kullanılmaz.
         Kalite kapısı, tam kumaş yerleşimi ve sonuç kaydı generate_photos ile aynı fonksiyonlardan geçer."""
         src = self.report_of(src_job)
-        photos = [dict(p, _yol=os.path.join("sahneler_bos", p["stem"] + ".png")) for p in src.get("fotograflar", []) if p.get("stem")]
+        photos = [dict(p, _yol="sahneler_bos/" + p["stem"] + ".png") for p in src.get("fotograflar", []) if p.get("stem")]
         if elenen_ham:            # elenen sahnelerin KAYITLI HAM görüntüleri (algılama katmanlı görüntü kullanılmaz)
             for e in src.get("elenenler", []):
                 if e.get("ham_dosya"):
@@ -864,19 +903,33 @@ class Orchestrator:
         ust, alt, koseler = pts(ust, 2), pts(alt, 2), pts(koseler, 4)
         if koseler is None and ust is None and alt is None:
             raise ProviderError("Üst/alt çizgisi ya da dört köşe gerekli.")
-        src = self.report_of(src_job)
+        # G5a: bütün doğrulamalar İŞ KLASÖRÜ AÇILMADAN yapılır (geçersiz istekte yarım iş klasörü kalmaz).
+        ust_k, alt_k = ([koseler[0], koseler[1]], [koseler[3], koseler[2]]) if koseler else (ust, alt)
+        if ust_k and alt_k:
+            # çizgiler soldan sağa eşlenir; her iki uçta üst çizgi alt çizginin ÜSTÜNDE (görüntüde daha küçük y) olmalı
+            u, a_ = sorted(ust_k), sorted(alt_k)
+            if not (u[0][1] < a_[0][1] and u[1][1] < a_[1][1]):
+                raise ProviderError("Üst çizgi (kumaşın üst kenarı) alt çizginin (zemine temas) üstünde olmalı."
+                                    + (" Köşe sırası: sol-üst, sağ-üst, sağ-alt, sol-alt." if koseler else ""))
+        # dosya yalnız kaynak işin sahneler_bos/ klasöründen olabilir (kayıtlı ham sahne); başka klasör/üst dizin reddedilir
+        bos_kok = os.path.normpath(os.path.join(src_job, "sahneler_bos"))
+        dosya = str(dosya).replace("\\", "/")                 # raporlarda yol her zaman "/" (Windows'ta da)
         spath = os.path.normpath(os.path.join(src_job, dosya))
-        if not spath.startswith(os.path.normpath(src_job) + os.sep) or not os.path.exists(spath):
-            raise ProviderError("Kayıtlı sahne bulunamadı.")
+        if not spath.startswith(bos_kok + os.sep) or not os.path.isfile(spath):
+            raise ProviderError("Kayıtlı sahne bulunamadı (yalnız işin sahneler_bos/ klasöründeki sahneler kullanılabilir).")
+        img0 = cvio.imread(spath, cv2.IMREAD_COLOR)
+        if img0 is None or img0.size == 0:
+            raise ProviderError("Kayıtlı sahne görsel olarak okunamadı.")
         files = glob.glob(os.path.join(src_job, "tasarim.*"))
         if not files:
             raise ProviderError("Kaynak işte tasarım dosyası yok.")
+        src = self.report_of(src_job)
         prof = self._profile(src)
         src_name = os.path.basename(src_job)
         job = self.new_job(files[0], src.get("kategori", "Düğün"), f"manuel_{src_name.split('_')[0]}", profile=prof)
         rap = self.report_of(job)
         rap.update(islem="manuel_sinir", kaynak_is=src_name, saglayici_cagrisi=0)
-        img = self._upscale(cvio.imread(spath, cv2.IMREAD_COLOR))
+        img = self._upscale(img0)
         H, W = img.shape[:2]
         px = lambda q: (q[0] * W, q[1] * H)
         det = None
@@ -885,7 +938,8 @@ class Orchestrator:
             pm = np.zeros((H, W), np.uint8)
             cv2.fillPoly(pm, [poly.astype(np.int32)], 1)
             oto = bd.detect(img, {"kind": "fabric"})
-            om = cv2.dilate((oto.mask > 0).astype(np.uint8), np.ones((15, 15), np.uint8))
+            g = self._manuel_genisletme_px(H, W)
+            om = cv2.dilate((oto.mask > 0).astype(np.uint8), np.ones((g, g), np.uint8))
             kes = pm & om
             ortusme = float(kes.sum()) / max(float(pm.sum()), 1.0)
             if ortusme < MANUEL_KOSE_ORTUSME:
@@ -930,6 +984,13 @@ class Orchestrator:
         _write_json(os.path.join(job, "rapor.json"), rap)
         self.progress(1.0, "Manuel sınırla yerleştirme bitti (servis çağrısı yok)")
         return {"job": os.path.basename(job), "sonuc": sonuc, "tur": ev["tur"], "neden": ev["neden"]}
+
+    @staticmethod
+    def _manuel_genisletme_px(H: int, W: int) -> int:
+        """Dört köşe modunda otomatik maskenin genişletme çekirdeği (tek sayı, px): kadrajın uzun kenarına oranlı (VARSAYIM,
+        MANUEL_GENISLETME_ORANI). 2400 px kadrajda 15 px (eski sabit değer), 1200 px'te 7 px, 4800 px'te 29 px."""
+        g = max(3, int(round(max(H, W) * MANUEL_GENISLETME_ORANI)))
+        return g if g % 2 else g + 1
 
     def _manuel_inceleme(self, job, rap, prof, src_name, dosya, kayit, neden, ortusme) -> dict:
         """Manuel sınır güvenle uygulanamadı: baskısız inceleme kaydı (foto/ yok, tasarımlı görsel yok)."""
@@ -1006,7 +1067,25 @@ class Orchestrator:
             return cp.composite(scene, design, det, **kw)
         return cp.composite(scene, design, det, mode="tam_kumas", profile=profile, **kw)
 
-    def _video_start(self, blank, design, margin=0.03, profile=None):
+    @staticmethod
+    def _video_tutarlilik(entry: dict | None, info: dict | None = None) -> list[str]:
+        """Video yolları sahneyi GÜNCEL kurallarla yeniden yerleştirir (G5a). Kayıtlı fotoğrafla tutarsızlık riski:
+          * fotoğraf eski K-16 kuralıyla ("temas_cizgisine_kadar" dikey ölçek) yerleştirilmiş -> güncel fiziksel ölçek farklı;
+          * güncel yeniden yerleşim sorun bildiriyor (info["sorunlar"]) -> fotoğrafın kabul koşulları artık sağlanmıyor.
+        Dönüş: kullanıcıya gösterilecek uyarılar (boşsa tutarlı)."""
+        uy = []
+        tk = (entry or {}).get("tam_kumas") or {}
+        if tk.get("dikey_olcek") == "temas_cizgisine_kadar":
+            uy.append("Bu fotoğraf eski kuralla (dikey ölçek temas çizgisine kadar, K-16) yerleştirilmişti; güncel kural fiziksel "
+                      "ölçek kullanır. Videoda tasarım fotoğraftakinden farklı boyda/yerde görünebilir.")
+        sor = (info or {}).get("sorunlar") or []
+        if sor:
+            uy.append("Sahne güncel kurallarla yeniden yerleştirildiğinde sorun bulundu ("
+                      + "; ".join(str(x.get("mesaj", x.get("tur", ""))) for x in sor)[:300]
+                      + "). Videodaki yerleşim kayıtlı fotoğrafla tutarsız olabilir.")
+        return uy
+
+    def _video_start(self, blank, design, margin=0.03, profile=None, entry=None):
         H, W = blank.shape[:2]
         hint = {"kind": "fabric"} if profile is not None else None
         det0 = bd.detect(blank, hint=hint)
@@ -1025,10 +1104,12 @@ class Orchestrator:
         if not det.ok:
             raise ProviderError("Kırpılmış kadrajda afiş bulunamadı: " + "; ".join(det.reject))
         ref, info, model = self._composite_for(blank_c, design, det, profile, return_model=True)
+        uyari = self._video_tutarlilik(entry, info if profile is not None else None)
         f = min(1.0, 1080 / cw)
         send = cv2.resize(ref, None, fx=f, fy=f, interpolation=cv2.INTER_AREA) if f < 1 else ref
         jpg = cv2.imencode(".jpg", send, [cv2.IMWRITE_JPEG_QUALITY, 95])[1].tobytes()
-        return {"blank": blank_c, "ref": ref, "model": model, "size": (cw, ch), "jpg": jpg, "crop": [x0, y0, cw, ch]}
+        return {"blank": blank_c, "ref": ref, "model": model, "size": (cw, ch), "jpg": jpg, "crop": [x0, y0, cw, ch],
+                "uyari": uyari}
 
     def generate_video(self, job: str, photo_name: str) -> dict:
         rap = self.report_of(job)
@@ -1040,7 +1121,11 @@ class Orchestrator:
             raise ProviderError("Boş sahne dosyası bulunamadı.")
         design = self._design(job)
         self.progress(0.02, "Video başlangıç karesi hazırlanıyor")
-        st = self._video_start(blank, design, profile=self._entry_profile(rap, entry))
+        st = self._video_start(blank, design, profile=self._entry_profile(rap, entry), entry=entry)
+        for u in st["uyari"]:            # ÜCRETLİ yol: bu başlangıç karesi sağlayıcıya gider -> kullanıcıya açık uyarı
+            self.log("UYARI (video): " + u)
+        if st["uyari"]:
+            self.progress(0.03, "UYARI: video başlangıç karesi kayıtlı fotoğrafla tutarsız olabilir (ayrıntı kayıtta)")
         vdir = os.path.join(job, "video", entry["stem"])
         os.makedirs(vdir, exist_ok=True)
         sel = self._selector("video")
@@ -1105,6 +1190,8 @@ class Orchestrator:
         shutil.copy(best[0], final)
         res = {"foto": photo_name, "kontrol_gecti": best[1]["ok"], "secilen_deneme": best[2], "nedenler": best[1]["reasons"],
                "servis": best[3], "denemeler": tries, "dosya": f"video/{entry['stem']}/final.mp4"}
+        if st["uyari"]:
+            res["uyari"] = list(st["uyari"])
         rap = self.report_of(job)
         rap.setdefault("videolar", []).append(res)
         _write_json(os.path.join(job, "rapor.json"), rap)
@@ -1128,7 +1215,7 @@ class Orchestrator:
         tries, reasons = [], []
         try:
             self.progress(0.02, "Video başlangıç karesi hazırlanıyor")
-            st = self._video_start(blank, design, margin=0.05, profile=self._entry_profile(rap, entry))
+            st = self._video_start(blank, design, margin=0.05, profile=self._entry_profile(rap, entry), entry=entry)
         except ProviderError as e:
             self.log(f"Kompozit video başlatılamadı: {e}")
             st = None
@@ -1254,7 +1341,7 @@ class Orchestrator:
         tries, reasons, best = [], [], None
         try:
             self.progress(0.02, "Video başlangıç karesi hazırlanıyor")
-            st = self._video_start(blank, design, margin=0.06, profile=self._entry_profile(rap, entry))
+            st = self._video_start(blank, design, margin=0.06, profile=self._entry_profile(rap, entry), entry=entry)
         except ProviderError as e:
             self.log(f"Hareketli video başlatılamadı: {e}")
             st, _ = None, reasons.append(str(e))
@@ -1369,12 +1456,21 @@ class Orchestrator:
             if f < 1.15:
                 return photo
             prof = self._entry_profile(self.report_of(job), entry)
+            eski = self._video_tutarlilik(entry)
+            if eski:                                # eski kuralla yerleştirilmiş fotoğraf: yeniden basmak tutarsız olur
+                self.log("Video kaynağı: " + eski[0] + " Kayıtlı fotoğraf kullanılıyor.")
+                return photo
             det = bd.detect(blank, hint={"kind": "fabric"} if prof is not None else None)
             if not det.ok or not det.mask.any():
                 return photo
             design = self._design(job)
             up = cv2.resize(blank, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC)
-            out, _ = self._composite_for(up, design, det.scaled(f, up.shape), prof)
+            out, info = self._composite_for(up, design, det.scaled(f, up.shape), prof)
+            if prof is not None:
+                uy = self._video_tutarlilik(entry, info)
+                if uy:                              # güncel yerleşim sorunlu: videoda fotoğraftan farklı tasarım olmasın
+                    self.log("Video kaynağı: " + uy[0] + " Kayıtlı fotoğraf kullanılıyor.")
+                    return photo
             out = ribbon_mod.restore(up, out, entry.get("kurdele"))
             self.log(f"Video kaynağı yüksek çözünürlükte hazırlandı ({photo.shape[1]}x{photo.shape[0]} -> {out.shape[1]}x{out.shape[0]}).")
             return out

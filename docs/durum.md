@@ -4,14 +4,63 @@ Bu dosya her aşamanın sonunda güncellenir. Claude ve Codex aynı klasörü ok
 buradan başlayın. Gizli bilgi (anahtar, `ayarlar.json` içeriği, gizli bağlantı, base64 görsel) bu dosyaya yazılmaz.
 Kararların gerekçeleri: `docs/kararlar.md`. Gereksinimler: `CLAUDE.md`.
 
-**Son güncelleme:** 2026-10-13 14:40 (Claude) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
+**Son güncelleme:** 2026-10-14 08:20 (Claude ekibi Tur 1) · **Mevcut aşama:** Aşama 2A + düzlem yerleşim + **çağrı kaydı / elenen
 denemeler / insan değerlendirmesi / kontrollü prompt sürümleri** tamamlandı. Sıradaki: Aşama 2B (6 sahne görevi + açılı
 görünüm) — BAŞLAMADI (kullanıcı onayı bekleniyor). Video aşamasına başlanmadı.
 
 
 ---
 
-## 0. Son iş: Manuel sınır — gerçek tarayıcı doğrulaması ve güvenlik (2026-10-13 14:40)
+## 0. Son iş: Geliştirme ekibi Tur 1 (2026-10-13/14)
+
+Ücretli çağrı yok, yeni üretim yok, ağ yok. Bütün testler **yerel** (Linux bulut; sahte servis/sentetik + kayıtlı ham sahneler);
+**Windows'ta çalıştırılmadı**. Ayrıntılar: `ekip/raporlar/*.md`.
+
+**Ekip yapısı (K-57):** geliştirme işleri tek görevli ajanlara bölündü (detection, placement, pipeline, provider, ui, video,
+test-runner, docs-writer; salt okunur quality-reviewer, architecture-reviewer, visual-inspector). Her dosyanın/testin tek sahibi
+var; değişiklik istekleri kimlikli gelen kutusu mesajlarıyla (`ekip/mesajlar/<ajan>.md`); pano (`ekip/pano.md`) ve git commit
+yalnız koordinatörde. Sahiplik tablosu tek yerde: `ekip/PROTOKOL.md`. Eski `image-engineer` → detection-engineer + placement-engineer.
+
+**Görev sonuçları:**
+- **G1 (quality-reviewer):** cb0ca76..adb1d82 (K-49…K-56) incelemesi — KOŞULLU ONAY; ENGEL yok, 3 HATA (kurtarma döngüsü,
+  video yeniden yerleşimi, bütçe sayımı) G5a'ya. Salt okunur; test çalıştırmadı.
+- **G2 (architecture-reviewer):** 24 bulgu; protokol düzeltildi; 6 madde Tur 2'ye (aşağıda). (Ayrı rapor dosyası yok; panodan.)
+- **G3 (detection-engineer):** 224824 `elenen_01_04` algılama hatası DEĞİL — dosya ham sahne değil, `banner_detect.overlay()`
+  tanı görseli (yeşil maske + mavi kenar); yeşil boya kumaşı "krem değil" yaptığı için %1,3'lük masa örtüsü seçiliyordu. Kod ve
+  kontrol örneği değişmedi. Asıl ret "asılı ≈119 cm" ölçümüydü; ham kayıtlı değil, doğrulanamadı (şüpheli olabilir).
+- **G4 (placement-engineer):** `BIRIKME_BANT_EN_FAZLA` %15 (VARSAYIM) korunur — %10–%18 aralığında hiçbir karar değişmiyor;
+  ilk değişim %19,9'da ve o da yaklaşık (ham olmayan) görsel. Birikme bantları 0,034–0,080, belirsizler (ham) 0,309–0,397.
+  Gerçek birikmeli ham örnek az (3). İş klasörlerindeki `elenen_NN_NN.jpg` ham değil, analiz dışı.
+- **G5a (pipeline-engineer):** kurtarma yalnız kabul+kararlı adayda durur, ilk tanı korunur (K-58); video tutarlılığı (K-60);
+  servis bütçesi hata/bozuk yanıtta da en az tahmini tutarla sayılır; VARSAYIM etiketleri, `MANUEL_GENISLETME_ORANI`,
+  manuel_sinir doğrulaması iş klasörü açılmadan, sessiz varyantta sınır kanıtı atlanır, rapor yolları "/". Yeni test:
+  `tests/test_kurtarma_akisi.py`.
+- **G5b (placement-engineer):** ölçüm payı bandında (≤%0,5 kısa) alt ≈1 cm'deki baskı ölçülüp uyarı yazılıyor (K-59, GEÇİCİ);
+  birikmesiz gizli bölge mesajı artık "biriken kumaş" demiyor; `TAM_BOY_TOL` yorumu düzeltildi; `sinir_kaniti` `is None`
+  denetimi ve `kaynak_kodu` alanı.
+- **G5c (detection-engineer):** `banner_detect.py` eşiklerine VARSAYIM etiketi + kanıt (değerler değişmedi; `ZEMIN_GENISLEME` ve
+  `_zemin_ayir` doluluk payı dar); `tespit_maskeden` delik oranını artık ölçüyor; testte yama geri yükleme try/finally.
+- **G5d (ui-engineer):** "Elenen ham" kutusu varsayılan işaretsiz; `kontrol.py` algılama ret listesini doğru yazıyor (TypeError
+  yerine asıl neden), `main()` koruması. Yeni test: `tests/test_kontrol_kurulum.py`.
+- **G6 (test-runner):** sürüyor. **G7 (docs-writer):** bu güncelleme. **G8:** commit (koordinatör).
+
+### Testler
+Ortam: Linux 6.18 bulut, Python 3.13; **Windows'ta çalıştırılmadı**. Hepsi yerel / sahte servis; gerçek sağlayıcı testi yok.
+`tests/` altındaki **27 test dosyasının 27'si TAMAM** (rc=0). 23'ü test-runner ajanınca (en fazla 4 paralel) çalıştırıldı; ajan oturum
+sınırına takılınca kalan 4'ü (3 video testi + tarayıcı testi) koordinatör tek tek çalıştırdı. Ayrıntı: `ekip/raporlar/test_20261013_tur1.md`.
+
+(test-runner G6 sonuçları gelince yazılacak. Ajanların kendi çalıştırdıkları testler raporlarında.)
+
+**Tur 2 birikimi (bu tura alınmadı):** architecture-reviewer 1, 2, 3, 5, 12, 13 — kurtarma/kutu denetimini banner_detect'e
+taşıma; tk_info sabit listesi ve layout hata kodu; `sade_neden` metin eşleşmesi; video bölümünü ayrı modüle; `pipeline.py` eski
+yerleşim yolu; 9:16 video. Ayrıca: 224824 elenen_01_04'ün ≈119 cm ölçümü (ham yok); %15 eşiği için daha çok gerçek birikmeli ham
+örnek; `_kurtar` aday listesini ilk algılamadan yeniden kullanma; kompozit/hareketli videoda tam kumaş yerleşimi (video-engineer).
+
+**Kullanıcıdan beklenen karar (K-59):** ölçüm payı bandında (kumaş ≤%0,5 kısa) alt ≈1 cm'ye düşen baskı **uyarı** mı kalsın
+(şimdiki), yoksa **ret** (`birikme_cozulemedi`) mi olsun? Ret, kabul edilmiş 005509 s01'i (−%0,15) ölçüm gürültüsüyle
+düşürebilir.
+
+## 0a. Önceki iş: Manuel sınır — gerçek tarayıcı doğrulaması ve güvenlik (2026-10-13 14:40)
 
 **Çözülenler**
 1. **Gerçek tarayıcı etkileşimi** (`tests/test_manuel_sinir_tarayici.py`, Playwright + Chromium, başsız): uygulama geçici
@@ -33,7 +82,7 @@ Yeni: test_manuel_sinir_tarayici (Playwright yoksa ATLANIR), test_manuel_sinir. 
 
 ---
 
-## 0a. Önceki iş: Zemine temas belirsizliği, fiziksel ölçek, manuel sınır (2026-10-13 13:50)
+## 0b. Önceki iş: Zemine temas belirsizliği, fiziksel ölçek, manuel sınır (2026-10-13 13:50)
 
 **Çözülenler**
 1. **Genişleme tek başına temas kanıtı değil** (`compositor.fabric_geometry`, K-54): kumaşın gerçek alt kenarı (etek ucu)
@@ -70,7 +119,7 @@ maskeyle kesişimden korunur; kesişim zayıfsa dörtgenin tamamına basılır.
 
 ---
 
-## 0b. Önceki iş: Farklı ortam kontrolleri, sınır kanıtı, tanı önizlemesi (2026-10-13 07:05)
+## 0c. Önceki iş: Farklı ortam kontrolleri, sınır kanıtı, tanı önizlemesi (2026-10-13 07:05)
 
 **Çözülenler**
 1. **053942 krem duvara taşma** (`banner_detect._yan_kirp`): kumaş ile krem duvar aynı renkte olduğu için maske alt yarıda
@@ -101,7 +150,7 @@ maskeyle kesişimden korunur; kesişim zayıfsa dörtgenin tamamına basılır.
 
 **±%3 kuralı:** `compositor.TAM_BOY_TOL` (K-16, K-17; 2026-10-12, sentetik sahnelerle seçilmiş VARSAYIM). Asılı boy,
 kumaşın görünen eninden ölçeklenip (en 75 cm) ürün boyuyla karşılaştırılır. Uzunsa ≤%3 fark tasarımın dikeyde sıkıştırılmasıyla
-sığdırılır (uyarı), fazlası ret; kısaysa ve birikme yoksa %3'ten fazlası "havada bitiyor" reddi. Gerekçe tasarım
+sığdırılır (uyarı) **(K-54 ile değişti: artık sıkıştırma yok, ölçek her zaman fiziksel; ±%3 yalnız uygunluk kararı)**, fazlası ret; kısaysa ve birikme yoksa %3'ten fazlası "havada bitiyor" reddi. Gerekçe tasarım
 bütünlüğü: tam kumaş modunda tasarım esnetilmez/kırpılmaz; ±%3 tasarımın en/boy oranının bozulabileceği en büyük paydır.
 Gevşetilmedi.
 
@@ -116,7 +165,7 @@ test_sureklilik: hepsi TAMAM. Diğer test dosyaları bu turda çalıştırılmad
 
 ---
 
-## 0c. Önceki iş: İş 054333 kumaş algılama hatası + algılama kurtarma akışı (2026-10-13 06:20)
+## 0d. Önceki iş: İş 054333 kumaş algılama hatası + algılama kurtarma akışı (2026-10-13 06:20)
 
 **Kök neden (genel, bu fotoğrafa özel değil):** kumaş, aynı renkteki krem halıyla tek bölge olarak birleşti → kenar
 temasından skor 0. Soldaki koyu duvar boşluğu da skor 0'dı; eşitlikte listedeki ilk aday (koyu boşluk, açıklık 32) seçildi.
@@ -164,7 +213,7 @@ kabul korunuyor), `test_e2e_mock`, `test_tam_kumas`, `test_deneme_kayit`, `test_
 
 ---
 
-## 0b. Önceki iş: Görsel Kontrol ilk 8 örneklik değerlendirme (2026-10-13)
+## 0e. Önceki iş: Görsel Kontrol ilk 8 örneklik değerlendirme (2026-10-13)
 
 Kullanıcı onayıyla (3. yol): kurulu `visual-inspector` bu bulut oturumunda tanınmadığı için, **visual-inspector
 talimatlarıyla çalışan genel amaçlı alt ajan** kullanıldı (temiz bağlam; program kararı/insan etiketi verilmedi).
@@ -208,7 +257,7 @@ kontrol.py "HER ŞEY TAMAM". Ajan/model çağrısı ve gerçek sağlayıcı test
 
 ---
 
-## 0e. Önceki iş: Görsel Kontrol ajanı değerlendirme düzeni + oran önerisi (2026-10-13)
+## 0g. Önceki iş: Görsel Kontrol ajanı değerlendirme düzeni + oran önerisi (2026-10-13)
 
 Kullanıcı kararı: oran üretimde (prompt + kılavuz) kurulacak; otomatik kırpma/esnetme/gizleme yok; "Şüpheli ölçümde dur"
 açık (K-40). Ücretli üretim yok; **ajan çalıştırılmadı** (çağrı sayısı ve tahmini maliyet `docs/gorsel_kontrol_plani.md` §4).
@@ -239,7 +288,7 @@ yaklaşık görüntü (ham değil). Doğru cevap yok; tablo uyuşma/çelişki g�
 
 ---
 
-## 0d. Önceki iş: gözle inceleme sonrası yanlış retleri azaltma (2026-10-13)
+## 0h. Önceki iş: gözle inceleme sonrası yanlış retleri azaltma (2026-10-13)
 
 Ücretli çağrı yok; prompt değiştirilmedi; eşikler gevşetilmedi; eski iş dosyaları değiştirilmedi (işe yalnız yeni
 `insan_degerlendirme.json` eklendi).
@@ -277,7 +326,7 @@ Gerçek sağlayıcı testi yok.
 
 ---
 
-## 0c. Önceki iş: Codex incelemesindeki iki eksik düzeltildi (2026-10-13)
+## 0i. Önceki iş: Codex incelemesindeki iki eksik düzeltildi (2026-10-13)
 
 Ücretli çağrı yapılmadı; otomatik prompt değişimi ya da iyileştirme döngüsü eklenmedi.
 
@@ -306,7 +355,7 @@ Ayarlar → Harcama koruması → "Son kabulden beri kaç çağrı sonuç vermez
 
 ---
 
-## 0b. Önceki iş: elenen denemeler, çağrı kaydı, tekrar sınırı, kısa prompt adayı (2026-10-13)
+## 0j. Önceki iş: elenen denemeler, çağrı kaydı, tekrar sınırı, kısa prompt adayı (2026-10-13)
 
 **İstek:** iş 20261013-005509'da 14 çağrıdan 2 kabul. Boşa giden tekrarları kaliteyi düşürmeden azaltmak.
 Ücretli çağrı YAPILMADI; eski iş dosyalarına dokunulmadı (analiz kopya üzerinde).
@@ -351,7 +400,7 @@ isteyip istemediği (ücretli, en az 12 çağrı); (3) durma sınırı 5 uygun m
 
 ---
 
-## 0a. Son iş: düzlem yerleşim kuralı ve uygulama akışında doğrulama (2026-10-13)
+## 0k. Önceki iş: düzlem yerleşim kuralı ve uygulama akışında doğrulama (2026-10-13)
 
 **Gereksinim (kullanıcı, 2026-10-13):** öncelik tasarımın bütünlüğü. Tasarım kumaşın her dalgasını izlemez; önden oran ve
 iç düzen korunarak, açılıda tamamına tek perspektifle yerleşir; satır satır kenar ve ışık gradyanı iç geometriyi bozmaz;
@@ -402,7 +451,7 @@ foto/_ozet.jpg, onizleme/01_gizli.jpg, rapor.json). Kaynak iş `isler/20261012-2
 **Windows:** Testler bilgisayarındaki Windows ortamında ÇALIŞTIRILMADI — bu oturumda bilgisayarda komut çalıştırma aracı
 yok. Yukarıdaki sonuçların hepsi bulut çalışma alanına aittir.
 
-## 0. Son iş: baskıdaki kopmaların kök nedeni ve düzeltmesi (2026-10-12 gece)
+## 0l. Önceki iş: baskıdaki kopmaların kök nedeni ve düzeltmesi (2026-10-12 gece)
 
 **Gözlem (kullanıcı + Codex):** iş `isler/20261012-224824_20261012-224717_design`; 02'de "Candy's" y kuyruğu ve BABY SHOWER
 üstlerinde, 01'de WELCOME, ayıcık ve alt BABY'de yatay kopmalar. Kaynak PNG'de yok.

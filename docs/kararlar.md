@@ -216,7 +216,7 @@ kurdele kumaş kenarını örterse o bölgedeki çentik de yumuşatılarak izlen
 `ORAN_TOLERANSI` %1 (PNG ↔ kumaş), `TAM_BOY_TOL` %3 (sahnede görünen boy ↔ ürün boyu), `OLCUM_PAYI` %0,5, `GIZLI_EN_FAZLA`
 %25, `SPREAD_FRAC` %4, `MUREKKEP_ESIK` %0,1. Sentetik sahnelerle seçildi; gerçek sahnelerle ayarlanmadı.
 
-**K-16 · 2026-10-12 · Dikey ölçek: kumaş sahnede kısa görünürse tasarım SIKIŞTIRILMAZ.**
+**K-16 · 2026-10-12 · Dikey ölçek: kumaş sahnede kısa görünürse tasarım SIKIŞTIRILMAZ.** **[K-54 ile yerine geçildi]**
 Bağımsız inceleme (quality-reviewer B1) sonrası. Asılı boy ürün boyundan kısa ise ölçek fizikseldir, görünmeyen alt kısım
 gizli bölge sayılır ve mürekkep denetimine girer; %3'ten fazla kısa ve birikme yoksa sahne "havada bitiyor" diye reddedilir.
 Ürün boyundan en fazla %3 uzun ise tasarım görünen boya sığdırılır ve bu kullanıcıya UYARI olarak yazılır (sessiz değil);
@@ -326,3 +326,31 @@ Otomatik temas/sınır çözülemezse kullanıcı kayıtlı aynı sahnede üst/a
 Dörtgenin tamamına basmak kurdeleleri ve önündeki nesneleri örter. Bölge = dörtgen ∩ otomatik kumaş maskesi; örtüşme
 %85'in altındaysa sonuç `manuel_maske_zayif` (inceleme, baskısız). İşaret çizgileri yalnız arayüz katmanındadır.
 
+**K-57 · 2026-10-13 · Geliştirme ekibi: tek görevli ajanlar, her dosyanın tek sahibi.**
+Geliştirme işleri görev başına tek ajana verilir (detection, placement, pipeline, provider, ui, video, test-runner, docs-writer;
+salt okunur quality/architecture-reviewer, visual-inspector). Her dosyanın ve testin TEK sahibi vardır; sahibi olmayan düzenlemez,
+isteğini sahibin gelen kutusuna kimlikli mesajla (`M-<gönderen>-<n>`, ÖNEM: ENGEL/HATA/ÖNERİ/BİLGİ) yazar. Görev panosunu
+(`ekip/pano.md`) yalnız koordinatör günceller; git commit'i yalnız koordinatör yapar. Eski `image-engineer` rolü
+detection-engineer + placement-engineer olarak ayrıldı; orchestrator pipeline-engineer'ındır. Ayrıntı ve sahiplik tablosu:
+`ekip/PROTOKOL.md` (tek kaynak). Neden: eşzamanlı yazma kaybı ve sahipsiz değişiklikler. Bu ajanlar uygulamanın parçası
+değildir (K-50).
+
+**K-58 · 2026-10-13 · Kurtarma yalnız kabul edilen VE kararlı adayda durur; kararlı ret ilk tanının yerine geçmez.**
+`orchestrator._kurtar` yerel adaylarda ve servis önerisinde yalnız `ok` + kararlı adayda döner; kararlı/kararsız retler
+kayda (`yerel_adaylar`, `servis`) yazılır ve arama sürer. Hiçbiri kabul edilmezse sonuç `dogrulanamadi` ve ilk değerlendirmenin
+tanısı (tür/neden/tanı görseli) korunur; `*_dogru_bolge_ret` sonuç kodları artık üretilmez. Neden: K-52 "kararlı ≠ doğru";
+yanlış adayın kararlı reddi doğru adayın denenmesini engelliyor ve ilk tanının yerine geçiyordu (quality-reviewer G1 HATA,
+pipeline-engineer G5a). Regresyon: `tests/test_kurtarma_akisi.py`.
+
+**K-59 · 2026-10-13 · GEÇİCİ — Ölçüm payı bandında alt ≈1 cm'deki baskı ret değil uyarıdır (kullanıcı kararı bekleniyor).**
+Kumaş ürün boyundan en fazla %0,5 (`OLCUM_PAYI`) kısa ölçülürse karar değişmez (ret yok), ama fiziksel ölçekte ≈1 cm temas
+çizgisinin altına düşer: `gorunen_murekkep` gerçek görünen orandan hesaplanır, o şeritteki baskı ölçülür (`olcum_payi_gizli_cm`,
+`olcum_payi_murekkep`) ve eşik üstündeyse UYARI yazılır ("ölçüm payı içinde ... ret değil, gözle kontrol edin"). Neden ret değil:
+fark ölçüm hassasiyeti içinde; kabul edilmiş 005509 s01 (−%0,15) bu bantta, ret onu yalnız ölçüm gürültüsüyle düşürebilirdi.
+Seçenek: ret (`birikme_cozulemedi`). Kaynak: placement-engineer G5b; test_tam_kumas bölüm 8. Kullanıcı karar verince güncellenecek.
+
+**K-60 · 2026-10-13 · Video, fotoğrafla tutarsız yeniden yerleşime dayanmaz.**
+Kayıt eski K-16 kuralıyla yerleşmişse (`dikey_olcek == "temas_cizgisine_kadar"`) ya da yeniden yerleşimde sorun çıkarsa:
+ücretsiz kamera videosu yeniden basmaz, **kayıtlı fotoğrafı** kullanır (günlükte neden yazılır); ücretli video yolunda çağrı
+engellenmez ama UYARI günlüğe, ilerleme metnine ve rapor.json video kaydına (`uyari`) yazılır. Açık: kompozit/hareketli videoda
+(`video_composite.py`, `video_track.py`) tasarım tam kumaş modu olmadan basılıyor — video-engineer'a iletildi (pipeline-engineer G5a).

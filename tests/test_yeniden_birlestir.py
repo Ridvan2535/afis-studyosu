@@ -107,7 +107,7 @@ for p_new, p_src in zip(nr["fotograflar"], src_rap["fotograflar"]):
     assert im.shape[0] == im.shape[1], im.shape
     assert p_new["yerlesim_modu"] == "tam_kumas" and p_new["servis"] == "kayitli_sahne" and p_new["kurdele"] == "#E8B4BC"
     assert p_new["kaynak"] == {"is": os.path.basename(src), "stem": p_src["stem"], "foto": p_src["ad"], "servis": p_src["servis"],
-                            "dosya": os.path.join("sahneler_bos", p_src["stem"] + ".png"), "onceki_karar": "kabul"}
+                            "dosya": "sahneler_bos/" + p_src["stem"] + ".png", "onceki_karar": "kabul"}   # raporda yol her zaman "/"
     for k in ("asili_cm", "gizli_cm", "px_per_cm", "birikme"):
         assert p_new["tam_kumas"][k] == p_src["tam_kumas"][k], (k, p_new["tam_kumas"][k], p_src["tam_kumas"][k])
     assert p_new["tam_kumas"]["kivrim_kaymasi"] == 0.0

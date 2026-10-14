@@ -135,5 +135,11 @@ tools = [t.strip() for t in ad.split("tools:")[1].split("\n")[0].split(",")]
 assert set(tools) <= {"Read", "Glob"}, tools
 assert "cevaplar_GIZLI" in ad and "Santimetre YAZMA" in ad and "reddetmez" in ad
 assert "hafif yan açı" in ad.lower() and "tek başına sorun DEĞİLDİR" in ad, "hafif yan açı ret nedeni olmamalı"
-assert ad == open(os.path.join(ROOT, "ajanlar_kurulum", "visual-inspector.md"), encoding="utf-8").read(), "kurulum kopyası güncel değil"
+# Kurulum kopyası (ajanlar_kurulum/, koordinatörün) varsa tanımla aynı olmalı; koordinatör kopyayı kaldırdıysa denetlenecek
+# kopya yoktur (G5a: 2026-10-13 çalışma kopyasında ajanlar_kurulum/visual-inspector.md silinmiş durumda).
+kopya = os.path.join(ROOT, "ajanlar_kurulum", "visual-inspector.md")
+if os.path.exists(kopya):
+    assert ad == open(kopya, encoding="utf-8").read(), "kurulum kopyası güncel değil"
+else:
+    print("not: ajanlar_kurulum/visual-inspector.md yok; kopya eşitliği denetlenmedi")
 print("test_gorsel_kontrol: TAMAM")

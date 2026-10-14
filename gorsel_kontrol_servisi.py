@@ -35,7 +35,8 @@ Resmî belgelerden DOĞRULANAN (2026-10-13, ağdan okundu; gerçek çağrı DEĞ
 DOĞRULANMAMIŞ (gerçek çağrı yapılmadı; kesin bilgi değildir):
   * Çağrı başına maliyet: TAHMİN. 1024 px sahne (ceil(1024/28)^2 = 1.369 jeton) + 512 px aday görseli (361) + istem metni
     (ölçülmedi, ~1.500 varsayıldı) ≈ 3.300 girdi, ≤ 600 çıktı -> ≈ 0,013 $. Bütçe sayacı gerçek çağrıda usage alanından
-    hesaplar; tahmin yalnız "izin var mı" ön kontrolünde kullanılır.
+    hesaplar; tahmin "izin var mı" ön kontrolünde ve kullanım bilinmeyen çağrılarda (istisna, yanıt yok) kullanılır:
+    hata/çözülemeyen yanıt da çağrı sayılır, en az tahmini tutarla (G5a; orchestrator._kurtar `finally`).
   * Modelin bu istemle geçerli JSON döndürdüğü, kutu önerisinin doğruluğu, yanıt süresi: hiç denenmedi.
 Anahtar ve base64 görsel hiçbir kayda/rapora yazılmaz.
 """
@@ -57,6 +58,7 @@ VARSAYILAN_MODEL = "claude-sonnet-5-5"
 FIYAT_USD_M = {"claude-sonnet-5-5": (2.0, 10.0), "claude-opus-5-5": (4.0, 20.0), "claude-haiku-5-5": (0.10, 0.50)}
 TAHMINI_GIRDI, TAHMINI_CIKTI = 3300, 600
 KULLANIM_DOSYASI = "gorsel_kontrol_kullanim.json"      # yalnız sayaçlar; anahtar yok
+GECERSIZ = "gecersiz_yanit"     # HTTP 200 geldi ama model metni geçerli JSON değil: kullanım bilgisi yine döner (bütçe sayımı)
 
 ISTEM = (
     "Bir etkinlik sahnesi fotoğrafında stand üzerinde asılı BOŞ krem/beyaz kumaş afiş aranıyor. Ürün oranı (en/boy) {oran:.3f}. "
@@ -96,8 +98,15 @@ class SahteServis:
         self.cagri = 0
 
     def incele(self, img, adaylar, oran):
+        """Yanıt öğesi: dict -> Sonuc; Exception örneği -> fırlatılır (servis hatası); str -> ham model metni gibi
+        çözülür (ClaudeServis ile aynı yol: çözülemezse durum=GECERSIZ, kullanım bilgisiyle)."""
         self.cagri += 1
         y = self.yanitlar.pop(0) if self.yanitlar else None
+        if isinstance(y, BaseException):
+            raise y
+        if isinstance(y, str):
+            return _yanit_isle({"content": [{"type": "text", "text": y}],
+                                "usage": {"input_tokens": TAHMINI_GIRDI, "output_tokens": 100}}, "sahte")
         return Sonuc(**y, model="sahte", tahmini_usd=0.0) if y else None
 
 
@@ -146,12 +155,41 @@ class ClaudeServis:
                           headers={"x-api-key": self._key, "anthropic-version": API_SURUM, "content-type": "application/json"})
         if r.status_code != 200:
             raise RuntimeError(f"görsel kontrol servisi HTTP {r.status_code}")          # gövde (olası anahtar yankısı) yazılmaz
-        j = r.json()
-        metin = "".join(c.get("text", "") for c in j.get("content", []) if c.get("type") == "text")
-        u = j.get("usage") or {}
-        gi, ci = FIYAT_USD_M.get(self.model, (4.0, 20.0))
-        usd = (u.get("input_tokens", 0) * gi + u.get("output_tokens", 0) * ci) / 1e6
-        return yanit_coz(metin, model=self.model, kullanim={k: u.get(k) for k in ("input_tokens", "output_tokens")}, usd=usd)
+        try:
+            j = r.json()
+        except ValueError:
+            raise RuntimeError("görsel kontrol servisi yanıtı JSON değil")
+        return _yanit_isle(j, self.model)
+
+
+def _yanit_isle(j: dict, model: str) -> Sonuc:
+    """Messages API yanıt gövdesinden Sonuc. Model metni çözülemese de kullanım (usage) ve tutar DÖNER (durum=GECERSIZ):
+    çağrı yapıldı, ücret kesildi; bütçe bunu saymalı (G5a)."""
+    j = j if isinstance(j, dict) else {}
+    metin = "".join(c.get("text", "") for c in (j.get("content") or []) if isinstance(c, dict) and c.get("type") == "text")
+    u = j.get("usage") or {}
+    kullanim = {k: u.get(k) for k in ("input_tokens", "output_tokens")}
+    gi, ci = FIYAT_USD_M.get(model, (4.0, 20.0))
+    usd = ((u.get("input_tokens") or 0) * gi + (u.get("output_tokens") or 0) * ci) / 1e6
+    res = yanit_coz(metin, model=model, kullanim=kullanim, usd=usd)
+    if res is None:
+        res = Sonuc(durum=GECERSIZ, model=model, kullanim=kullanim, tahmini_usd=round(usd, 5))
+    return res
+
+
+def tahmini_cagri_usd(model: str) -> float:
+    """Bir çağrının TAHMİNİ tutarı (gerçek kullanım bilinmiyorsa). Bkz. modül başı: tahmin, ölçüm değil."""
+    gi, ci = FIYAT_USD_M.get(model, (4.0, 20.0))
+    return (TAHMINI_GIRDI * gi + TAHMINI_CIKTI * ci) / 1e6
+
+
+def harcanan_usd(res, tahmin: float) -> float:
+    """Bütçeye yazılacak tutar: gerçek kullanım (usage jetonları) varsa ondan hesaplanan tutar; yoksa (istisna, yanıt yok,
+    kullanım alanı boş) EN AZ tahmini tutar. Çağrı hiçbir durumda 0 $ sayılmaz."""
+    k = getattr(res, "kullanim", None) or {}
+    if res is not None and (k.get("input_tokens") or k.get("output_tokens")):
+        return float(getattr(res, "tahmini_usd", 0.0) or 0.0)
+    return float(tahmin)
 
 
 def yanit_coz(metin: str, model=None, kullanim=None, usd=0.0) -> Sonuc | None:
@@ -205,13 +243,14 @@ class Butce:
         if self.is_cagri >= en_fazla:
             return False, f"iş başına görsel kontrol sınırı ({en_fazla}) doldu"
         tavan = float(getattr(self.s, "gorsel_kontrol_gunluk_tavan_usd", 0.5) or 0)
-        model = getattr(self.s, "gorsel_kontrol_modeli", VARSAYILAN_MODEL)
-        gi, ci = FIYAT_USD_M.get(model, (4.0, 20.0))
-        tahmin = (TAHMINI_GIRDI * gi + TAHMINI_CIKTI * ci) / 1e6
+        tahmin = self.tahmini_usd()
         bugun = self._oku().get(date.today().isoformat(), {"usd": 0.0})
         if bugun["usd"] + tahmin > tavan:
             return False, f"günlük görsel kontrol tavanı ({tavan:.2f} $) aşılacaktı"
         return True, ""
+
+    def tahmini_usd(self) -> float:
+        return tahmini_cagri_usd(getattr(self.s, "gorsel_kontrol_modeli", VARSAYILAN_MODEL))
 
     def kaydet(self, usd: float):
         self.is_cagri += 1

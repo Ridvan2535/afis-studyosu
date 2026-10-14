@@ -9,6 +9,9 @@ düzelt) -> Uygula -> yeni sonuç otomatik açılır -> foto kartını büyüt. 
   2. Yeni sonuç ayrı işte; kaynak iş klasörü bayt bayt değişmez.
   3. Ürün çıktısında (foto/*.jpg) işaret çizgisi yok ve tanı yazıları yok: tasarım alanı dışındaki pikseller sahneyle aynı.
   4. Dört köşe modunda köşeler kumaşla örtüşmüyorsa baskı yapılmaz, açık uyarı gösterilir, foto/ boş kalır.
+  5. "Elenen ham görüntüleri de dene" kutusu (ham görüntüsü olan işte görünür) varsayılan İŞARETSİZ; işaretsizken
+     /api/yeniden_birlestir gövdesinde elenen_ham false, işaretlenince true gider (istek tarayıcıda yakalanır,
+     sunucuya ulaşmaz: kaynak iş değişmez, yeni üretim yok).
 Playwright yoksa test ATLANIR (Windows kurulumunda gerekmez). Çalıştır: python tests/test_manuel_sinir_tarayici.py
 """
 import hashlib
@@ -97,6 +100,39 @@ def tikla(page, fx, fy):
     return b
 
 
+def elenen_ham_kutusu(br, base):
+    page = br.new_page(viewport={"width": 1100, "height": 900})
+    giden = []
+
+    def yakala(route):
+        giden.append(json.loads(route.request.post_data))
+        route.fulfill(status=200, content_type="application/json", body='{"ok": true}')
+    page.route("**/api/yeniden_birlestir", yakala)
+    page.goto(base)
+    page.wait_for_function("document.querySelector('#jobSel') && document.querySelector('#jobSel').options.length > 0")
+    page.select_option("#jobSel", KAYNAK_IS)
+    page.wait_for_selector("#elenenHam", state="visible", timeout=20000)
+    assert page.is_visible("#btnRecomp"), "yeniden birleştir düğmesi görünmüyor"
+    assert not page.is_checked("#elenenHam"), "'elenen ham' kutusu varsayılan olarak işaretli"
+    ekran(page, "0_elenen_ham_kutusu.png")
+    page.click("#btnRecomp")
+    for _ in range(40):
+        if giden:
+            break
+        page.wait_for_timeout(100)
+    assert giden and giden[-1].get("elenen_ham") is False, f"işaretsiz kutuyla gövde: {giden}"
+    page.check("#elenenHam")
+    page.click("#btnRecomp")
+    for _ in range(40):
+        if len(giden) >= 2:
+            break
+        page.wait_for_timeout(100)
+    assert len(giden) >= 2 and giden[-1].get("elenen_ham") is True, f"işaretli kutuyla gövde: {giden}"
+    assert giden[-1].get("job") == KAYNAK_IS, giden[-1]
+    page.close()
+    print("elenen ham kutusu: varsayılan işaretsiz; gönderilen gövdeler", giden)
+
+
 def calistir():
     tdir = tempfile.mkdtemp(prefix="manuel_tarayici_")
     app_dir, src = kur(tdir)
@@ -116,6 +152,7 @@ def calistir():
                 time.sleep(0.3)
         with sync_playwright() as p:
             br = p.chromium.launch()
+            elenen_ham_kutusu(br, base)                       # 5) önce: kaynak iş henüz el değmemişken
             sonuc = {}
             for genislik in (1280, 700):                       # iki farklı küçültme
                 page = br.new_page(viewport={"width": genislik, "height": 900})

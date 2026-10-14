@@ -51,6 +51,8 @@ def hata_imzasi(tur: str | None, neden: str | None) -> str:
 KESIN_ORAN_SAPMA = 0.30        # layout.ASPECT_RATIO_TOL ile aynı: afiş biçimi bu kadar farklıysa "çok geniş/dar" (bağımsız kaba sınır)
 YAN_TASMA_DUSUK_GUVEN = 0.04   # VARSAYIM: kenar satırlarının %4'ünden fazlası doğrudan taşıyorsa maske güvenilir değil
 BOY_TOL = 0.03                 # compositor TAM_BOY_TOL ile aynı (±%3)
+# sinir_araligi.kaynak "ölçüm sınır seçimine bağlı" değerleri: eski kayıtlar metinden "sınır", G5b sonrası kod "sinir"
+SINIR_KODLARI = ("sınır", "sinir")
 INSAN_ELENEN_KARARLARI = ("kullanilabilir", "gercekten_hatali")
 
 
@@ -96,7 +98,7 @@ def kontrol_sonucu(rec: dict, urun_orani: float, boy_cm: float | None = None) ->
         if ub >= 0.01 and a and abs(a / boy - 1) - ub < BOY_TOL:
             dusuk.append(f"Üstte maskeye girmemiş kumaş bandı var (boyun %{ub * 100:.0f}'i); dahil edilirse karar değişebilir.")
     sa = rec.get("sinir_araligi") or {}
-    if sa.get("kaynak") == "sınır":
+    if sa.get("kaynak") in SINIR_KODLARI:
         dusuk.append(f"Makul sınır seçimlerine göre asılı boy {sa['asili_min']:.0f}–{sa['asili_max']:.0f} cm; bazı seçimler "
                      f"±%{BOY_TOL * 100:.0f} kabul aralığına giriyor. Sonuç sınırın nereden alındığına bağlı.")
     guven = "dusuk" if dusuk else ("bilinmiyor" if alg is None and not kr else "yuksek")
@@ -142,14 +144,14 @@ def siniflandir(rec: dict, urun_orani: float, boy_cm: float | None = None) -> di
 
 def sade_neden(rec: dict, boy_cm: float | None = None) -> str:
     """Arayüz için sade Türkçe tek cümle. Santimetreler 'tahmini' olarak gösterilir. Ölçüm sınır seçimine bağlıysa
-    (sinir_araligi.kaynak == "sınır") tek bir santimetre kesinmiş gibi gösterilmez."""
+    (sinir_araligi.kaynak "sınır" / "sinir") tek bir santimetre kesinmiş gibi gösterilmez."""
     if rec.get("tur") == "manuel_maske_zayif":
         return "Verdiğin köşeler kumaşla güvenle eşleşmedi; kurdeleleri örtmemek için baskı yapılmadı. Köşeleri yeniden koy ya da üst/alt çizgi modunu kullan."
     if rec.get("tur") == "temas_belirsiz":
         return ("Kumaşın zemine nerede değdiği kesin değil; program yazıları otomatik gizlemedi. Sahne incelemeye bırakıldı "
                 "(manuel sınırla düzeltilebilir).")
     sa = rec.get("sinir_araligi") or {}
-    if sa.get("kaynak") == "sınır":
+    if sa.get("kaynak") in SINIR_KODLARI:
         return (f"Kumaşın boyu kesin ölçülemedi: sınırın nereden alındığına göre {sa['asili_min']:.0f}–{sa['asili_max']:.0f} cm. "
                 "Sahne kullanılmadı; gözle inceleme gerekli.")
     return _sade_neden(rec, boy_cm)

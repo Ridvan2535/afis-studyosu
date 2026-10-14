@@ -212,6 +212,49 @@ for k in (0.98, 1.02):
         assert not any("dikeyde" in w and "sıkıştı" in w for w in inf["uyarilar"]), inf
     print(f"asılı/ürün {k}: dikey ölçek {inf['dikey_olcek']}, olcek_farki {inf['olcek_farki']}, uyarı: {inf['uyarilar'][:1]}")
 
+# ---------------------------------------------------------------- 8: ölçüm payı bandı ve birikmesiz gizli bölge metni (G5b)
+# (a) |fark| ≤ OLCUM_PAYI (≈1 cm kısa): karar değişmez (ret yok, v_gizli 1.0), AMA fiziksel ölçekte en alttaki ≈1 cm temas
+#     çizgisinin altına düşer -> görünen mürekkep GERÇEK orandan (<1) raporlanır, bu banttaki baskı ölçülür ve uyarı yazılır.
+#     (Eski kod gorunen_murekkep=1.0 yazıp bu bandı hiç denetlemiyordu.)
+alt_serit = np.ones((DH, DW, 3), np.float32)
+alt_serit[int(0.9925 * DH):] = (0.2, 0.3, 0.7)                      # yalnız en alttaki ≈1,5 cm mürekkepli
+sc, tt = mp.square_scene(1536, PROF.oran / 0.997, "dokunan", seed=4)
+dd = bd.detect(sc, hint={"kind": "fabric"})
+_, inf = cp.composite(sc, alt_serit, dd, mode="tam_kumas", profile=PROF)
+assert -cp.OLCUM_PAYI <= inf["olcek_farki"] < 0, inf["olcek_farki"]
+assert inf["sorunlar"] == [] and inf["v_gizli"] == 1.0, inf
+assert inf["gorunen_murekkep"] < 0.95, inf["gorunen_murekkep"]
+assert inf["olcum_payi_gizli_cm"] > 0.3 and inf["olcum_payi_murekkep"] > cp.MUREKKEP_ESIK, inf
+assert any("ölçüm payı" in w for w in inf["uyarilar"]), inf["uyarilar"]
+print(f"ölçüm payı bandı: fark {inf['olcek_farki']}, gizli ≈{inf['olcum_payi_gizli_cm']} cm, görünen mürekkep "
+      f"{inf['gorunen_murekkep']} -> uyarı, ret yok")
+# aynı sahne, alt kenarı boş tasarım: uyarı yok, görünen mürekkep 1.0
+_, inf0 = cp.composite(sc, make_design({"merkez"})[0], dd, mode="tam_kumas", profile=PROF)
+assert inf0["sorunlar"] == [] and inf0["gorunen_murekkep"] == 1.0 and not any("ölçüm payı" in w for w in inf0["uyarilar"]), inf0
+# (b) birikmesiz %2 kısa kumaş: gizli bölgede baskı -> tür yine birikme_cozulemedi, ama metin "zeminde biriken" DEMEZ
+sc, tt = mp.square_scene(1536, PROF.oran / 0.98, "dokunan", seed=4)
+dd = bd.detect(sc, hint={"kind": "fabric"})
+_, inf = cp.composite(sc, band, dd, mode="tam_kumas", profile=PROF)
+assert not inf["birikme"] and [s["tur"] for s in inf["sorunlar"]] == ["birikme_cozulemedi"], inf
+msg = inf["sorunlar"][0]["mesaj"]
+assert "birik" not in msg.replace("birikme görünmüyor", "") and "görünen alt kenar" in msg, msg
+_, inf = cp.composite(sc, make_design({"merkez"})[0], dd, mode="tam_kumas", profile=PROF)
+assert inf["sorunlar"] == [] and not any("zeminde birik" in w for w in inf["uyarilar"]), inf["uyarilar"]
+print("birikmesiz kısa kumaş: tür birikme_cozulemedi, metin:", msg[:80], "...")
+
+# ---------------------------------------------------------------- 9: sinir_kaniti kod alanı ve 0 değeri (G5b)
+import sinir_kaniti as sk       # noqa: E402
+for kind, kod in (("dokunan", "uygun"), ("uzun", "geometri")):
+    sc, _ = mp.square_scene(1536, PROF.oran, kind, seed=3)
+    r = sk.olc(sc, 75, 200)
+    assert r["kaynak_kodu"] == kod and r["kaynak"].startswith(kod), (kind, r["kaynak_kodu"], r["kaynak"])
+rec0 = {"tam_kumas": {"asili_cm": 140.0, "temas_belirsiz": True},
+        "temas_karsilastirma": {"yayilma": {"asili_cm": 140.0, "gorunen_murekkep": 0.0}, "etek_ucu": {"asili_cm": 200.0}}}
+assert "%100'i gizlenir" in sk.kalan_sorunlar(rec0)[0], sk.kalan_sorunlar(rec0)[0]   # eski `or 1` burada %0 yazıyordu
+rec1 = {"tam_kumas": {"asili_cm": 190.0}, "sinir_araligi": {"asili_min": 185, "asili_max": 199, "kaynak": "sinir"}}
+assert any("Sınır seçimine göre" in s for s in sk.kalan_sorunlar(rec1)), sk.kalan_sorunlar(rec1)
+print("sinir_kaniti: kaynak_kodu uygun/geometri; görünen mürekkep 0 -> %100 gizli yazılır")
+
 # profil zorunlu, bilinmeyen mod reddedilir
 for kw in ({"mode": "tam_kumas"}, {"mode": "baska", "profile": PROF}):
     try:

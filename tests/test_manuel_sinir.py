@@ -5,6 +5,8 @@
      kabul edilmez (sahne_kivrim), foto/ boş.
   3. Köşeler kumaşla örtüşmüyor (duvar): dörtgene otomatik baskı YOK -> manuel_maske_zayif, foto/ boş, açık uyarı.
   4. Kaynak iş klasörü bayt bayt değişmez; her sonuç ayrı yeni işte.
+  5. G5a olumsuz durumlar: görsel olmayan dosya, sahneler_bos/ dışındaki dosya (tasarım görseli dahil), üst dizine kaçış,
+     üst çizgi alt çizginin altında, köşe sırası ters -> ProviderError ve HİÇ iş klasörü açılmaz (yarım iş kalmaz).
 """
 import hashlib
 import json
@@ -41,6 +43,8 @@ def kaynak(t, kenar_murekkep=False):
     if kenar_murekkep:
         rgba[100:1900, 10:40] = (30, 30, 200, 255)
     cv2.imwrite(os.path.join(src, "tasarim.png"), rgba)
+    with open(os.path.join(src, "sahneler_bos", "bozuk.jpg"), "w", encoding="utf-8") as f:
+        f.write("bu bir görsel değil")
     json.dump({"urun_profili": {"olcu_id": "75x200"}}, open(os.path.join(src, "rapor.json"), "w"))
     return src
 
@@ -79,6 +83,31 @@ with tempfile.TemporaryDirectory() as t:
     e = json.load(open(os.path.join(j3, "rapor.json"), encoding="utf-8"))["elenenler"][0]
     assert "baskı yapılmadı" in e["sade_neden"] and e["siniflama"]["durum"] == "inceleme"
     print("3) köşeler duvarda:", e["sade_neden"])
+
+    # 5) olumsuz durumlar: doğrulama iş klasörü açılmadan yapılır
+    from providers import ProviderError       # noqa: E402
+    isler_once = sorted(os.listdir(orch.JOBS_DIR))
+    olumsuz = [("görsel olmayan dosya", "sahneler_bos/bozuk.jpg", dict(koseler=KUMAS), "görsel olarak okunamadı"),
+               ("sahneler_bos dışı (tasarım)", "tasarim.png", dict(koseler=KUMAS), "sahneler_bos"),
+               ("üst dizine kaçış", "sahneler_bos/../tasarim.png", dict(koseler=KUMAS), "sahneler_bos"),
+               ("var olmayan dosya", "sahneler_bos/yok.jpg", dict(koseler=KUMAS), "bulunamadı"),
+               ("üst çizgi altta", "sahneler_bos/ham.jpg", dict(ust=[[0.2, 0.9], [0.5, 0.9]], alt=[[0.2, 0.2], [0.5, 0.2]]),
+                "üstünde olmalı"),
+               ("çizgiler bir uçta kesişiyor", "sahneler_bos/ham.jpg", dict(ust=[[0.2, 0.1], [0.5, 0.7]], alt=[[0.2, 0.9], [0.5, 0.6]]),
+                "üstünde olmalı"),
+               ("köşe sırası ters", "sahneler_bos/ham.jpg", dict(koseler=[KUMAS[3], KUMAS[2], KUMAS[1], KUMAS[0]]), "Köşe sırası")]
+    for ad, dosya, kw, beklenen in olumsuz:
+        try:
+            O.manuel_sinir(src, dosya, **kw)
+            raise AssertionError(f"{ad}: hata verilmedi")
+        except ProviderError as e:
+            assert beklenen in str(e), (ad, str(e))
+        assert sorted(os.listdir(orch.JOBS_DIR)) == isler_once, f"{ad}: yarım iş klasörü açıldı"
+    print(f"5) {len(olumsuz)} olumsuz durum: hepsi reddedildi, iş klasörü açılmadı")
+    # Windows ters bölüsüyle verilen yol da kabul edilir; raporda yol "/" ile yazılır
+    r4 = O.manuel_sinir(src, "sahneler_bos\\ham.jpg", koseler=KUMAS)
+    k4 = json.load(open(os.path.join(orch.JOBS_DIR, r4["job"], "rapor.json"), encoding="utf-8"))["fotograflar"][0]["kaynak"]
+    assert r4["sonuc"] == "kabul" and k4["dosya"] == "sahneler_bos/ham.jpg", (r4, k4)
 
     assert md5_klasor(src) == once and md5_klasor(src2) == once2, "kaynak iş değişti"
     assert len({r1["job"], r2["job"], r3["job"]}) == 3

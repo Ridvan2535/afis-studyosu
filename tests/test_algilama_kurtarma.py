@@ -6,6 +6,7 @@
 3) _kurtar: yerel aday sırası, servis kapalıyken baskı yok, "uygun" deyip kutu vermeyen yanıt baskıya yol açmaz,
    önerilen kutuyla tutarsız maske reddedilir, tutarlı öneri bütün kontrollerden geçerse kabul edilir, bütçe sınırları.
 """
+import contextlib
 import os
 import sys
 import tempfile
@@ -40,6 +41,26 @@ def test_054333_kumas_secilir():
     L = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)[..., 0][m].mean()
     assert L > 150, f"seçilen bölge koyu ({L:.0f})"
     assert 0.15 < m.mean() < 0.35, "maske halıya/zemine taştı"
+
+
+def test_tespit_maskeden_delik_kapisi():
+    """G5c: manuel bölgede de "afişin içi boş değil (delik)" kapısı çalışır; delik oranı VERİLEN maskeden hesaplanır.
+    Düzeltme geri alınırsa (delik=0.0 sabit) ilk assert başarısız olur. Sentetik sahne: koyu zemin, krem kumaş, ortasında
+    kumaşın önünde koyu bir nesne (maske dışında bırakılmış = iç delik, alanın ~%9'u > HOLES_REJECT)."""
+    img = np.full((1000, 1000, 3), 70, np.uint8)
+    img[100:900, 350:650] = (215, 225, 232)
+    img[450:550, 450:550] = (40, 40, 40)                # kumaşın içinde koyu nesne (100x100)
+    tam = np.zeros((1000, 1000), np.uint8)
+    tam[100:900, 350:650] = 1
+    delikli = tam.copy()
+    delikli[430:570, 430:570] = 0                             # iç delik (140x140 ≈ alanın %8,2'si)
+    d = bd.tespit_maskeden(img, delikli)
+    assert d.metrics["holes"] > bd.HOLES_REJECT, f"delik oranı ölçülmedi: {d.metrics['holes']}"
+    assert any("içi boş değil" in r for r in d.reject), d.reject
+    assert int((d.mask > 0).sum()) == int(delikli.sum()), "manuel maske değiştirildi (doldurulmamalı)"
+    # deliksiz manuel bölge: delik kapısı tetiklenmez (yalnız delik denetimi sınanıyor)
+    d2 = bd.tespit_maskeden(img, tam)
+    assert d2.metrics["holes"] < bd.HOLES_WARN and not any("içi boş değil" in r for r in d2.reject), (d2.metrics["holes"], d2.reject)
 
 
 def test_sade_neden_algilama_ayri():
@@ -84,54 +105,63 @@ YANLIS = kutu_maske(0.05, 0.1, 0.15, 0.7)
 DOGRU = kutu_maske(0.35, 0.1, 0.65, 0.9)
 
 
+@contextlib.contextmanager
 def yama(adaylar, yeniden=None):
+    """bd.detect_candidates / bd.detect'i YALNIZ bu blok içinde değiştirir; çıkışta (hata olsa da) geri yükler.
+    Böylece bir testin yaması sonraki teste (ya da başka bir koşucuyla birlikte çalışan testlere) sızmaz."""
+    asil = (bd.detect_candidates, bd.detect)
     bd.detect_candidates = lambda img, hint, en_fazla=4, **k: adaylar
     if yeniden is not None:
         bd.detect = lambda img, hint, **k: yeniden
+    try:
+        yield
+    finally:
+        bd.detect_candidates, bd.detect = asil
 
 
 def test_yerel_aday_ilk_yanlisi_atlar():
-    yama([det(YANLIS), det(DOGRU)])
-    o = sahte_orc()
-    ev, bilgi = o._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
-    assert ev is not None and bilgi["sonuc"] == "yerel_aday_kabul" and bilgi["secilen"]["aday"] == 2
-    assert len(o.cagrilar) == 1 and abs(o.cagrilar[0]["point"][0] - 0.5) < 0.02
+    with yama([det(YANLIS), det(DOGRU)]):
+        o = sahte_orc()
+        ev, bilgi = o._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
+        assert ev is not None and bilgi["sonuc"] == "yerel_aday_kabul" and bilgi["secilen"]["aday"] == 2
+        assert len(o.cagrilar) == 1 and abs(o.cagrilar[0]["point"][0] - 0.5) < 0.02
 
 
 def test_servis_kapali_baski_yok():
-    yama([det(YANLIS)])
-    ev, bilgi = sahte_orc()._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
-    assert ev is None and bilgi["servis"]["durum"] == "kapali" and bilgi["sonuc"] == "dogrulanamadi"
+    with yama([det(YANLIS)]):
+        ev, bilgi = sahte_orc()._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
+        assert ev is None and bilgi["servis"]["durum"] == "kapali" and bilgi["sonuc"] == "dogrulanamadi"
 
 
 def test_uygun_ama_kutu_yok_baski_yok():
-    yama([det(YANLIS)], yeniden=det(DOGRU))
-    s = gks.SahteServis([{"durum": "uygun", "kumas_kutusu": None}])
-    o = sahte_orc(servis=s)
-    ev, bilgi = o._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
-    assert ev is None and s.cagri == 1 and o.cagrilar == [], "kutusuz 'uygun' yanıtıyla değerlendirme/baskı yapıldı"
+    with yama([det(YANLIS)], yeniden=det(DOGRU)):
+        s = gks.SahteServis([{"durum": "uygun", "kumas_kutusu": None}])
+        o = sahte_orc(servis=s)
+        ev, bilgi = o._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
+        assert ev is None and s.cagri == 1 and o.cagrilar == [], "kutusuz 'uygun' yanıtıyla değerlendirme/baskı yapıldı"
 
 
 def test_tutarsiz_maske_reddedilir():
-    yama([det(YANLIS)], yeniden=det(YANLIS))          # öneri ortada, yeniden algılama yine solu buluyor
-    s = gks.SahteServis([{"durum": "uygun", "kumas_kutusu": [0.33, 0.08, 0.67, 0.92]}])
-    o = sahte_orc(servis=s)
-    ev, bilgi = o._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
-    assert ev is None and "tutarsız" in bilgi["servis"]["yeniden_algilama"] and o.cagrilar == []
+    with yama([det(YANLIS)], yeniden=det(YANLIS)):     # öneri ortada, yeniden algılama yine solu buluyor
+        s = gks.SahteServis([{"durum": "uygun", "kumas_kutusu": [0.33, 0.08, 0.67, 0.92]}])
+        o = sahte_orc(servis=s)
+        ev, bilgi = o._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
+        assert ev is None and "tutarsız" in bilgi["servis"]["yeniden_algilama"] and o.cagrilar == []
 
 
 def test_tutarli_oneri_kontrollerden_gecer():
-    yama([det(YANLIS)], yeniden=det(DOGRU))
-    s = gks.SahteServis([{"durum": "inceleme_gerekli", "kumas_kutusu": [0.33, 0.08, 0.67, 0.92]}])
-    o = sahte_orc(servis=s)
-    ev, bilgi = o._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
-    assert ev is not None and bilgi["sonuc"] == "servis_onerisi_kabul" and o.cagrilar == [{"box": [0.33, 0.08, 0.67, 0.92]}]
-    # öneri doğru bölgede ama sahne yine kontrolden geçmiyorsa: kabul DEĞİL, doğru bölgede ret
-    yama([det(YANLIS)], yeniden=det(DOGRU))
-    o2 = sahte_orc(servis=gks.SahteServis([{"durum": "uygun", "kumas_kutusu": [0.33, 0.08, 0.67, 0.92]}]),
-                   dogrulayan=lambda d: False)
-    ev2, bilgi2 = o2._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
-    assert ev2 is not None and not ev2["ok"] and bilgi2["sonuc"] == "servis_onerisi_dogru_bolge_ret"
+    with yama([det(YANLIS)], yeniden=det(DOGRU)):
+        s = gks.SahteServis([{"durum": "inceleme_gerekli", "kumas_kutusu": [0.33, 0.08, 0.67, 0.92]}])
+        o = sahte_orc(servis=s)
+        ev, bilgi = o._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
+        assert ev is not None and bilgi["sonuc"] == "servis_onerisi_kabul" and o.cagrilar == [{"box": [0.33, 0.08, 0.67, 0.92]}]
+    # öneri doğru bölgede ama sahne yine kontrolden geçmiyorsa: kabul DEĞİL; G5a sözleşmesi: ret dönmez, ilk tanı korunur
+    # (None, "dogrulanamadi"). Ayrıntılı sınama: tests/test_kurtarma_akisi.py (pipeline-engineer).
+    with yama([det(YANLIS)], yeniden=det(DOGRU)):
+        o2 = sahte_orc(servis=gks.SahteServis([{"durum": "uygun", "kumas_kutusu": [0.33, 0.08, 0.67, 0.92]}]),
+                       dogrulayan=lambda d: False)
+        ev2, bilgi2 = o2._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
+        assert ev2 is None and bilgi2["sonuc"] == "dogrulanamadi" and bilgi2["servis"]["yeniden_algilama"].startswith("ret"), bilgi2
 
 
 def test_butce_sinirlari():
@@ -149,10 +179,10 @@ def test_butce_sinirlari():
         ok2, neden2 = b2.izin()
         assert not ok2 and "günlük" in neden2
         # bütçe doluysa servis çağrılmaz
-        yama([det(YANLIS)])
-        s = gks.SahteServis([{"durum": "uygun", "kumas_kutusu": [0.3, 0.1, 0.7, 0.9]}])
-        ev, bilgi = sahte_orc(servis=s, butce=b)._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
-        assert ev is None and s.cagri == 0 and bilgi["servis"]["durum"] == "butce"
+        with yama([det(YANLIS)]):
+            s = gks.SahteServis([{"durum": "uygun", "kumas_kutusu": [0.3, 0.1, 0.7, 0.9]}])
+            ev, bilgi = sahte_orc(servis=s, butce=b)._kurtar(IMG, None, PROF, "s", {"det": det(YANLIS)})
+            assert ev is None and s.cagri == 0 and bilgi["servis"]["durum"] == "butce"
 
 
 def test_yanit_coz_dogrular():
@@ -177,6 +207,7 @@ if __name__ == "__main__":
     for ad, f in list(globals().items()):
         if ad.startswith("test_") and callable(f):
             f()
-            bd.detect_candidates, bd.detect = asil
+            # elle geri yükleme YOK: yamalar her testin kendi try/finally'siyle geri yüklenmeli (sızıntı = test hatası)
+            assert (bd.detect_candidates, bd.detect) == asil, f"{ad}: bd.detect/detect_candidates yaması sızdı"
             print("geçti:", ad)
     print("TAMAM")

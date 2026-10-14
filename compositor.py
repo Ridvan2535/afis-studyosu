@@ -209,7 +209,8 @@ def _place_fabric(scene, design, det, ink, paper, ssaa, follow, inset_frac, fold
 # ----------------------------------------------------------------------------
 # Aşağıdaki eşiklerin hepsi VARSAYIMDIR (sentetik sahnelerle seçildi; gerçek sahnelerle ayarlanmadı):
 TAM_BOY_TOL = 0.03         # VARSAYIM: görünen asılı boy ürün boyundan bu oranı aşacak kadar UZUNSA sahne geometrisi uyuşmuyor
-                           # (tolerans içindeki uzunluk farkı tasarımı dikeyde en fazla bu kadar sıkıştırır ve UYARI olarak yazılır)
+                           # (yalnız uygunluk kararıdır; ölçek her zaman fiziksel kalır, tasarım sıkıştırılmaz/esnetilmez — K-54.
+                           # Tolerans içindeki uzunluk farkı UYARI olarak yazılır)
 TEK_YAN_BUYUK_EN_AZ = 0.06  # VARSAYIM: yalnız belirgin yayılmada (büyük yan asılı genişliğin %6'sı ve üstü) tek taraflılık aranır;
                             # küçük yayılmalar (kabul edilmiş s01'de %1-4) gürültüdür, bu kurala girmez
 TEK_YAN_ORAN = 0.25        # VARSAYIM: yayılmanın küçük yanı büyüğün bu oranından azsa "tek taraflı" (maske taşması şüphesi)
@@ -469,9 +470,14 @@ def _place_full_fabric(scene, design, det, ink, paper, ssaa, fold_shift, en_cm, 
     elif not g["birikme"] and asili_cm < boy_cm and olcek_farki < -OLCUM_PAYI:
         uyarilar.append(f"Kumaşın görünen boyu ürün boyundan ≈{boy_cm - asili_cm:.0f} cm kısa; kalan kısım zemine değen kenarda "
                         f"(görünmeyen) kabul edildi, tasarım sıkıştırılmadı.")
-    # ölçüm payı içindeki fark (≈1 cm) "gizli bölge" sayılmaz (yalnız rapor); ölçek yine fiziksel kalır
-    v_gizli = 1.0 if abs(olcek_farki) <= OLCUM_PAYI else min(1.0, asili_cm / boy_cm)
+    # ölçüm payı içindeki fark (≈1 cm) KARAR için "gizli bölge" sayılmaz (ret nedeni olmaz); ölçek yine fiziksel kalır.
+    # Ancak fiziksel ölçekte bu ≈1 cm gerçekten temas çizgisinin altına düşer (G5b): görünen mürekkep oranı GERÇEK görünen
+    # orandan hesaplanır ve bu banttaki baskı ayrıca ölçülüp UYARI olarak raporlanır (ölçüm hassasiyeti içinde olduğu için ret yok).
+    v_gorunen = min(1.0, asili_cm / boy_cm)                            # tasarımın temas çizgisi üstünde kalan gerçek oranı
+    olcum_payinda = abs(olcek_farki) <= OLCUM_PAYI
+    v_gizli = 1.0 if olcum_payinda else v_gorunen
     gizli_cm = (1.0 - v_gizli) * boy_cm
+    pay_gizli_cm = (1.0 - v_gorunen) * boy_cm if olcum_payinda else 0.0
 
     x0, x1 = max(0, g["x_range"][0] - 4), min(W, g["x_range"][1] + 5)
     y0, y1 = max(0, g["y0"] - 4), min(H, g["y1"] + 5)
@@ -556,7 +562,7 @@ def _place_full_fabric(scene, design, det, ink, paper, ssaa, fold_shift, en_cm, 
     d_ink = d_lum < 0.85
     gorunen = 1.0
     if d_ink.any():
-        sat = int(round(v_gizli * design.shape[0]))
+        sat = int(round(v_gorunen * design.shape[0]))
         gorunen = float(d_ink[:sat].sum()) / float(d_ink.sum())
 
     # gizli bölgede baskı var mı? (yerde biriken kumaşın altındaki tasarım)
@@ -565,15 +571,36 @@ def _place_full_fabric(scene, design, det, ink, paper, ssaa, fold_shift, en_cm, 
         import product
         d8 = (np.clip(design, 0, 1) * 255 + 0.5).astype(np.uint8)
         ink_hidden = float(product.murekkep_orani(d8, v_gizli))
+        # Mesaj metni birikmenin gerçekten görülüp görülmediğine göre ayrılır (G5b, M-architecture-reviewer-18): birikme yoksa
+        # (ör. %0,5-3 kısa kumaş ya da manuel temas) alt kısım "zeminde biriken kumaş" değil, görünen alt kenarın altıdır.
+        # Hata türü aynı kalır (birikme_cozulemedi); yalnız tanı metni değişir.
         if ink_hidden > MUREKKEP_ESIK:
-            sorunlar.append({"tur": "birikme_cozulemedi",
-                             "mesaj": f"Tasarımın alt ≈{gizli_cm:.0f} cm'si zeminde biriken kumaşta kalıyor ve bu bölgede baskı var "
-                                      f"(%{ink_hidden * 100:.1f}). Birikmedeki kıvrımlar üzerinde baskı doğru çizilemediği için "
-                                      f"bu sahne başarılı sayılmadı."})
-        else:
+            if g["birikme"]:
+                msg = (f"Tasarımın alt ≈{gizli_cm:.0f} cm'si zeminde biriken kumaşta kalıyor ve bu bölgede baskı var "
+                       f"(%{ink_hidden * 100:.1f}). Birikmedeki kıvrımlar üzerinde baskı doğru çizilemediği için "
+                       f"bu sahne başarılı sayılmadı.")
+            else:
+                msg = (f"Tasarımın alt ≈{gizli_cm:.0f} cm'si kumaşın görünen alt kenarının (zemine temas çizgisi) altına düşüyor "
+                       f"ve bu bölgede baskı var (%{ink_hidden * 100:.1f}). Sahnede birikme görünmüyor; etek ucunun altı "
+                       f"görünmediği için bu baskı gösterilemiyor, sahne başarılı sayılmadı.")
+            sorunlar.append({"tur": "birikme_cozulemedi", "mesaj": msg})
+        elif g["birikme"]:
             uyarilar.append(f"Tasarımın alt ≈{gizli_cm:.0f} cm'si zeminde birikiyor; bu bölgede baskı yok.")
-        if gizli_cm > 0.15 * boy_cm:
+        else:
+            uyarilar.append(f"Tasarımın alt ≈{gizli_cm:.0f} cm'si kumaşın görünen alt kenarının altında kalıyor (birikme "
+                            f"görünmüyor); bu bölgede baskı yok.")
+        if g["birikme"] and gizli_cm > 0.15 * boy_cm:
             uyarilar.append(f"Zemindeki birikme büyük görünüyor (≈{gizli_cm:.0f} cm); sahneyi gözle kontrol edin.")
+    pay_murekkep = 0.0
+    if pay_gizli_cm > 0 and not sorunlar:
+        # ölçüm payı bandı (|fark| ≤ OLCUM_PAYI, ≈1 cm): karar değişmez, ama gizlenen baskı sessiz kalmaz (G5b)
+        import product
+        d8 = (np.clip(design, 0, 1) * 255 + 0.5).astype(np.uint8)
+        pay_murekkep = float(product.murekkep_orani(d8, v_gorunen))
+        if pay_murekkep > MUREKKEP_ESIK:
+            uyarilar.append(f"Tasarımın en alttaki ≈{pay_gizli_cm:.1f} cm'si (ölçüm payı içinde) temas çizgisinin altına düşüyor ve "
+                            f"bu bantta baskı var (%{pay_murekkep * 100:.2f}); ölçüm hassasiyeti içinde olduğu için ret değil. "
+                            f"Alt kenardaki baskıyı gözle kontrol edin.")
 
     model = {"bbox": [int(x0), int(y0), int(x1), int(y1)],
              "u": cv2.resize(u.astype(np.float32), sz, interpolation=cv2.INTER_AREA),
@@ -594,7 +621,8 @@ def _place_full_fabric(scene, design, det, ink, paper, ssaa, fold_shift, en_cm, 
             "yayilma_baslangic_y": g.get("yayilma_baslangic_y"), "yayilma_temas_asili_cm": g.get("yayilma_temas_asili_cm"),
             "gorunen_murekkep": round(float(gorunen), 5), "temas_cizgisi": [round(ac, 6), round(bc, 2)],
             "ust_kenar": [round(at, 5), round(bt, 2)], "genislik_px": round(g["W0"], 1),
-            "gizli_murekkep": round(ink_hidden, 5), "sorunlar": sorunlar, "uyarilar": uyarilar}
+            "gizli_murekkep": round(ink_hidden, 5), "olcum_payi_gizli_cm": round(pay_gizli_cm, 2),
+            "olcum_payi_murekkep": round(pay_murekkep, 5), "sorunlar": sorunlar, "uyarilar": uyarilar}
     return out, info, model
 
 
